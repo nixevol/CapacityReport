@@ -1,0 +1,22 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+pymysql
+sqlalchemy
+cryptography
+
+# Data Processing
+pandas
+openpyxl
+chardet
+sqlparse
+
+# Utilities
+aiofiles
+python-dateutil
+
+# Process Manager
+supervisor

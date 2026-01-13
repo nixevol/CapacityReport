@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>容量报表处理程序</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 侧边栏导航 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <div class="logo-icon">📊</div>
+                <span class="logo-text">CapacityReport</span>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-page="upload" title="数据上传">
+                    <span class="nav-icon">📤</span>
+                    <span>数据上传</span>
+                </a>
+                <a href="#" class="nav-item" data-page="history" title="处理历史">
+                    <span class="nav-icon">📋</span>
+                    <span>处理历史</span>
+                </a>
+                <a href="#" class="nav-item" data-page="database" title="数据库管理">
+                    <span class="nav-icon">🗄️</span>
+                    <span>数据库管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings" title="系统设置">
+                    <span class="nav-icon">⚙️</span>
+                    <span>系统设置</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer" data-version="v2.0.0">
+                <div class="sidebar-footer-info">
+                    <span class="version">版本：v2.0.0</span>
+                    <span class="version">Power by：NIXEVOL</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 上传页面 -->
+            <section id="page-upload" class="page active">
+                <header class="page-header">
+                    <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起侧边栏">
+                        <span id="sidebarToggleIcon">☰</span>
+                    </button>
+                    <div class="page-header-content">
+                        <h1>数据上传与处理</h1>
+                    </div>
+                    <div class="page-header-actions">
+                        <button class="theme-toggle" id="themeToggle" title="切换主题">
+                            <span>🌓</span>
+                        </button>
+                        <button class="restart-btn" id="restartService" title="重启服务">
+                            <span>⏻</span>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="page-body">
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-icon">📁</div>
+                        <h3>拖拽文件夹或文件到这里</h3>
+                        <p>支持 .zip, .xlsx, .xls, .csv 格式</p>
+                        <p class="upload-hint">或者点击选择文件</p>
+                        <input type="file" id="fileInput" multiple webkitdirectory directory>
+                        <input type="file" id="fileInputSingle" multiple accept=".zip,.xlsx,.xls,.csv" style="display:none">
+                    </div>
+
+                    <div class="file-list" id="fileList" style="display: none;">
+                        <div class="file-list-header">
+                            <h4>已选择文件</h4>
+                            <button class="btn btn-sm btn-text" id="clearFiles">清空</button>
+                        </div>
+                        
+                        <div class="file-list-footer">
+                            <span id="fileCount">0 个文件</span>
+                            <button class="btn btn-primary" id="startUpload">
+                                <span>🚀</span> 上传并处理
+                            </button>
+                        </div>
+                        
+                        <!-- 总进度 -->
+                        <div class="total-progress" id="totalProgress" style="display: none; padding: 16px;">
+                            <div class="total-progress-header">
+                                <span class="label">上传进度</span>
+                                <span class="percent" id="totalPercent">0%</span>
+                            </div>
+                            <div class="total-progress-bar">
+                                <div class="total-progress-bar-inner" id="totalProgressBar"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 上传统计 -->
+                        <div class="upload-stats" id="uploadStats" style="display: none; margin: 0 16px;">
+                            <div class="upload-stats-item">
+                                <span>总计:</span>
+                                <span class="count" id="statsTotal">0</span>
+                            </div>
+                            <div class="upload-stats-item uploading">
+                                <span>上传中:</span>
+                                <span class="count" id="statsUploading">0</span>
+                            </div>
+                            <div class="upload-stats-item success">
+                                <span>已完成:</span>
+                                <span class="count" id="statsSuccess">0</span>
+                            </div>
+                            <div class="upload-stats-item error">
+                                <span>失败:</span>
+                                <span class="count" id="statsError">0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="file-items" id="fileItems"></div>
+                    </div>
+
+                    <!-- 处理状态 -->
+                    <div class="process-section" id="processSection" style="display: none;">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-left">
+                                    <span class="card-title">处理进度</span>
+                                    <span class="process-status processing" id="processStatus">处理中...</span>
+                                </div>
+                                <div class="card-header-right">
+                                    <label class="auto-refresh-toggle">
+                                        <input type="checkbox" id="autoRefreshLog" checked>
+                                        <span>自动刷新</span>
+                                    </label>
+                                    <button class="btn btn-sm btn-outline" id="manualRefreshLog" title="手动刷新日志">
+                                        <span>🔄</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="log-container" id="logContainer">
+                                    <div class="log-content" id="logContent"></div>
+                                </div>
+                            </div>
+                            <div class="card-footer process-actions" id="processActions" style="display: none;">
+                                <button class="btn btn-success" id="downloadResult">
+                                    <span>📥</span> 下载结果
+                                </button>
+                                <button class="btn btn-outline" id="newProcess">
+                                    <span>🔄</span> 新建任务
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 历史记录页面 -->
+            <section id="page-history" class="page">
+                <header class="page-header">
+                    <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起侧边栏">
+                        <span id="sidebarToggleIcon">☰</span>
+                    </button>
+                    <div class="page-header-content">
+                        <h1>处理历史</h1>
+                    </div>
+                    <div class="page-header-actions">
+                        <button class="theme-toggle" id="themeToggle" title="切换主题">
+                            <span>🌓</span>
+                        </button>
+                        <button class="restart-btn" id="restartService" title="重启服务">
+                            <span>⏻</span>
+                        </button>
+                    </div>
+                </header>
+                <div class="page-body">
+                    <div class="toolbar">
+                        <div class="toolbar-left">
+                            <button class="btn btn-outline" id="refreshHistory">
+                                <span>🔄</span> 刷新
+                            </button>
+                            <button class="btn btn-danger" id="clearHistory">
+                                <span>🗑️</span> 清空历史
+                            </button>
+                        </div>
+                        <div class="toolbar-right">
+                            <span class="total-size">总占用: <span id="totalHistorySize">计算中...</span></span>
+                        </div>
+                    </div>
+                    <div class="history-list" id="historyList">
+                        <div class="empty-state">
+                            <span class="empty-icon">📭</span>
+                            <p>暂无处理记录</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 数据库管理页面 -->
+            <section id="page-database" class="page">
+                <header class="page-header">
+                    <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起侧边栏">
+                        <span id="sidebarToggleIcon">☰</span>
+                    </button>
+                    <div class="page-header-content">
+                        <h1>数据库管理</h1>
+                    </div>
+                    <div class="page-header-actions">
+                        <button class="theme-toggle" id="themeToggle" title="切换主题">
+                            <span>🌓</span>
+                        </button>
+                        <button class="restart-btn" id="restartService" title="重启服务">
+                            <span>⏻</span>
+                        </button>
+                    </div>
+                </header>
+                <div class="page-body" style="display: flex; flex-direction: column; height: calc(100% - 64px);">
+                    <div class="database-layout" style="flex: 1; overflow: hidden;">
+                        <div class="db-sidebar">
+                            <div class="db-connection" id="dbConnection">
+                                <span class="status-dot"></span>
+                                <span>检测连接中...</span>
+                            </div>
+                            <div class="table-list" id="tableList">
+                                <div class="loading">加载中...</div>
+                            </div>
+                        </div>
+                        <div class="db-content">
+                            <div class="db-toolbar" id="dbToolbar" style="display: none;">
+                                <div class="toolbar-left">
+                                    <span class="current-table" id="currentTable"></span>
+                                    <span class="row-count" id="rowCount"></span>
+                                </div>
+                                <div class="toolbar-right">
+                                    <input type="text" class="search-input" id="searchInput" placeholder="搜索...">
+                                    <button class="btn btn-sm btn-primary" id="downloadTable">📥 导出</button>
+                                    <button class="btn btn-sm btn-warning" id="truncateTable">清空</button>
+                                    <button class="btn btn-sm btn-danger" id="dropTable">删除</button>
+                                </div>
+                            </div>
+                            <div class="data-table-container" id="dataTableContainer">
+                                <div class="empty-state">
+                                    <span class="empty-icon">👈</span>
+                                    <p>请选择左侧的数据表</p>
+                                </div>
+                            </div>
+                            <div class="pagination" id="pagination" style="display: none;">
+                                <button class="btn btn-sm btn-outline" id="prevPage">上一页</button>
+                                <span id="pageInfo">第 1 页</span>
+                                <button class="btn btn-sm btn-outline" id="nextPage">下一页</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 设置页面 -->
+            <section id="page-settings" class="page">
+                <header class="page-header">
+                    <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起侧边栏">
+                        <span id="sidebarToggleIcon">☰</span>
+                    </button>
+                    <div class="page-header-content">
+                        <h1>系统设置</h1>
+                    </div>
+                    <div class="page-header-actions">
+                        <button class="theme-toggle" id="themeToggle" title="切换主题">
+                            <span>🌓</span>
+                        </button>
+                        <button class="restart-btn" id="restartService" title="重启服务">
+                            <span>⏻</span>
+                        </button>
+                    </div>
+                </header>
+                <div class="page-body settings-page-body">
+                    <!-- 左侧列 -->
+                    <div class="settings-column">
+                        <!-- 数据库配置 -->
+                        <div class="card settings-card">
+                            <div class="card-header">
+                                <span class="card-title">数据库配置</span>
+                                <span class="config-update-time" id="configUpdate">-</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>主机地址</label>
+                                        <input type="text" id="configHost" class="form-input" placeholder="localhost">
+                                    </div>
+                                    <div class="form-group form-group-sm">
+                                        <label>端口</label>
+                                        <input type="number" id="configPort" class="form-input" placeholder="3306">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>数据库名</label>
+                                    <input type="text" id="configDbname" class="form-input" placeholder="CapacityReport">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>用户名</label>
+                                        <input type="text" id="configUser" class="form-input" placeholder="root">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>密码</label>
+                                        <div class="password-input-wrapper">
+                                            <input type="password" id="configPasswd" class="form-input" placeholder="输入密码">
+                                            <button type="button" class="password-toggle" id="togglePassword" title="显示/隐藏密码">
+                                                <span class="eye-icon">👁</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <button class="btn btn-primary" id="saveMysqlConfig">保存配置</button>
+                                <button class="btn btn-outline" id="testDbConnection">测试连接</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Sheet 过滤规则 -->
+                        <div class="card settings-card">
+                            <div class="card-header">
+                                <span class="card-title">Sheet 过滤规则</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
+                                <div class="filter-list" id="sheetFilterList">
+                                    <!-- 动态生成 -->
+                                </div>
+                                <div class="add-filter-row">
+                                    <input type="text" id="newSheetFilter" class="form-input" placeholder="输入过滤关键词">
+                                    <button class="btn btn-outline btn-sm" id="addSheetFilter">添加</button>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <button class="btn btn-primary" id="saveSheetFilter">保存规则</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧列 - 字段映射 -->
+                    <div class="settings-column settings-column-wide">
+                        <div class="card settings-card field-mapping-card">
+                            <div class="card-header">
+                                <span class="card-title">字段映射配置</span>
+                                <span class="field-count" id="fieldCount">0 个字段</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
+                                <div class="field-mapping-list" id="fieldMappingList">
+                                    <!-- 动态生成 -->
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <button class="btn btn-outline" id="addFieldMapping">添加字段</button>
+                                <button class="btn btn-primary" id="saveFieldMapping">保存映射</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 重启服务加载遮罩 -->
+    <div class="restart-overlay" id="restartOverlay">
+        <div class="restart-overlay-content">
+            <div class="restart-overlay-spinner"></div>
+            <div class="restart-overlay-text">正在重启服务...</div>
+        </div>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 id="confirmTitle">确认操作</h3>
+            <p id="confirmMessage">确定要执行此操作吗？</p>
+            <div class="modal-actions">
+                <button class="btn btn-outline" id="confirmCancel">取消</button>
+                <button class="btn btn-danger" id="confirmOk">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下载选择对话框 -->
+    <div class="modal" id="downloadModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>选择下载的数据表</h3>
+            <div class="download-options">
+                <button class="btn btn-lg btn-primary download-option" data-table="4G_结果表">
+                    <span>📊</span> 4G 结果表
+                </button>
+                <button class="btn btn-lg btn-primary download-option" data-table="5G_结果表">
+                    <span>📊</span> 5G 结果表
+                </button>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" id="downloadCancel">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
