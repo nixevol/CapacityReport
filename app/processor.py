@@ -83,16 +83,30 @@ class DataProcessor:
         self.results: Dict[str, Any] = {}
         
         # 预编译字段映射，避免重复查找
-        self._field_map = self._build_field_map()
+        self._field_map, self._type_map = self._build_field_map()
     
-    def _build_field_map(self) -> Dict[str, str]:
-        """预构建字段映射表，提高查找效率"""
+    def _build_field_map(self) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """
+        预构建字段映射表和类型映射表，提高查找效率
+        
+        Returns:
+            field_map: {源字段名: 目标字段名}
+            type_map: {目标字段名: 字段类型}
+        """
         field_map = {}
+        type_map = {}
         for field_def in self.config.extract_fields:
             db_field = field_def.get("Field")
+            field_type = field_def.get("Type", "string")  # 默认类型为 string
+            
+            # 记录目标字段的类型
+            type_map[db_field] = field_type
+            
+            # 记录源字段到目标字段的映射
             for extract_name in field_def.get("Extract", []):
                 field_map[extract_name] = db_field
-        return field_map
+        
+        return field_map, type_map
     
     def process(self) -> Dict[str, Any]:
         """执行完整的数据处理流程"""
@@ -254,6 +268,7 @@ class DataProcessor:
         """
         高性能处理单个 CSV 文件
         使用批量插入代替 to_sql，性能提升 5-10 倍
+        根据配置的字段类型进行数据转换
         """
         encoding = self._detect_encoding(csv_file)
         rel_path = csv_file.relative_to(self.work_dir)
@@ -286,32 +301,180 @@ class DataProcessor:
         source_cols = list(col_mapping.keys())
         target_cols = list(col_mapping.values())
         
-        df_result = df[source_cols]
+        # 创建结果 DataFrame，使用目标列名
+        df_result = df[source_cols].copy()
+        df_result.columns = target_cols
         
-        # 向量化数据清洗（比逐列循环快 10 倍以上）
-        # 替换 NA 为 '0'，去除百分号，截断长度
-        df_result = df_result.fillna('0')
+        # 替换 NA 为默认值
+        df_result = df_result.fillna('')
         
-        # 使用 numpy 向量化操作
-        for col in df_result.columns:
-            # 去除百分号
-            df_result[col] = df_result[col].str.replace('%', '', regex=False)
-            # 截断超长字符串
-            mask = df_result[col].str.len() > 200
-            if mask.any():
-                df_result.loc[mask, col] = df_result.loc[mask, col].str[:200]
+        # 构建目标字段的类型映射
+        column_types = {col: self._type_map.get(col, 'string') for col in target_cols}
         
-        # 确保表存在
-        self.db.create_table_from_columns(table_name, target_cols)
+        # 根据类型处理每列数据
+        for col in target_cols:
+            col_type = column_types.get(col, 'string')
+            
+            if col_type == 'datetime':
+                # 日期时间类型处理
+                df_result[col] = self._convert_datetime_column(df_result[col])
+            
+            elif col_type == 'int':
+                # 整数类型处理
+                df_result[col] = self._convert_int_column(df_result[col])
+            
+            elif col_type == 'float':
+                # 浮点数类型处理
+                df_result[col] = self._convert_float_column(df_result[col])
+            
+            elif col_type == 'text':
+                # 长文本类型，截断到 65535 字符
+                mask = df_result[col].str.len() > 65535
+                if mask.any():
+                    df_result.loc[mask, col] = df_result.loc[mask, col].str[:65535]
+            
+            else:  # string 或其他
+                # 字符串类型：去除百分号、截断长度
+                df_result[col] = df_result[col].str.replace('%', '', regex=False)
+                mask = df_result[col].str.len() > 255
+                if mask.any():
+                    df_result.loc[mask, col] = df_result.loc[mask, col].str[:255]
+        
+        # 确保表存在（传递类型信息）
+        self.db.create_table_from_columns(table_name, target_cols, column_types)
         
         # 转换为元组列表，用于批量插入
-        # 这比 to_sql 快很多
         data_tuples = [tuple(row) for row in df_result.values]
         
         # 使用批量插入
         inserted = self.db.bulk_insert(table_name, target_cols, data_tuples, self.BATCH_SIZE)
         
         return inserted
+    
+    # 支持的日期时间格式列表
+    DATETIME_FORMATS = [
+        'ISO8601',                    # 2026-01-06T00:00:00+08:00
+        '%Y-%m-%d %H:%M:%S',          # 2026-01-06 00:00:00
+        '%Y-%m-%d %H:%M',             # 2026-01-06 00:00
+        '%Y/%m/%d %H:%M:%S',          # 2026/01/06 00:00:00
+        '%Y/%m/%d %H:%M',             # 2026/01/06 00:00
+        '%Y-%m-%d',                   # 2026-01-06
+        '%Y/%m/%d',                   # 2026/01/06
+        '%Y年%m月%d日 %H:%M:%S',       # 2026年01月06日 00:00:00
+        '%Y年%m月%d日',                # 2026年01月06日
+        '%Y%m%d%H%M%S',               # 20260106000000
+        '%Y%m%d',                     # 20260106
+    ]
+    
+    def _detect_datetime_format(self, series: pd.Series, sample_size: int = 100) -> list:
+        """
+        采样检测时间格式，返回检测到的格式列表（按匹配数量排序）
+        """
+        # 获取非空样本
+        valid = series[series.notna() & (series != '') & (series.astype(str).str.strip() != '')]
+        if len(valid) == 0:
+            return self.DATETIME_FORMATS
+        
+        # 采样
+        sample = valid.head(sample_size) if len(valid) > sample_size else valid
+        
+        # 检测每种格式的匹配率
+        format_matches = {}
+        for fmt in self.DATETIME_FORMATS:
+            try:
+                if fmt == 'ISO8601':
+                    parsed = pd.to_datetime(sample, errors='coerce', format='ISO8601')
+                else:
+                    parsed = pd.to_datetime(sample, errors='coerce', format=fmt)
+                match_count = parsed.notna().sum()
+                if match_count > 0:
+                    format_matches[fmt] = match_count
+            except Exception:
+                continue
+        
+        # 按匹配数量降序排序，只返回有匹配的格式
+        if format_matches:
+            sorted_formats = sorted(format_matches.keys(), key=lambda x: format_matches[x], reverse=True)
+            return sorted_formats
+        
+        # 没有检测到格式，返回默认列表
+        return self.DATETIME_FORMATS
+    
+    def _convert_datetime_column(self, series: pd.Series) -> pd.Series:
+        """
+        转换日期时间列，支持多种常见格式
+        使用采样检测优化性能：先检测主要格式，再批量处理
+        """
+        try:
+            valid_mask = series.notna() & (series != '') & (series.astype(str).str.strip() != '')
+            if not valid_mask.any():
+                return pd.Series([None] * len(series), index=series.index)
+            
+            # 采样检测格式（只用前 100 条数据检测）
+            detected_formats = self._detect_datetime_format(series, sample_size=100)
+            
+            # 初始化结果
+            parsed = pd.Series([pd.NaT] * len(series), index=series.index)
+            remaining = valid_mask.copy()
+            
+            # 按检测到的格式顺序处理
+            for fmt in detected_formats:
+                if not remaining.any():
+                    break
+                
+                try:
+                    if fmt == 'ISO8601':
+                        temp_parsed = pd.to_datetime(series[remaining], errors='coerce', format='ISO8601')
+                    else:
+                        temp_parsed = pd.to_datetime(series[remaining], errors='coerce', format=fmt)
+                    
+                    success_mask = temp_parsed.notna()
+                    if success_mask.any():
+                        success_indices = remaining[remaining].index[success_mask]
+                        parsed.loc[success_indices] = temp_parsed[success_mask].values
+                        remaining.loc[success_indices] = False
+                except Exception:
+                    continue
+            
+            # 兜底：用 mixed 模式处理剩余的
+            if remaining.any():
+                try:
+                    temp_parsed = pd.to_datetime(series[remaining], errors='coerce', format='mixed', dayfirst=False)
+                    success_mask = temp_parsed.notna()
+                    if success_mask.any():
+                        success_indices = remaining[remaining].index[success_mask]
+                        parsed.loc[success_indices] = temp_parsed[success_mask].values
+                except Exception:
+                    pass
+            
+            # 格式化输出
+            return parsed.dt.strftime('%Y-%m-%d %H:%M:%S').fillna(None)
+        except Exception:
+            return series
+    
+    def _convert_int_column(self, series: pd.Series) -> pd.Series:
+        """转换整数列"""
+        try:
+            # 去除百分号和逗号
+            cleaned = series.str.replace('%', '', regex=False).str.replace(',', '', regex=False)
+            # 转换为数值，保留为字符串形式（数据库会自动转换）
+            numeric = pd.to_numeric(cleaned, errors='coerce')
+            # 四舍五入并转为整数字符串，空值保留为 None
+            return numeric.round().fillna(0).astype(int).astype(str).replace('0', None, regex=False)
+        except Exception:
+            return series
+    
+    def _convert_float_column(self, series: pd.Series) -> pd.Series:
+        """转换浮点数列"""
+        try:
+            # 去除百分号和逗号
+            cleaned = series.str.replace('%', '', regex=False).str.replace(',', '', regex=False)
+            # 转换为数值
+            numeric = pd.to_numeric(cleaned, errors='coerce')
+            # 保留小数，空值为 None
+            return numeric.fillna(0).astype(str).replace('0.0', None, regex=False).replace('0', None, regex=False)
+        except Exception:
+            return series
     
     def _find_data_directories(self) -> Dict[str, Path]:
         """

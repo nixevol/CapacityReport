@@ -245,10 +245,37 @@ class DatabaseManager:
         
         return total_inserted
     
-    def create_table_from_columns(self, table_name: str, columns: List[str]):
-        """根据列名创建表（所有列都是 VARCHAR(255)）"""
-        column_defs = ', '.join([f'`{col}` VARCHAR(255)' for col in columns])
-        sql = f"CREATE TABLE IF NOT EXISTS `{table_name}` ({column_defs}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    # 字段类型到 MySQL 类型的映射
+    TYPE_MAPPING = {
+        'string': 'VARCHAR(255)',
+        'datetime': 'DATETIME',
+        'int': 'INT',
+        'float': 'DOUBLE',
+        'text': 'TEXT',
+    }
+    
+    def create_table_from_columns(self, table_name: str, columns: List[str], 
+                                   column_types: Optional[Dict[str, str]] = None):
+        """
+        根据列名和类型创建表
+        
+        Args:
+            table_name: 表名
+            columns: 列名列表
+            column_types: 列名到类型的映射 {列名: 类型}，类型可选: string, datetime, int, float, text
+        """
+        column_defs = []
+        for col in columns:
+            # 获取类型，默认为 string
+            col_type = 'string'
+            if column_types and col in column_types:
+                col_type = column_types[col]
+            
+            # 转换为 MySQL 类型
+            mysql_type = self.TYPE_MAPPING.get(col_type, 'VARCHAR(255)')
+            column_defs.append(f'`{col}` {mysql_type}')
+        
+        sql = f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(column_defs)}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         
         with self.get_connection() as conn:
             with conn.cursor() as cursor:

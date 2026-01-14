@@ -1689,6 +1689,15 @@ class SettingsManager {
             return;
         }
         
+        // 可用的字段类型
+        const fieldTypes = [
+            { value: 'string', label: '字符串 (VARCHAR)' },
+            { value: 'datetime', label: '日期时间 (DATETIME)' },
+            { value: 'int', label: '整数 (INT)' },
+            { value: 'float', label: '浮点数 (DOUBLE)' },
+            { value: 'text', label: '长文本 (TEXT)' }
+        ];
+        
         container.innerHTML = this.extractFields.map((field, index) => `
             <div class="field-mapping-item" data-index="${index}">
                 <span class="field-mapping-number">${index + 1}</span>
@@ -1697,6 +1706,16 @@ class SettingsManager {
                         <label>数据库字段名</label>
                         <input type="text" class="form-input field-input" value="${field.Field || ''}" 
                                data-index="${index}" data-prop="Field" placeholder="输入字段名">
+                    </div>
+                    <div class="field-type">
+                        <label>字段类型</label>
+                        <select class="form-select type-select" data-index="${index}">
+                            ${fieldTypes.map(t => `
+                                <option value="${t.value}" ${(field.Type || 'string') === t.value ? 'selected' : ''}>
+                                    ${t.label}
+                                </option>
+                            `).join('')}
+                        </select>
                     </div>
                     <button class="btn-icon remove-mapping" data-index="${index}" title="删除此映射">✕</button>
                 </div>
@@ -1737,6 +1756,14 @@ class SettingsManager {
             input.addEventListener('change', () => {
                 const index = parseInt(input.dataset.index);
                 this.extractFields[index].Field = input.value.trim();
+            });
+        });
+        
+        // 绑定字段类型修改事件
+        container.querySelectorAll('.type-select').forEach(select => {
+            select.addEventListener('change', () => {
+                const index = parseInt(select.dataset.index);
+                this.extractFields[index].Type = select.value;
             });
         });
         
@@ -1786,6 +1813,7 @@ class SettingsManager {
     addFieldMapping() {
         this.extractFields.push({
             Field: '',
+            Type: 'string',
             Extract: []
         });
         this.renderFieldMappings();
