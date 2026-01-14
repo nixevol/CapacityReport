@@ -6,7 +6,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -72,3 +71,8 @@ uploads/
 
 # 配置文件（如果包含敏感信息）
 # Configure.json  # 如果需要保留配置，注释掉这行
+
+# dist 目录（保留脚本和配置文件，忽略生成的镜像）
+dist/images/
+dist/cache/
+dist/logs/

@@ -4,6 +4,7 @@ FastAPI 主入口
 """
 import os
 import sys
+import json
 import signal
 import shutil
 import asyncio
@@ -626,6 +627,23 @@ async def drop_table(table_name: str = Body(..., embed=True)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/database/table/drop-all")
+async def drop_all_tables():
+    """删除所有表（危险操作，需要确认）"""
+    try:
+        db = DatabaseManager(config)
+        result = db.drop_all_tables()
+        db.dispose()
+        return {
+            "success": True,
+            "message": f"已删除 {result['dropped_count']} 个表",
+            "dropped_count": result['dropped_count'],
+            "tables": result['tables']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/database/execute")
 async def execute_sql(sql: str = Body(..., embed=True)):
     """执行自定义 SQL"""
@@ -735,6 +753,85 @@ async def update_extract_fields(fields: List[Dict[str, Any]] = Body(...)):
     config.save()
     
     return {"success": True, "message": "字段映射配置已更新", "update": config.update}
+
+
+@app.get("/api/config/download")
+async def download_config():
+    """下载配置文件（JSON 格式）"""
+    config_file = BASE_DIR / "Configure.json"
+    
+    if not config_file.exists():
+        raise HTTPException(status_code=404, detail="配置文件不存在")
+    
+    # 生成带时间戳的文件名
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"Configure_{timestamp}.json"
+    
+    return FileResponse(
+        path=str(config_file),
+        filename=filename,
+        media_type="application/json"
+    )
+
+
+@app.post("/api/config/upload")
+async def upload_config(file: UploadFile = File(...)):
+    """上传配置文件（JSON 格式）"""
+    global config
+    
+    # 验证文件类型
+    if not file.filename.endswith('.json'):
+        raise HTTPException(status_code=400, detail="只支持 JSON 格式的配置文件")
+    
+    backup_file = None
+    try:
+        # 读取文件内容
+        content = await file.read()
+        data = json.loads(content.decode('utf-8'))
+        
+        # 验证配置结构
+        if not isinstance(data, dict):
+            raise ValueError("配置文件格式错误：必须是 JSON 对象")
+        
+        # 备份当前配置
+        config_file = BASE_DIR / "Configure.json"
+        if config_file.exists():
+            backup_file = BASE_DIR / f"Configure.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            shutil.copy2(config_file, backup_file)
+        
+        # 验证并更新配置
+        # 验证 MySQL 配置
+        mysql_data = data.get("MySQL_DBInfo", {})
+        if not all(key in mysql_data for key in ["host", "port", "user", "passwd", "dbname"]):
+            raise ValueError("配置文件缺少必需的 MySQL 配置项")
+        
+        # 更新配置
+        config.mysql.host = mysql_data.get("host", "localhost")
+        config.mysql.port = mysql_data.get("port", 3306)
+        config.mysql.user = mysql_data.get("user", "root")
+        config.mysql.passwd = mysql_data.get("passwd", "")
+        config.mysql.dbname = mysql_data.get("dbname", "CapacityReport")
+        
+        # 更新其他配置
+        config.sheet_filter = data.get("SheetFilter", [])
+        config.extract_fields = data.get("ExtractField", [])
+        
+        # 保存配置
+        config.save()
+        
+        return {
+            "success": True,
+            "message": "配置文件上传成功",
+            "update": config.update,
+            "backup": backup_file.name if backup_file and backup_file.exists() else None
+        }
+        
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="配置文件格式错误：不是有效的 JSON 文件")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
 
 
 # ==================== 清理 API ====================
@@ -858,21 +955,45 @@ async def get_history_size(record_id: str = Body(..., embed=True)):
 
 def is_supervisor_running() -> bool:
     """检查是否在 supervisor 环境下运行"""
-    # 检查 supervisor socket 文件是否存在
-    supervisor_sock = Path("/var/run/supervisor.sock")
-    if supervisor_sock.exists():
-        return True
-    
-    # 检查环境变量
+    # 1. 检查环境变量（最可靠的方式）
     if os.environ.get("SUPERVISOR_ENABLED") == "1":
         return True
     
-    # 检查父进程是否是 supervisord
+    # 2. 检查 supervisor socket 文件是否存在
+    supervisor_sock = Path("/var/run/supervisor.sock")
+    if supervisor_sock.exists():
+        # 尝试连接验证
+        try:
+            result = subprocess.run(
+                ["supervisorctl", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return True
+        except:
+            pass
+    
+    # 3. 检查父进程是否是 supervisord
     try:
         import psutil  # pyright: ignore[reportMissingModuleSource]
         current = psutil.Process()
         parent = current.parent()
         if parent and "supervisor" in parent.name().lower():
+            return True
+    except:
+        pass
+    
+    # 4. 检查进程列表中是否有 supervisord
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "supervisord"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        if result.returncode == 0 and result.stdout.strip():
             return True
     except:
         pass
@@ -883,6 +1004,7 @@ def is_supervisor_running() -> bool:
 def restart_via_supervisor() -> tuple:
     """通过 supervisor 重启服务"""
     try:
+        # 尝试使用 supervisorctl 重启
         result = subprocess.run(
             ["supervisorctl", "restart", "fastapi"],
             capture_output=True,
@@ -892,7 +1014,8 @@ def restart_via_supervisor() -> tuple:
         if result.returncode == 0:
             return True, "服务正在通过 supervisor 重启..."
         else:
-            return False, f"重启失败: {result.stderr or result.stdout}"
+            error_msg = result.stderr or result.stdout or "未知错误"
+            return False, f"重启失败: {error_msg}"
     except subprocess.TimeoutExpired:
         return False, "重启操作超时"
     except FileNotFoundError:
@@ -925,36 +1048,68 @@ def restart_via_signal() -> tuple:
 async def restart_service():
     """
     重启服务
-    - 在 supervisor 环境下使用 supervisorctl restart
-    - 在非 supervisor 环境下发送信号或退出进程
+    - 优先使用 supervisorctl restart（Docker/Linux 环境）
+    - 如果检测失败但命令可用，尝试直接调用 supervisorctl
+    - Windows 环境使用进程退出方式
     """
-    # 检查是否在 supervisor 环境下
+    # 方案 1: 如果检测到 supervisor，直接使用
     if is_supervisor_running():
         success, message = restart_via_supervisor()
-    else:
-        # 非 supervisor 环境，使用延迟退出
-        # 先返回响应，然后在后台线程中退出进程
-        def delayed_exit():
-            import time
-            time.sleep(1)  # 等待响应发送完成
-            if platform.system() == "Windows":
-                os._exit(0)
-            else:
-                os.kill(os.getpid(), signal.SIGTERM)
-        
-        thread = Thread(target=delayed_exit, daemon=True)
-        thread.start()
-        
         return {
-            "success": True,
-            "message": "服务正在重启，请稍后刷新页面...",
-            "method": "signal"
+            "success": success,
+            "message": message,
+            "method": "supervisor"
         }
     
+    # 方案 2: 在非 Windows 环境下，即使检测不到也尝试直接调用 supervisorctl
+    # 这在 Docker 中可能有效（检测逻辑可能失败但命令实际可用）
+    if platform.system() != "Windows":
+        try:
+            result = subprocess.run(
+                ["supervisorctl", "restart", "fastapi"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0:
+                return {
+                    "success": True,
+                    "message": "服务正在通过 supervisor 重启...",
+                    "method": "supervisor"
+                }
+            # 如果返回非 0，记录错误但继续尝试其他方案
+        except FileNotFoundError:
+            # supervisorctl 不存在，跳过
+            pass
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "message": "重启操作超时，请检查 supervisor 状态",
+                "method": "supervisor"
+            }
+        except Exception as e:
+            # 其他错误，记录但继续
+            pass
+    
+    # 方案 3: 非 supervisor 环境，使用延迟退出
+    # 先返回响应，然后在后台线程中退出进程
+    def delayed_exit():
+        import time
+        time.sleep(1)  # 等待响应发送完成
+        if platform.system() == "Windows":
+            os._exit(0)
+        else:
+            # Linux/Mac: 发送 SIGTERM 信号
+            # 在 Docker 中，如果容器有 restart policy，会自动重启
+            os.kill(os.getpid(), signal.SIGTERM)
+    
+    thread = Thread(target=delayed_exit, daemon=True)
+    thread.start()
+    
     return {
-        "success": success,
-        "message": message,
-        "method": "supervisor" if is_supervisor_running() else "signal"
+        "success": True,
+        "message": "服务正在重启，请稍后刷新页面...",
+        "method": "signal"
     }
 
 

@@ -245,6 +245,34 @@ class DatabaseManager:
                 conn.commit()
                 return True
     
+    def drop_all_tables(self) -> Dict[str, Any]:
+        """删除所有表"""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # 获取所有表名
+                cursor.execute("SHOW TABLES")
+                tables = [list(row.values())[0] for row in cursor.fetchall()]
+                
+                if not tables:
+                    return {"success": True, "dropped_count": 0, "tables": []}
+                
+                # 删除所有表
+                dropped_tables = []
+                for table in tables:
+                    try:
+                        cursor.execute(f"DROP TABLE IF EXISTS `{table}`")
+                        dropped_tables.append(table)
+                    except Exception as e:
+                        # 记录错误但继续删除其他表
+                        pass
+                
+                conn.commit()
+                return {
+                    "success": True,
+                    "dropped_count": len(dropped_tables),
+                    "tables": dropped_tables
+                }
+    
     def execute_sql(self, sql: str) -> Tuple[bool, Any]:
         """执行自定义 SQL"""
         with self.get_connection() as conn:

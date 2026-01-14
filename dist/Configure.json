@@ -1,10 +1,10 @@
 {
-  "Update": "2026/01/14 17:10:35",
+  "Update": "2026/01/14 09:14:43",
   "MySQL_DBInfo": {
-    "host": "127.0.0.1",
+    "host": "capacity-mysql",
     "port": 3306,
     "user": "root",
-    "passwd": "242520",
+    "passwd": "gmcc123",
     "dbname": "CapacityReport"
   },
   "SheetFilter": [

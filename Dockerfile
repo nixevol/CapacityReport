@@ -1,7 +1,7 @@
 # CapacityReport Dockerfile
 # 容量报表处理系统 - 用于内网离线部署
 
-FROM python:3.13-slim
+FROM python:3.13.11-slim
 
 LABEL maintainer="CapacityReport"
 LABEL description="容量报表处理系统"

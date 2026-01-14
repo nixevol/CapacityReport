@@ -65,7 +65,10 @@
                             <span>🌓</span>
                         </button>
                         <button class="restart-btn" id="restartService" title="重启服务">
-                            <span>⏻</span>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
                         </button>
                     </div>
                 </header>
@@ -173,28 +176,25 @@
                         <h1>处理历史</h1>
                     </div>
                     <div class="page-header-actions">
+                        <button class="btn btn-sm btn-outline" id="refreshHistory">
+                            <span>🔄</span> 刷新
+                        </button>
+                        <button class="btn btn-sm btn-danger" id="clearHistory">
+                            <span>🗑️</span> 清空历史
+                        </button>
+                        <span class="total-size" style="margin: 0 8px; font-size: 13px; color: var(--td-text-color-secondary);">总占用: <span id="totalHistorySize">计算中...</span></span>
                         <button class="theme-toggle" id="themeToggle" title="切换主题">
                             <span>🌓</span>
                         </button>
                         <button class="restart-btn" id="restartService" title="重启服务">
-                            <span>⏻</span>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
                         </button>
                     </div>
                 </header>
                 <div class="page-body">
-                    <div class="toolbar">
-                        <div class="toolbar-left">
-                            <button class="btn btn-outline" id="refreshHistory">
-                                <span>🔄</span> 刷新
-                            </button>
-                            <button class="btn btn-danger" id="clearHistory">
-                                <span>🗑️</span> 清空历史
-                            </button>
-                        </div>
-                        <div class="toolbar-right">
-                            <span class="total-size">总占用: <span id="totalHistorySize">计算中...</span></span>
-                        </div>
-                    </div>
                     <div class="history-list" id="historyList">
                         <div class="empty-state">
                             <span class="empty-icon">📭</span>
@@ -214,11 +214,17 @@
                         <h1>数据管理</h1>
                     </div>
                     <div class="page-header-actions">
+                        <button class="btn btn-sm btn-danger" id="dropAllTables" title="删除所有表">
+                            🗑️ 删除全部表
+                        </button>
                         <button class="theme-toggle" id="themeToggle" title="切换主题">
                             <span>🌓</span>
                         </button>
                         <button class="restart-btn" id="restartService" title="重启服务">
-                            <span>⏻</span>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
                         </button>
                     </div>
                 </header>
@@ -250,7 +256,6 @@
                                     <span class="row-count" id="rowCount"></span>
                                 </div>
                                 <div class="toolbar-right">
-                                    <input type="text" class="search-input" id="searchInput" placeholder="搜索...">
                                     <button class="btn btn-sm btn-primary" id="downloadTable">📥 导出</button>
                                     <button class="btn btn-sm btn-warning" id="truncateTable">清空</button>
                                     <button class="btn btn-sm btn-danger" id="dropTable">删除</button>
@@ -263,9 +268,27 @@
                                 </div>
                             </div>
                             <div class="pagination" id="pagination" style="display: none;">
-                                <button class="btn btn-sm btn-outline" id="prevPage">上一页</button>
-                                <span id="pageInfo">第 1 页</span>
-                                <button class="btn btn-sm btn-outline" id="nextPage">下一页</button>
+                                <div class="pagination-left">
+                                    <span class="pagination-total">共 <span id="totalRecords">0</span> 条</span>
+                                    <select class="pagination-size-select" id="pageSizeSelect">
+                                        <option value="50">50 条/页</option>
+                                        <option value="100">100 条/页</option>
+                                        <option value="200">200 条/页</option>
+                                        <option value="500">500 条/页</option>
+                                    </select>
+                                </div>
+                                <div class="pagination-center">
+                                    <button class="pagination-btn" id="firstPage" title="首页">«</button>
+                                    <button class="pagination-btn" id="prevPage" title="上一页">‹</button>
+                                    <div class="pagination-jump">
+                                        <span>第</span>
+                                        <input type="number" class="pagination-input" id="pageJumpInput" min="1" value="1">
+                                        <span>页</span>
+                                        <span class="pagination-total-pages">/ <span id="totalPagesDisplay">1</span></span>
+                                    </div>
+                                    <button class="pagination-btn" id="nextPage" title="下一页">›</button>
+                                    <button class="pagination-btn" id="lastPage" title="末页">»</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -294,7 +317,10 @@
                             <span>🌓</span>
                         </button>
                         <button class="restart-btn" id="restartService" title="重启服务">
-                            <span>⏻</span>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
                         </button>
                     </div>
                 </header>
@@ -319,11 +345,21 @@
                         <h1>系统设置</h1>
                     </div>
                     <div class="page-header-actions">
+                        <button class="btn btn-sm btn-outline" id="downloadConfig" title="下载配置文件">
+                            📥 下载配置
+                        </button>
+                        <label class="btn btn-sm btn-outline" for="uploadConfig" title="上传配置文件" style="cursor: pointer; margin: 0;">
+                            📤 上传配置
+                            <input type="file" id="uploadConfig" accept=".json" style="display: none;">
+                        </label>
                         <button class="theme-toggle" id="themeToggle" title="切换主题">
                             <span>🌓</span>
                         </button>
                         <button class="restart-btn" id="restartService" title="重启服务">
-                            <span>⏻</span>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="8" cy="8" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
                         </button>
                     </div>
                 </header>
@@ -399,8 +435,11 @@
                         <div class="card settings-card field-mapping-card">
                             <div class="card-header">
                                 <div class="card-header-top">
-                                    <span class="card-title">字段映射配置</span>
-                                    <span class="field-count" id="fieldCount">0 个字段</span>
+                                    <div class="card-header-left">
+                                        <span class="card-title">字段映射配置</span>
+                                        <span class="field-count" id="fieldCount">0 个字段</span>
+                                    </div>
+                                    <input type="text" class="field-search-input" id="fieldSearchInput" placeholder="搜索字段...">
                                 </div>
                                 <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
                             </div>

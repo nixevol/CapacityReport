@@ -52,14 +52,29 @@ function showToast(message, type = 'info') {
     
     toast.innerHTML = `
         <span class="toast-icon">${icons[type] || 'i'}</span>
-        <span>${message}</span>
+        <span class="toast-message">${message}</span>
+        <button class="toast-close" aria-label="关闭">×</button>
     `;
     container.appendChild(toast);
     
-    setTimeout(() => {
-        toast.style.animation = 'toastIn 0.3s ease reverse';
+    // 触发重排，确保动画生效
+    toast.offsetHeight;
+    
+    // 关闭函数
+    const closeToast = () => {
+        if (toast.timeoutId) {
+            clearTimeout(toast.timeoutId);
+        }
+        toast.style.animation = 'toastOut 0.3s ease forwards';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    };
+    
+    // 绑定关闭按钮事件
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', closeToast);
+    
+    // 自动关闭
+    toast.timeoutId = setTimeout(closeToast, 3000);
 }
 
 // 确认对话框
@@ -1242,28 +1257,40 @@ class DatabaseManager {
     }
     
     init() {
-        $('#searchInput').addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                this.search();
-            }
-        });
-        
         $('#downloadTable').addEventListener('click', () => this.downloadTable());
         $('#truncateTable').addEventListener('click', () => this.truncateTable());
         $('#dropTable').addEventListener('click', () => this.dropTable());
+        $('#dropAllTables').addEventListener('click', () => this.dropAllTables());
         
-        $('#prevPage').addEventListener('click', () => {
-            if (this.currentPage > 1) {
-                this.currentPage--;
-                this.loadData();
+        // 分页按钮事件
+        $('#firstPage').addEventListener('click', () => this.goToPage(1));
+        $('#prevPage').addEventListener('click', () => this.goToPage(this.currentPage - 1));
+        $('#nextPage').addEventListener('click', () => this.goToPage(this.currentPage + 1));
+        $('#lastPage').addEventListener('click', () => this.goToPage(this.totalPages));
+        
+        // 页面大小选择
+        $('#pageSizeSelect').addEventListener('change', (e) => {
+            this.pageSize = parseInt(e.target.value);
+            this.currentPage = 1;
+            this.loadData();
+        });
+        
+        // 跳转页面输入框
+        $('#pageJumpInput').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                const page = parseInt(e.target.value);
+                if (page >= 1 && page <= this.totalPages) {
+                    this.goToPage(page);
+                } else {
+                    e.target.value = this.currentPage;
+                    showToast(`页码必须在 1-${this.totalPages} 之间`, 'error');
+                }
             }
         });
         
-        $('#nextPage').addEventListener('click', () => {
-            if (this.currentPage < this.totalPages) {
-                this.currentPage++;
-                this.loadData();
-            }
+        // 失去焦点时恢复当前页
+        $('#pageJumpInput').addEventListener('blur', (e) => {
+            e.target.value = this.currentPage;
         });
         
         window.addEventListener('pagechange', (e) => {
@@ -1391,6 +1418,10 @@ class DatabaseManager {
         this.currentTable = tableName;
         this.currentPage = 1;
         
+        // 重置页面大小为默认值
+        $('#pageSizeSelect').value = this.pageSize.toString();
+        $('#pageJumpInput').value = '1';
+        
         $('#dbToolbar').style.display = 'flex';
         $('#currentTable').textContent = tableName;
         $('#pagination').style.display = 'flex';
@@ -1410,47 +1441,43 @@ class DatabaseManager {
         }
     }
     
+    goToPage(page) {
+        if (page < 1) page = 1;
+        if (page > this.totalPages) page = this.totalPages;
+        if (page === this.currentPage) return;
+        
+        this.currentPage = page;
+        this.loadData();
+    }
+    
     async loadData() {
         const container = $('#dataTableContainer');
         container.innerHTML = '<div class="loading">加载中...</div>';
         
         try {
-            const searchValue = $('#searchInput').value.trim();
-            let result;
-            
-            if (searchValue && this.columns.length > 0) {
-                // 构建筛选条件（只用第一个字段搜索以提高性能）
-                const filters = {};
-                if (this.columns[0]) {
-                    filters[this.columns[0]] = searchValue;
-                }
-                
-                result = await api('/database/table/query', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        table_name: this.currentTable,
-                        page: this.currentPage,
-                        page_size: this.pageSize,
-                        filters: filters
-                    })
-                });
-            } else {
-                result = await api('/database/table/data', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        table_name: this.currentTable,
-                        page: this.currentPage,
-                        page_size: this.pageSize
-                    })
-                });
-            }
+            const result = await api('/database/table/data', {
+                method: 'POST',
+                body: JSON.stringify({
+                    table_name: this.currentTable,
+                    page: this.currentPage,
+                    page_size: this.pageSize
+                })
+            });
             
             this.totalPages = result.total_pages;
             this.renderTable(result.data);
             
-            $('#pageInfo').textContent = `第 ${this.currentPage} / ${this.totalPages} 页 (共 ${result.total} 条)`;
+            // 更新分页信息
+            $('#totalRecords').textContent = result.total;
+            $('#totalPagesDisplay').textContent = this.totalPages;
+            $('#pageJumpInput').value = this.currentPage;
+            $('#pageJumpInput').max = this.totalPages;
+            
+            // 更新按钮状态
+            $('#firstPage').disabled = this.currentPage <= 1;
             $('#prevPage').disabled = this.currentPage <= 1;
             $('#nextPage').disabled = this.currentPage >= this.totalPages;
+            $('#lastPage').disabled = this.currentPage >= this.totalPages;
             
         } catch (error) {
             container.innerHTML = `<div class="empty-state"><p>加载失败: ${error.message}</p></div>`;
@@ -1460,12 +1487,15 @@ class DatabaseManager {
     renderTable(data) {
         const container = $('#dataTableContainer');
         
-        if (data.length === 0) {
+        // 使用已保存的字段列表，如果没有则从数据中获取
+        const columns = this.columns && this.columns.length > 0 
+            ? this.columns 
+            : (data.length > 0 ? Object.keys(data[0]) : []);
+        
+        if (columns.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>暂无数据</p></div>';
             return;
         }
-        
-        const columns = Object.keys(data[0]);
         
         container.innerHTML = `
             <table class="data-table">
@@ -1475,7 +1505,15 @@ class DatabaseManager {
                     </tr>
                 </thead>
                 <tbody>
-                    ${data.map(row => `
+                    ${data.length === 0 ? `
+                        <tr class="empty-row">
+                            <td colspan="${columns.length}" style="text-align: center; padding: 40px; color: var(--td-text-color-placeholder);">
+                                <div class="empty-state" style="padding: 0;">
+                                    <p>暂无数据</p>
+                                </div>
+                            </td>
+                        </tr>
+                    ` : data.map(row => `
                         <tr>
                             ${columns.map(col => `<td title="${row[col] || ''}">${row[col] ?? ''}</td>`).join('')}
                         </tr>
@@ -1483,11 +1521,6 @@ class DatabaseManager {
                 </tbody>
             </table>
         `;
-    }
-    
-    search() {
-        this.currentPage = 1;
-        this.loadData();
     }
     
     async downloadTable() {
@@ -1561,6 +1594,59 @@ class DatabaseManager {
             showToast(`删除失败: ${error.message}`, 'error');
         }
     }
+    
+    async dropAllTables() {
+        // 首先获取所有表
+        let tables = [];
+        try {
+            const result = await api('/database/tables', { method: 'POST' });
+            tables = result.tables || [];
+        } catch (error) {
+            showToast(`获取表列表失败: ${error.message}`, 'error');
+            return;
+        }
+        
+        if (tables.length === 0) {
+            showToast('数据库中没有表', 'info');
+            return;
+        }
+        
+        // 第一次确认
+        const firstConfirm = await showConfirm(
+            '删除全部表',
+            `警告：此操作将删除数据库中的所有 ${tables.length} 个表！\n\n表列表：${tables.slice(0, 10).join(', ')}${tables.length > 10 ? '...' : ''}\n\n此操作不可恢复，请谨慎操作！`
+        );
+        
+        if (!firstConfirm) return;
+        
+        // 第二次确认（双重确认，防止误操作）
+        const secondConfirm = await showConfirm(
+            '最后确认',
+            `您确定要删除所有 ${tables.length} 个表吗？\n\n此操作将永久删除所有数据，无法恢复！\n\n请再次确认。`
+        );
+        
+        if (!secondConfirm) return;
+        
+        // 执行删除
+        try {
+            const result = await api('/database/table/drop-all', {
+                method: 'POST'
+            });
+            
+            showToast(`已删除 ${result.dropped_count} 个表`, 'success');
+            
+            // 重置当前状态
+            this.currentTable = null;
+            $('#dbToolbar').style.display = 'none';
+            $('#pagination').style.display = 'none';
+            $('#dataTableContainer').innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span><p>数据库中没有表</p></div>';
+            
+            // 重新加载表列表
+            this.loadTables();
+        } catch (error) {
+            showToast(`删除失败: ${error.message}`, 'error');
+        }
+    }
 }
 
 
@@ -1570,6 +1656,7 @@ class SettingsManager {
     constructor() {
         this.sheetFilters = [];
         this.extractFields = [];
+        this.fieldSearchKeyword = '';
         this.init();
     }
     
@@ -1591,6 +1678,16 @@ class SettingsManager {
         // 字段映射
         $('#addFieldMapping').addEventListener('click', () => this.addFieldMapping());
         $('#saveFieldMapping').addEventListener('click', () => this.saveFieldMappings());
+        
+        // 字段搜索
+        $('#fieldSearchInput').addEventListener('input', (e) => {
+            this.fieldSearchKeyword = e.target.value.trim().toLowerCase();
+            this.renderFieldMappings();
+        });
+        
+        // 配置管理
+        $('#downloadConfig').addEventListener('click', () => this.downloadConfig());
+        $('#uploadConfig').addEventListener('change', (e) => this.uploadConfig(e));
         
         window.addEventListener('pagechange', (e) => {
             if (e.detail.page === 'settings') {
@@ -1738,6 +1835,7 @@ class SettingsManager {
     
     renderFieldMappings() {
         const container = $('#fieldMappingList');
+        
         const countEl = $('#fieldCount');
         
         // 更新字段数量显示
@@ -1759,8 +1857,16 @@ class SettingsManager {
             { value: 'text', label: '长文本' }
         ];
         
-        container.innerHTML = this.extractFields.map((field, index) => `
-            <div class="field-mapping-item" data-index="${index}">
+        container.innerHTML = this.extractFields.map((field, index) => {
+            // 根据搜索关键词决定是否显示
+            const shouldShow = !this.fieldSearchKeyword || (() => {
+                const fieldName = (field.Field || '').toLowerCase();
+                const extractSources = (field.Extract || []).join(' ').toLowerCase();
+                return fieldName.includes(this.fieldSearchKeyword) || extractSources.includes(this.fieldSearchKeyword);
+            })();
+            
+            return `
+            <div class="field-mapping-item" data-index="${index}" ${!shouldShow ? 'style="display: none;"' : ''}>
                 <span class="field-mapping-number">${index + 1}</span>
                 <button class="btn-icon remove-mapping" data-index="${index}" title="删除此映射">✕</button>
                 <div class="field-mapping-header">
@@ -1803,7 +1909,8 @@ class SettingsManager {
                     `}
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
         
         // 绑定删除映射事件
         container.querySelectorAll('.remove-mapping').forEach(btn => {
@@ -1905,6 +2012,99 @@ class SettingsManager {
             $('#configUpdate').textContent = `更新时间: ${result.update}`;
         } catch (error) {
             showToast(`保存失败: ${error.message}`, 'error');
+        }
+    }
+    
+    async downloadConfig() {
+        try {
+            const response = await fetch('/api/config/download', {
+                method: 'GET'
+            });
+            
+            if (!response.ok) {
+                throw new Error('下载失败');
+            }
+            
+            // 获取文件名（从 Content-Disposition 头或使用默认名称）
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'Configure.json';
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+                if (filenameMatch) {
+                    filename = filenameMatch[1];
+                }
+            }
+            
+            // 下载文件
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            showToast('配置文件下载成功', 'success');
+        } catch (error) {
+            showToast(`下载失败: ${error.message}`, 'error');
+        }
+    }
+    
+    async uploadConfig(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        // 验证文件类型
+        if (!file.name.endsWith('.json')) {
+            showToast('只支持 JSON 格式的配置文件', 'error');
+            event.target.value = '';
+            return;
+        }
+        
+        // 确认上传
+        const confirmed = await showConfirm(
+            '上传配置',
+            `确定要上传配置文件 "${file.name}" 吗？当前配置将被替换，系统会自动备份原配置。`
+        );
+        
+        if (!confirmed) {
+            event.target.value = '';
+            return;
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('/api/config/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.detail || '上传失败');
+            }
+            
+            // 重新加载配置
+            await this.loadConfig();
+            
+            let message = '配置文件上传成功';
+            if (result.backup) {
+                message += `，原配置已备份为 ${result.backup}`;
+            }
+            
+            showToast(message, 'success');
+            $('#configUpdate').textContent = `更新时间: ${result.update}`;
+            
+        } catch (error) {
+            showToast(`上传失败: ${error.message}`, 'error');
+        } finally {
+            // 清空文件选择，允许重复选择同一文件
+            event.target.value = '';
         }
     }
 }

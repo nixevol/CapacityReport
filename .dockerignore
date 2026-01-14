@@ -12,6 +12,7 @@ __pycache__
 .venv
 venv/
 ENV/
+dist/
 
 # IDE
 .idea/
@@ -23,7 +24,7 @@ ENV/
 cache/
 logs/
 *.log
-
+CapacityReportData/
 # Docker
 docker-compose*.yml
 Dockerfile*
