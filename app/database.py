@@ -97,6 +97,55 @@ class DatabaseManager:
         except Exception as e:
             return False, str(e)
     
+    def check_load_data_support(self) -> Tuple[bool, str]:
+        """
+        检测数据库是否支持 LOAD DATA LOCAL INFILE
+        
+        Returns:
+            (是否支持, 详细信息)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 检查服务器端 local_infile 变量
+                    cursor.execute("SHOW VARIABLES LIKE 'local_infile'")
+                    result = cursor.fetchone()
+                    
+                    if result:
+                        value = result.get('Value', '').upper()
+                        if value == 'ON':
+                            return True, "服务器已启用 local_infile"
+                        else:
+                            return False, f"服务器 local_infile={value}，需要设置为 ON"
+                    else:
+                        return False, "无法获取 local_infile 变量"
+        except Exception as e:
+            return False, f"检测失败: {str(e)}"
+    
+    def get_server_info(self) -> Dict[str, Any]:
+        """获取数据库服务器信息"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 获取版本
+                    cursor.execute("SELECT VERSION() as version")
+                    version = cursor.fetchone().get('version', 'Unknown')
+                    
+                    # 检查 LOAD DATA 支持
+                    load_data_supported, load_data_msg = self.check_load_data_support()
+                    
+                    return {
+                        "version": version,
+                        "load_data_infile": load_data_supported,
+                        "load_data_message": load_data_msg
+                    }
+        except Exception as e:
+            return {
+                "version": "Unknown",
+                "load_data_infile": False,
+                "load_data_message": str(e)
+            }
+    
     def get_tables(self) -> List[str]:
         """获取所有表名"""
         with self.get_connection() as conn:
@@ -211,10 +260,13 @@ class DatabaseManager:
                     return False, str(e)
     
     def bulk_insert(self, table_name: str, columns: List[str], data: List[Tuple], 
-                    batch_size: int = 5000) -> int:
+                    batch_size: int = 5000, conn=None) -> int:
         """
         高性能批量插入
         使用 executemany + 批量提交，比 to_sql 快 5-10 倍
+        
+        Args:
+            conn: 可选，复用已有连接
         """
         if not data:
             return 0
@@ -224,8 +276,9 @@ class DatabaseManager:
         column_names = ', '.join([f'`{col}`' for col in columns])
         sql = f"INSERT INTO `{table_name}` ({column_names}) VALUES ({placeholders})"
         
-        with self.get_fast_connection() as conn:
-            with conn.cursor() as cursor:
+        def do_insert(connection):
+            nonlocal total_inserted
+            with connection.cursor() as cursor:
                 # 优化插入性能的设置
                 cursor.execute("SET autocommit=0")
                 cursor.execute("SET unique_checks=0")
@@ -238,12 +291,74 @@ class DatabaseManager:
                     total_inserted += len(batch)
                 
                 # 提交并恢复设置
-                conn.commit()
+                connection.commit()
                 cursor.execute("SET unique_checks=1")
                 cursor.execute("SET foreign_key_checks=1")
                 cursor.execute("SET autocommit=1")
         
+        if conn:
+            do_insert(conn)
+        else:
+            with self.get_fast_connection() as connection:
+                do_insert(connection)
+        
         return total_inserted
+    
+    def load_data_infile(self, table_name: str, columns: List[str], 
+                         temp_file: str, conn=None) -> int:
+        """
+        使用 LOAD DATA LOCAL INFILE 高速导入 CSV 文件
+        比 executemany 快 10-50 倍
+        
+        Args:
+            table_name: 目标表名
+            columns: 列名列表
+            temp_file: 临时 CSV 文件路径
+            conn: 可选，复用已有连接
+            
+        Returns:
+            导入的行数
+        """
+        column_names = ', '.join([f'`{col}`' for col in columns])
+        
+        # 使用正斜杠路径（MySQL 兼容）
+        file_path = temp_file.replace('\\', '/')
+        
+        sql = f"""
+            LOAD DATA LOCAL INFILE '{file_path}'
+            INTO TABLE `{table_name}`
+            CHARACTER SET utf8mb4
+            FIELDS TERMINATED BY ','
+            OPTIONALLY ENCLOSED BY '"'
+            LINES TERMINATED BY '\\n'
+            IGNORE 1 LINES
+            ({column_names})
+        """
+        
+        def do_load(connection):
+            with connection.cursor() as cursor:
+                # 优化导入性能的设置
+                cursor.execute("SET autocommit=0")
+                cursor.execute("SET unique_checks=0")
+                cursor.execute("SET foreign_key_checks=0")
+                
+                # 执行 LOAD DATA
+                cursor.execute(sql)
+                row_count = cursor.rowcount
+                
+                # 提交并恢复设置
+                connection.commit()
+                cursor.execute("SET unique_checks=1")
+                cursor.execute("SET foreign_key_checks=1")
+                cursor.execute("SET autocommit=1")
+                
+                return row_count
+        
+        if conn:
+            return do_load(conn)
+        else:
+            with self.get_fast_connection() as connection:
+                return do_load(connection)
     
     # 字段类型到 MySQL 类型的映射
     TYPE_MAPPING = {

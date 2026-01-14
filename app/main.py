@@ -60,6 +60,54 @@ global_task_lock: Dict[str, Any] = {
 }
 
 
+# ==================== 健康检查 ====================
+
+@app.get("/health")
+async def health_check():
+    """
+    健康检查接口（用于 Docker/K8s 健康检查）
+    
+    返回:
+        - status: 服务状态 (healthy/unhealthy)
+        - timestamp: 当前时间戳
+        - version: 应用版本
+        - checks: 各组件检查结果
+    """
+    checks = {
+        "app": {"status": "ok"},
+        "database": {"status": "unknown"},
+    }
+    
+    # 检查数据库连接
+    try:
+        db_manager = DatabaseManager(config.mysql_config)
+        server_info = db_manager.get_server_info()
+        if server_info:
+            checks["database"] = {
+                "status": "ok",
+                "version": server_info.get("version", "unknown"),
+                "load_data_infile": server_info.get("load_data_support", False)
+            }
+        else:
+            checks["database"] = {"status": "error", "message": "无法获取数据库信息"}
+    except Exception as e:
+        checks["database"] = {"status": "error", "message": str(e)}
+    
+    # 综合判断健康状态
+    is_healthy = all(
+        c.get("status") == "ok" 
+        for c in checks.values()
+    )
+    
+    return {
+        "status": "healthy" if is_healthy else "unhealthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "2.0.0",
+        "uptime_pid": os.getpid(),
+        "checks": checks
+    }
+
+
 # ==================== 页面路由 ====================
 
 @app.get("/", response_class=HTMLResponse)
@@ -240,7 +288,6 @@ async def test_task_api():
 
 
 @app.get("/api/task/status")
-@app.post("/api/task/status")
 async def get_global_task_status():
     """获取全局任务状态（是否有任务在上传或处理中）"""
     # 自动清理：如果任务已完成但还锁定，则自动解锁
@@ -324,7 +371,6 @@ async def unlock_task(task_id: str = Body(None, embed=True)):
 
 
 @app.get("/api/process/active")
-@app.post("/api/process/active")
 async def get_active_task():
     """获取当前正在进行的任务（全局状态）- 兼容旧接口"""
     return await get_global_task_status()
@@ -472,14 +518,26 @@ async def get_history_detail(record_id: str = Body(..., embed=True)):
 
 # ==================== 数据库管理 API ====================
 
-@app.get("/api/database/test")
 @app.post("/api/database/test")
 async def test_database():
-    """测试数据库连接（支持 GET 和 POST，无需传参）"""
+    """测试数据库连接"""
     db = DatabaseManager(config)
     success, message = db.test_connection()
     db.dispose()
     return {"success": success, "message": message}
+
+
+@app.get("/api/database/info")
+async def get_database_info():
+    """获取数据库服务器信息（包括是否支持 LOAD DATA INFILE）"""
+    db = DatabaseManager(config)
+    try:
+        info = db.get_server_info()
+        return {"success": True, **info}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    finally:
+        db.dispose()
 
 
 @app.get("/api/database/tables")
@@ -682,13 +740,22 @@ async def update_extract_fields(fields: List[Dict[str, Any]] = Body(...)):
 # ==================== 清理 API ====================
 
 @app.get("/api/cache/size")
-@app.post("/api/cache/size")
 async def get_cache_size():
-    """获取 cache 目录占用大小（无需传参）"""
+    """获取 cache 目录占用大小"""
     try:
         total_size = 0
         file_count = 0
         dir_count = 0
+        
+        # 如果 cache 目录不存在，直接返回 0
+        if not CACHE_DIR.exists():
+            return {
+                "success": True,
+                "size_bytes": 0,
+                "size_formatted": "0 B",
+                "file_count": 0,
+                "dir_count": 0
+            }
         
         def get_dir_size(path: Path):
             """递归计算目录大小"""
@@ -705,12 +772,18 @@ async def get_cache_size():
                 pass
         
         # 计算 cache 目录大小（排除 history.json）
-        for item in CACHE_DIR.iterdir():
-            if item.name != "history.json":
-                get_dir_size(item)
+        try:
+            for item in CACHE_DIR.iterdir():
+                if item.name != "history.json":
+                    get_dir_size(item)
+        except (PermissionError, OSError) as e:
+            # 如果无法访问目录，返回 0 而不是失败
+            pass
         
         # 格式化大小
         def format_size(size_bytes):
+            if size_bytes == 0:
+                return "0 B"
             for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
                 if size_bytes < 1024.0:
                     return f"{size_bytes:.2f} {unit}"
@@ -896,6 +969,66 @@ async def get_service_status():
         "pid": os.getpid(),
         "python_version": platform.python_version()
     }
+
+
+# ==================== SQL 脚本编辑 API ====================
+
+@app.get("/api/script/content")
+async def get_script_content():
+    """获取 SQL 脚本内容"""
+    from app.config import SQL_SCRIPT
+    
+    try:
+        if SQL_SCRIPT.exists():
+            content = SQL_SCRIPT.read_text(encoding='utf-8')
+            # 获取文件修改时间
+            mtime = SQL_SCRIPT.stat().st_mtime
+            from datetime import datetime
+            modified = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+            return {
+                "success": True,
+                "content": content,
+                "modified": modified,
+                "path": str(SQL_SCRIPT)
+            }
+        else:
+            return {
+                "success": True,
+                "content": "# SQL 脚本文件不存在，请在此编写脚本\n",
+                "modified": None,
+                "path": str(SQL_SCRIPT)
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/script/save")
+async def save_script_content(content: str = Body(..., embed=True)):
+    """保存 SQL 脚本内容"""
+    from app.config import SQL_SCRIPT
+    
+    try:
+        # 备份原文件
+        if SQL_SCRIPT.exists():
+            backup_path = SQL_SCRIPT.with_suffix('.sql.bak')
+            import shutil
+            shutil.copy(SQL_SCRIPT, backup_path)
+        
+        # 保存新内容
+        SQL_SCRIPT.write_text(content, encoding='utf-8')
+        
+        # 获取新的修改时间
+        mtime = SQL_SCRIPT.stat().st_mtime
+        from datetime import datetime
+        modified = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+        
+        return {
+            "success": True,
+            "message": "脚本保存成功",
+            "modified": modified
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ==================== 启动入口 ====================

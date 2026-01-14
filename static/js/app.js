@@ -531,7 +531,7 @@ class FileUploader {
         
         // 检查是否有其他任务在运行
         try {
-            const statusCheck = await api('/task/status', { method: 'POST' });
+            const statusCheck = await api('/task/status');
             if (statusCheck.has_active) {
                 const stageText = statusCheck.stage === 'uploading' ? '上传' : '处理';
                 showToast(`已有任务在运行（${stageText}中）`, 'warning');
@@ -930,7 +930,7 @@ class FileUploader {
         // 检查是否有正在进行的任务（全局状态）
         // 只在用户导航到上传页面时调用，避免无意义的请求
         try {
-            const result = await api('/task/status', { method: 'POST' });
+            const result = await api('/task/status');
             if (result.has_active) {
                 // 有任务正在进行，隐藏上传区域，显示处理进度
                 $('#uploadZone').style.display = 'none';
@@ -1002,8 +1002,8 @@ class FileUploader {
                     return;
                 }
                 
-                const result = await api('/task/status', { method: 'POST' });
-                
+                const result = await api('/task/status');
+
                 if (!result.has_active) {
                     // 任务已完成或取消，停止轮询并恢复上传界面
                     if (this.pollInterval) {
@@ -1072,6 +1072,8 @@ class HistoryManager {
                         <p>暂无处理记录</p>
                     </div>
                 `;
+                // 即使没有历史记录，也要加载总占用大小
+                this.loadTotalSize();
                 return;
             }
             
@@ -1214,7 +1216,7 @@ class HistoryManager {
         if (!totalSizeEl) return;
         
         try {
-            const result = await api('/cache/size', { method: 'POST' });
+            const result = await api('/cache/size');
             if (result.success) {
                 totalSizeEl.textContent = result.size_formatted;
             } else {
@@ -1273,24 +1275,83 @@ class DatabaseManager {
     }
     
     async testConnection() {
-        const connEl = $('#dbConnection');
-        connEl.innerHTML = '<span class="status-dot"></span><span>检测连接中...</span>';
+        const versionEl = $('#dbVersion');
+        if (!versionEl) return;
+        
+        const versionBadge = versionEl.querySelector('.version-badge');
+        if (!versionBadge) return;
+        
+        versionBadge.classList.remove('connected', 'error', 'unknown');
+        versionBadge.classList.add('unknown');
+        versionBadge.textContent = '检测中';
         
         try {
-            const result = await api('/database/test');
-            const dot = connEl.querySelector('.status-dot');
-            
+            const result = await api('/database/test', { method: 'POST' });
+
             if (result.success) {
-                dot.classList.add('connected');
-                connEl.querySelector('span:last-child').textContent = '已连接';
+                // 连接成功，加载服务器信息
+                await this.loadServerInfo();
             } else {
-                dot.classList.add('error');
-                connEl.querySelector('span:last-child').textContent = '连接失败';
+                // 连接失败
+                versionBadge.classList.remove('unknown');
+                versionBadge.classList.add('error');
+                versionBadge.textContent = '连接失败';
+                versionBadge.title = result.message || '无法连接到数据库';
             }
         } catch (error) {
-            const dot = connEl.querySelector('.status-dot');
-            dot.classList.add('error');
-            connEl.querySelector('span:last-child').textContent = '连接失败';
+            // 连接异常
+            versionBadge.classList.remove('unknown');
+            versionBadge.classList.add('error');
+            versionBadge.textContent = '连接失败';
+            versionBadge.title = error.message || '连接异常';
+        }
+    }
+    
+    async loadServerInfo() {
+        const versionEl = $('#dbVersion');
+        const loadDataEl = $('#loadDataSupport');
+        
+        if (!versionEl || !loadDataEl) return;
+        
+        try {
+            const info = await api('/database/info');
+            
+            if (info.success) {
+                // 显示版本（连接成功）
+                const versionBadge = versionEl.querySelector('.version-badge');
+                versionBadge.classList.remove('unknown', 'error');
+                versionBadge.classList.add('connected');
+                versionBadge.textContent = info.version || '-';
+                versionBadge.title = '数据库版本';
+                
+                // 显示 LOAD DATA INFILE 支持状态
+                const badge = loadDataEl.querySelector('.support-badge');
+                badge.classList.remove('unknown', 'supported', 'unsupported');
+                
+                if (info.load_data_infile) {
+                    badge.classList.add('supported');
+                    badge.textContent = '已启用';
+                    badge.title = info.load_data_message || '支持高速导入';
+                } else {
+                    badge.classList.add('unsupported');
+                    badge.textContent = '未启用';
+                    badge.title = info.load_data_message || '将使用标准导入模式';
+                }
+            } else {
+                // 获取信息失败，但连接可能成功
+                const versionBadge = versionEl.querySelector('.version-badge');
+                versionBadge.classList.remove('unknown');
+                versionBadge.classList.add('error');
+                versionBadge.textContent = '获取失败';
+                versionBadge.title = info.error || '无法获取服务器信息';
+            }
+        } catch (error) {
+            console.error('获取服务器信息失败:', error);
+            const versionBadge = versionEl.querySelector('.version-badge');
+            versionBadge.classList.remove('unknown');
+            versionBadge.classList.add('error');
+            versionBadge.textContent = '获取失败';
+            versionBadge.title = error.message || '获取服务器信息异常';
         }
     }
     
@@ -1604,7 +1665,7 @@ class SettingsManager {
     
     async testConnection() {
         try {
-            const result = await api('/database/test');
+            const result = await api('/database/test', { method: 'POST' });
             if (result.success) {
                 showToast('数据库连接成功', 'success');
             } else {
@@ -1691,16 +1752,17 @@ class SettingsManager {
         
         // 可用的字段类型
         const fieldTypes = [
-            { value: 'string', label: '字符串 (VARCHAR)' },
-            { value: 'datetime', label: '日期时间 (DATETIME)' },
-            { value: 'int', label: '整数 (INT)' },
-            { value: 'float', label: '浮点数 (DOUBLE)' },
-            { value: 'text', label: '长文本 (TEXT)' }
+            { value: 'string', label: '字符串' },
+            { value: 'datetime', label: '日期时间' },
+            { value: 'int', label: '整数' },
+            { value: 'float', label: '浮点数' },
+            { value: 'text', label: '长文本' }
         ];
         
         container.innerHTML = this.extractFields.map((field, index) => `
             <div class="field-mapping-item" data-index="${index}">
                 <span class="field-mapping-number">${index + 1}</span>
+                <button class="btn-icon remove-mapping" data-index="${index}" title="删除此映射">✕</button>
                 <div class="field-mapping-header">
                     <div class="field-name">
                         <label>数据库字段名</label>
@@ -1717,10 +1779,16 @@ class SettingsManager {
                             `).join('')}
                         </select>
                     </div>
-                    <button class="btn-icon remove-mapping" data-index="${index}" title="删除此映射">✕</button>
                 </div>
                 <div class="extract-list">
-                    <label>提取来源 (${(field.Extract || []).length} 个)</label>
+                    <div class="extract-list-header">
+                        <label>提取来源 (${(field.Extract || []).length} 个)</label>
+                        <div class="add-extract-row">
+                            <input type="text" class="form-input extract-input" placeholder="输入 Excel 列名" 
+                                   data-index="${index}">
+                            <button class="btn btn-sm btn-outline add-extract" data-index="${index}">添加</button>
+                        </div>
+                    </div>
                     ${(field.Extract || []).length > 0 ? `
                         <div class="extract-tree" data-index="${index}">
                             ${(field.Extract || []).map((extract, ei) => `
@@ -1733,11 +1801,6 @@ class SettingsManager {
                     ` : `
                         <div class="extract-empty">暂无提取来源，请在下方添加</div>
                     `}
-                    <div class="add-extract-row">
-                        <input type="text" class="form-input extract-input" placeholder="输入 Excel 列名" 
-                               data-index="${index}">
-                        <button class="btn btn-sm btn-outline add-extract" data-index="${index}">添加</button>
-                    </div>
                 </div>
             </div>
         `).join('');
@@ -1856,7 +1919,7 @@ async function updateCacheSize() {
     if (!cacheSizeEl) return;
     
     try {
-        const result = await api('/cache/size', { method: 'POST' });
+        const result = await api('/cache/size');
         if (result.success) {
             cacheSizeEl.textContent = `历史数据: ${result.size_formatted}`;
         } else {
@@ -1998,4 +2061,442 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+    
+    // 初始化脚本编辑器（延迟初始化，只在页面显示时创建）
+    window.scriptEditor = new ScriptEditor();
+    
+    // 监听页面切换事件，延迟初始化 Monaco Editor
+    window.addEventListener('pagechange', (e) => {
+        if (e.detail.page === 'script' && window.scriptEditor) {
+            // 延迟一点确保 DOM 已更新
+            setTimeout(() => {
+                window.scriptEditor.ensureEditor();
+            }, 100);
+        }
+    });
+    
+    // 如果初始页面就是脚本编辑页面，也需要初始化
+    const initialPage = document.querySelector('.page.active')?.id;
+    if (initialPage === 'page-script' && window.scriptEditor) {
+        setTimeout(() => {
+            window.scriptEditor.ensureEditor();
+        }, 300);
+    }
 });
+
+
+// ==================== 脚本编辑器类 ====================
+
+class ScriptEditor {
+    constructor() {
+        this.editor = null;
+        this.originalContent = '';
+        this.isModified = false;
+        this.monacoReady = false;
+        this.monacoLoading = false;
+        this.initAttempted = false;
+        
+        // 只绑定事件，不立即初始化编辑器
+        this.bindEvents();
+    }
+    
+    async waitForLoader() {
+        // 等待 loader.js 加载完成
+        let attempts = 0;
+        const maxAttempts = 50; // 最多等待 5 秒
+        
+        while (attempts < maxAttempts) {
+            if (typeof require !== 'undefined' && typeof require.config === 'function') {
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+        
+        return false;
+    }
+    
+    async initMonaco() {
+        // 如果正在加载或已加载，直接返回
+        if (this.monacoLoading || this.monacoReady) {
+            return;
+        }
+        
+        this.monacoLoading = true;
+        
+        try {
+            // 等待 loader.js 加载完成
+            const loaderReady = await this.waitForLoader();
+            if (!loaderReady) {
+                throw new Error('Monaco Editor loader.js 加载超时');
+            }
+            
+            // 只在第一次配置，避免重复配置导致冲突
+            if (!window.__monacoConfigSet) {
+                require.config({
+                    paths: {
+                        'vs': '/static/lib/monaco/vs'
+                    },
+                    'vs/nls': {
+                        availableLanguages: {
+                            '*': 'zh-cn'  // 使用中文语言包
+                        }
+                    },
+                    // 添加错误处理配置
+                    onError: (err) => {
+                        console.error('Monaco Editor 模块加载错误:', err);
+                        // 不抛出错误，让加载继续
+                    }
+                });
+                window.__monacoConfigSet = true;
+            }
+            
+            // 先预加载关键依赖模块，确保它们完全加载
+            // 这样可以避免竞态条件导致的 undefined 描述符问题
+            await new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    try {
+                        // 先加载 editor.api，确保基础 API 可用
+                        require(['vs/editor.api.001a2486'], (apiModule) => {
+                            if (!apiModule || !apiModule.editor) {
+                                reject(new Error('editor.api 模块加载不完整'));
+                                return;
+                            }
+                            // 验证关键 API 是否可用
+                            if (!apiModule.editor || typeof apiModule.editor.create !== 'function') {
+                                reject(new Error('editor.api 缺少关键方法'));
+                                return;
+                            }
+                            console.log('editor.api 已加载并验证');
+                            resolve();
+                        }, (err) => {
+                            console.error('editor.api 加载失败:', err);
+                            reject(err);
+                        });
+                    } catch (error) {
+                        reject(error);
+                    }
+                }, 100);
+            });
+            
+            // 再等待一点时间，确保所有依赖模块完全初始化
+            await new Promise(resolve => setTimeout(resolve, 150));
+            
+            // 再加载完整的编辑器
+            await new Promise((resolve, reject) => {
+                try {
+                    require(['vs/editor/editor.main'], (module) => {
+                        // 检查模块是否正确加载
+                        if (!module || !module.m) {
+                            reject(new Error('Monaco Editor 模块加载不完整'));
+                            return;
+                        }
+                        
+                        // 验证关键 API 是否可用
+                        if (!module.m.editor || !module.m.editor.create) {
+                            reject(new Error('Monaco Editor API 不完整'));
+                            return;
+                        }
+                        
+                        // 将模块暴露到全局
+                        window.monaco = module.m;
+                        
+                        this.monacoReady = true;
+                        this.monacoLoading = false;
+                        console.log('Monaco Editor 加载成功');
+                        resolve();
+                    }, (err) => {
+                        this.monacoLoading = false;
+                        console.error('Monaco Editor 模块加载失败:', err);
+                        // 尝试获取更详细的错误信息
+                        if (err && err.requireModules) {
+                            console.error('失败的模块:', err.requireModules);
+                        }
+                        reject(err);
+                    });
+                } catch (error) {
+                    this.monacoLoading = false;
+                    console.error('Monaco Editor 加载异常:', error);
+                    reject(error);
+                }
+            });
+        } catch (error) {
+            this.monacoLoading = false;
+            console.error('初始化 Monaco Editor 失败:', error);
+            showToast('编辑器加载失败: ' + error.message, 'error');
+        }
+    }
+    
+    async ensureEditor() {
+        // 检查容器是否存在且可见
+        const container = document.getElementById('scriptEditor');
+        if (!container) {
+            console.warn('脚本编辑器容器不存在');
+            return;
+        }
+        
+        // 检查容器是否可见
+        const page = document.getElementById('page-script');
+        if (!page || !page.classList.contains('active')) {
+            console.warn('脚本编辑页面未激活');
+            return;
+        }
+        
+        // 如果编辑器已创建，只需重新布局
+        if (this.editor) {
+            setTimeout(() => {
+                this.editor.layout();
+            }, 100);
+            return;
+        }
+        
+        // 如果 Monaco 未加载，先加载
+        if (!this.monacoReady) {
+            await this.initMonaco();
+        }
+        
+        // 创建编辑器
+        if (this.monacoReady && !this.editor) {
+            this.createEditor();
+        }
+    }
+    
+    createEditor() {
+        const container = document.getElementById('scriptEditor');
+        if (!container) {
+            console.error('脚本编辑器容器不存在');
+            return;
+        }
+        
+        // 如果编辑器已存在，先销毁
+        if (this.editor) {
+            try {
+                this.editor.dispose();
+            } catch (e) {
+                console.warn('销毁旧编辑器失败:', e);
+            }
+        }
+        
+        try {
+            // 检测当前主题
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            
+            // 创建编辑器实例
+            this.editor = monaco.editor.create(container, {
+            value: '-- 加载中...',
+            language: 'sql',
+            theme: isDark ? 'vs-dark' : 'vs',
+            fontSize: 14,
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace",
+            minimap: { enabled: true },
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            lineNumbers: 'on',
+            renderLineHighlight: 'all',
+            selectOnLineNumbers: true,
+            roundedSelection: true,
+            cursorBlinking: 'smooth',
+            cursorSmoothCaretAnimation: 'on',
+            smoothScrolling: true,
+            tabSize: 4,
+            insertSpaces: true,
+            folding: true,
+            foldingStrategy: 'indentation',
+            showFoldingControls: 'always',
+            bracketPairColorization: { enabled: true },
+            guides: {
+                bracketPairs: true,
+                indentation: true
+            },
+            suggest: {
+                showKeywords: true,
+                showSnippets: true
+            }
+        });
+        
+        // 监听内容变化
+        this.editor.onDidChangeModelContent(() => {
+            this.checkModified();
+        });
+        
+        // 监听光标位置变化
+        this.editor.onDidChangeCursorPosition((e) => {
+            this.updateCursorPosition(e.position);
+        });
+        
+        // 添加快捷键
+        this.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            this.saveScript();
+        });
+        
+        // 监听窗口大小变化，自动调整布局
+        window.addEventListener('resize', () => {
+            if (this.editor) {
+                this.editor.layout();
+            }
+        });
+        
+        // 延迟加载脚本内容，确保编辑器已完全渲染
+        setTimeout(() => {
+            this.loadScript();
+        }, 200);
+        } catch (error) {
+            console.error('创建编辑器失败:', error);
+            showToast('创建编辑器失败: ' + error.message, 'error');
+        }
+    }
+    
+    async loadScript() {
+        try {
+            this.updateStatus('加载中...');
+            const result = await api('/script/content');
+            
+            if (result.success) {
+                this.originalContent = result.content;
+                if (this.editor) {
+                    this.editor.setValue(result.content);
+                }
+                
+                // 更新路径和修改时间
+                const pathEl = document.getElementById('scriptPath');
+                const modifiedEl = document.getElementById('scriptModified');
+                
+                if (pathEl) {
+                    pathEl.textContent = result.path;
+                    pathEl.title = result.path;
+                }
+                
+                if (modifiedEl && result.modified) {
+                    modifiedEl.textContent = `最后修改: ${result.modified}`;
+                }
+                
+                this.isModified = false;
+                this.updateStatus('就绪');
+            } else {
+                showToast('加载脚本失败: ' + result.error, 'error');
+                this.updateStatus('加载失败');
+            }
+        } catch (error) {
+            showToast('加载脚本失败: ' + error.message, 'error');
+            this.updateStatus('加载失败');
+        }
+    }
+    
+    async saveScript() {
+        if (!this.editor) return;
+        
+        try {
+            this.updateStatus('保存中...');
+            const content = this.editor.getValue();
+            
+            const result = await api('/script/save', {
+                method: 'POST',
+                body: JSON.stringify({ content })
+            });
+            
+            if (result.success) {
+                this.originalContent = content;
+                this.isModified = false;
+                
+                // 更新修改时间
+                const modifiedEl = document.getElementById('scriptModified');
+                if (modifiedEl && result.modified) {
+                    modifiedEl.textContent = `最后修改: ${result.modified}`;
+                }
+                
+                showToast('脚本保存成功', 'success');
+                this.updateStatus('已保存');
+            } else {
+                showToast('保存失败: ' + result.error, 'error');
+                this.updateStatus('保存失败');
+            }
+        } catch (error) {
+            showToast('保存失败: ' + error.message, 'error');
+            this.updateStatus('保存失败');
+        }
+    }
+    
+    formatScript() {
+        if (!this.editor) return;
+        
+        // Monaco 内置的格式化功能
+        this.editor.getAction('editor.action.formatDocument').run();
+        showToast('格式化完成', 'success');
+    }
+    
+    checkModified() {
+        if (!this.editor) return;
+        
+        const current = this.editor.getValue();
+        this.isModified = current !== this.originalContent;
+        
+        // 更新标题显示修改状态
+        const saveBtn = document.getElementById('saveScript');
+        if (saveBtn) {
+            if (this.isModified) {
+                saveBtn.classList.add('modified');
+                saveBtn.innerHTML = '💾 保存 *';
+            } else {
+                saveBtn.classList.remove('modified');
+                saveBtn.innerHTML = '💾 保存';
+            }
+        }
+    }
+    
+    updateCursorPosition(position) {
+        const cursorEl = document.getElementById('editorCursor');
+        if (cursorEl) {
+            cursorEl.textContent = `行 ${position.lineNumber}, 列 ${position.column}`;
+        }
+    }
+    
+    updateStatus(status) {
+        const statusEl = document.getElementById('editorStatus');
+        if (statusEl) {
+            statusEl.textContent = status;
+        }
+    }
+    
+    updateTheme(isDark) {
+        if (this.editor) {
+            monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+        }
+    }
+    
+    bindEvents() {
+        // 保存按钮
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#saveScript')) {
+                this.saveScript();
+            }
+            if (e.target.closest('#formatScript')) {
+                this.formatScript();
+            }
+        });
+        
+        // 监听主题变化
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'data-theme') {
+                    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    this.updateTheme(isDark);
+                }
+            });
+        });
+        
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme']
+        });
+        
+        // 页面离开前提示保存
+        window.addEventListener('beforeunload', (e) => {
+            if (this.isModified) {
+                e.preventDefault();
+                e.returnValue = '您有未保存的更改，确定要离开吗？';
+                return e.returnValue;
+            }
+        });
+    }
+}

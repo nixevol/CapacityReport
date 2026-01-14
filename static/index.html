@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>容量报表处理程序</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- 本地字体（可选，没有则使用系统字体） -->
+    <link rel="stylesheet" href="/static/css/fonts.css">
     <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Monaco Editor（本地）- 必须在 app.js 之前加载 -->
+    <script src="/static/lib/monaco/vs/loader.js"></script>
 </head>
 <body>
     <div class="app">
@@ -27,9 +28,13 @@
                     <span class="nav-icon">📋</span>
                     <span>处理历史</span>
                 </a>
-                <a href="#" class="nav-item" data-page="database" title="数据库管理">
+                <a href="#" class="nav-item" data-page="database" title="数据管理">
                     <span class="nav-icon">🗄️</span>
-                    <span>数据库管理</span>
+                    <span>数据管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="script" title="脚本编辑">
+                    <span class="nav-icon">📝</span>
+                    <span>脚本编辑</span>
                 </a>
                 <a href="#" class="nav-item" data-page="settings" title="系统设置">
                     <span class="nav-icon">⚙️</span>
@@ -206,7 +211,7 @@
                         <span id="sidebarToggleIcon">☰</span>
                     </button>
                     <div class="page-header-content">
-                        <h1>数据库管理</h1>
+                        <h1>数据管理</h1>
                     </div>
                     <div class="page-header-actions">
                         <button class="theme-toggle" id="themeToggle" title="切换主题">
@@ -220,12 +225,22 @@
                 <div class="page-body" style="display: flex; flex-direction: column; height: calc(100% - 64px);">
                     <div class="database-layout" style="flex: 1; overflow: hidden;">
                         <div class="db-sidebar">
-                            <div class="db-connection" id="dbConnection">
-                                <span class="status-dot"></span>
-                                <span>检测连接中...</span>
-                            </div>
                             <div class="table-list" id="tableList">
                                 <div class="loading">加载中...</div>
+                            </div>
+                            <div class="db-server-info" id="dbServerInfo">
+                                <div class="server-info-item" id="dbVersion">
+                                    <span class="info-label">版本:</span>
+                                    <span class="info-value">
+                                        <span class="version-badge unknown">检测中</span>
+                                    </span>
+                                </div>
+                                <div class="server-info-item" id="loadDataSupport">
+                                    <span class="info-label">快速导入:</span>
+                                    <span class="info-value">
+                                        <span class="support-badge unknown">检测中</span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div class="db-content">
@@ -253,6 +268,43 @@
                                 <button class="btn btn-sm btn-outline" id="nextPage">下一页</button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 脚本编辑页面 -->
+            <section id="page-script" class="page">
+                <header class="page-header">
+                    <button class="sidebar-toggle" id="sidebarToggle" title="展开/收起侧边栏">
+                        <span id="sidebarToggleIcon">☰</span>
+                    </button>
+                    <div class="page-header-content">
+                        <h1>脚本编辑</h1>
+                        <span class="script-path" id="scriptPath" title="脚本路径"></span>
+                    </div>
+                    <div class="page-header-actions">
+                        <span class="script-modified" id="scriptModified"></span>
+                        <button class="btn btn-sm btn-primary" id="saveScript" title="保存脚本 (Ctrl+S)">
+                            💾 保存
+                        </button>
+                        <button class="btn btn-sm btn-outline" id="formatScript" title="格式化 SQL">
+                            ✨ 格式化
+                        </button>
+                        <button class="theme-toggle" id="themeToggle" title="切换主题">
+                            <span>🌓</span>
+                        </button>
+                        <button class="restart-btn" id="restartService" title="重启服务">
+                            <span>⏻</span>
+                        </button>
+                    </div>
+                </header>
+                <div class="page-body script-page-body">
+                    <div class="script-editor-container">
+                        <div id="scriptEditor" class="script-editor"></div>
+                    </div>
+                    <div class="script-status-bar">
+                        <span id="editorCursor">行 1, 列 1</span>
+                        <span id="editorStatus">就绪</span>
                     </div>
                 </div>
             </section>
@@ -346,11 +398,13 @@
                     <div class="settings-column settings-column-wide">
                         <div class="card settings-card field-mapping-card">
                             <div class="card-header">
-                                <span class="card-title">字段映射配置</span>
-                                <span class="field-count" id="fieldCount">0 个字段</span>
+                                <div class="card-header-top">
+                                    <span class="card-title">字段映射配置</span>
+                                    <span class="field-count" id="fieldCount">0 个字段</span>
+                                </div>
+                                <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
                             </div>
                             <div class="card-body">
-                                <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
                                 <div class="field-mapping-list" id="fieldMappingList">
                                     <!-- 动态生成 -->
                                 </div>

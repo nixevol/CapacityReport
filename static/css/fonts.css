@@ -1,0 +1,43 @@
+/*
+ * 本地字体配置
+ * 
+ * 如果需要使用 Noto Sans SC 字体：
+ * 1. 下载字体文件到 static/fonts/ 目录
+ * 2. 取消下方 @font-face 的注释
+ * 
+ * 默认使用系统字体，无需额外下载
+ */
+
+/*
+@font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/static/fonts/NotoSansSC-Regular.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/static/fonts/NotoSansSC-Medium.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('/static/fonts/NotoSansSC-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/static/fonts/NotoSansSC-Bold.woff2') format('woff2');
+}
+*/

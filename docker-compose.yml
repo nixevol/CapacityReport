@@ -1,0 +1,97 @@
+# CapacityReport Docker 编排文件
+# 用于内网离线部署
+#
+# 使用方法:
+#   docker-compose up -d          # 启动所有服务
+#   docker-compose down           # 停止所有服务
+#   docker-compose logs -f app    # 查看应用日志
+#   docker-compose logs -f mysql  # 查看 MySQL 日志
+#
+# 内网部署准备（在有外网的机器上）:
+#   docker pull python:3.11-slim
+#   docker pull mysql:8.0          # 或指定版本: mysql:8.0.44
+#   docker save -o capacity-images.tar python:3.11-slim mysql:8.0
+#   # 将 capacity-images.tar 传到目标机器后执行:
+#   docker load -i capacity-images.tar
+
+version: '3.8'
+
+services:
+  # 容量报表应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: capacity-report
+    restart: unless-stopped
+    ports:
+      - "9081:9081"
+    volumes:
+      # 持久化数据
+      - ./cache:/app/cache
+      - ./Configure.json:/app/Configure.json
+      - ./ReportScript.sql:/app/ReportScript.sql
+      # 日志目录
+      - ./logs:/var/log/supervisor
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - capacity-network
+
+  # MySQL 数据库
+  # 版本说明：
+  #   - mysql:8.0          # 自动使用最新的 8.0.x 版本（推荐，当前最新为 8.0.44）
+  #   - mysql:8.0.44        # 固定版本，适合生产环境（2025-11-04 发布）
+  #   - mysql:8.0.43        # 其他稳定版本
+  # 注意：MySQL 9.5 目前没有官方 Docker 镜像，建议使用 8.0 系列
+  # LOAD DATA INFILE 支持：MySQL 8.0 完全支持，已通过配置启用
+  mysql:
+    image: mysql:8.0
+    container_name: capacity-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化
+      - mysql-data:/var/lib/mysql
+      # 自定义配置（启用 LOAD DATA INFILE）
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
+      # 初始化脚本（仅在首次启动时执行）
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - MYSQL_ROOT_PASSWORD=gmcc123
+      # MYSQL_DATABASE: 仅在首次初始化时创建数据库
+      # 如果数据目录已存在，此变量会被忽略（安全）
+      # 初始化脚本 mysql/init/01-init-db.sql 会确保数据库以 utf8mb4 字符集创建
+      - MYSQL_DATABASE=CapacityReport
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --local-infile=ON
+      - --secure-file-priv=
+      - --max_allowed_packet=256M
+      - --innodb_buffer_pool_size=512M
+      - --innodb_log_file_size=128M
+      - --innodb_flush_log_at_trx_commit=2
+      - --sync_binlog=0
+    networks:
+      - capacity-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pgmcc123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  capacity-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local

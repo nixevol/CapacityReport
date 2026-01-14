@@ -84,6 +84,10 @@ class DataProcessor:
         
         # 预编译字段映射，避免重复查找
         self._field_map, self._type_map = self._build_field_map()
+        
+        # LOAD DATA INFILE 支持状态（在首次使用时检测）
+        self._load_data_supported: Optional[bool] = None
+        self._load_data_checked = False
     
     def _build_field_map(self) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
@@ -138,6 +142,9 @@ class DataProcessor:
             self.results["error"] = str(e)
         
         finally:
+            # 清理临时目录
+            self._cleanup_temp_dir()
+            # 释放数据库连接
             self.db.dispose()
         
         return self.results
@@ -264,11 +271,20 @@ class DataProcessor:
             return 'gbk'
         return 'utf-8'
     
-    def _process_csv_file_fast(self, csv_file: Path, table_name: str) -> int:
+    def _process_csv_file_fast(self, csv_file: Path, table_name: str, 
+                                conn=None, table_created: bool = False) -> Tuple[int, bool]:
         """
         高性能处理单个 CSV 文件
-        使用批量插入代替 to_sql，性能提升 5-10 倍
-        根据配置的字段类型进行数据转换
+        使用 LOAD DATA LOCAL INFILE，比 executemany 快 10-50 倍
+        
+        Args:
+            csv_file: CSV 文件路径
+            table_name: 目标表名
+            conn: 数据库连接（复用）
+            table_created: 表是否已创建
+            
+        Returns:
+            (导入行数, 表是否已创建)
         """
         encoding = self._detect_encoding(csv_file)
         rel_path = csv_file.relative_to(self.work_dir)
@@ -294,7 +310,7 @@ class DataProcessor:
         if len(col_mapping) <= 3:
             if 'kpis' in str(csv_file).lower():
                 self.logger.warning(f"跳过非数据文件: {rel_path}")
-                return 0
+                return 0, table_created
             raise ValueError(f"字段匹配不足: {rel_path}")
         
         # 选择需要的列并重命名
@@ -340,16 +356,105 @@ class DataProcessor:
                 if mask.any():
                     df_result.loc[mask, col] = df_result.loc[mask, col].str[:255]
         
-        # 确保表存在（传递类型信息）
-        self.db.create_table_from_columns(table_name, target_cols, column_types)
+        # 确保表存在（只在第一次创建）
+        if not table_created:
+            self.db.create_table_from_columns(table_name, target_cols, column_types)
+            table_created = True
         
-        # 转换为元组列表，用于批量插入
-        data_tuples = [tuple(row) for row in df_result.values]
+        # 使用 LOAD DATA INFILE 导入
+        inserted = self._load_data_infile(df_result, table_name, target_cols, conn)
         
+        return inserted, table_created
+    
+    def _get_temp_dir(self) -> Path:
+        """获取临时目录（使用工作目录下的 .temp 子目录）"""
+        temp_dir = self.work_dir / '.temp'
+        temp_dir.mkdir(exist_ok=True)
+        return temp_dir
+    
+    def _cleanup_temp_dir(self):
+        """清理临时目录"""
+        temp_dir = self.work_dir / '.temp'
+        if temp_dir.exists():
+            try:
+                import shutil
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
+    
+    def _check_load_data_support(self) -> bool:
+        """检测是否支持 LOAD DATA INFILE（只检测一次）"""
+        if self._load_data_checked:
+            return self._load_data_supported or False
+        
+        self._load_data_checked = True
+        supported, message = self.db.check_load_data_support()
+        self._load_data_supported = supported
+        
+        if supported:
+            self.logger.info(f"LOAD DATA INFILE: 已启用 ({message})")
+        else:
+            self.logger.warning(f"LOAD DATA INFILE: 不可用 ({message})，将使用批量插入模式")
+        
+        return supported
+    
+    def _load_data_infile(self, df: pd.DataFrame, table_name: str, 
+                          columns: List[str], conn=None) -> int:
+        """
+        使用 LOAD DATA LOCAL INFILE 导入数据
+        如果失败则自动回退到 bulk_insert 方式
+        临时文件放在工作目录的 .temp 子目录中
+        """
+        import tempfile
+        
+        # 检测是否支持 LOAD DATA INFILE
+        if not self._check_load_data_support():
+            # 不支持，直接使用 bulk_insert
+            return self._bulk_insert_fallback(df, table_name, columns, conn)
+        
+        # 获取临时目录
+        temp_dir = self._get_temp_dir()
+        temp_file = None
+        
+        try:
+            # 写入临时 CSV 文件
+            with tempfile.NamedTemporaryFile(
+                mode='w', 
+                suffix='.csv', 
+                delete=False, 
+                encoding='utf-8',
+                newline='',
+                dir=str(temp_dir)  # 使用指定的临时目录
+            ) as f:
+                temp_file = f.name
+                # 写入 CSV（带表头，用于 IGNORE 1 LINES）
+                df.to_csv(f, index=False, header=True, na_rep='\\N')
+            
+            # 使用 LOAD DATA LOCAL INFILE 导入
+            inserted = self.db.load_data_infile(table_name, columns, temp_file, conn)
+            return inserted
+            
+        except Exception as e:
+            # LOAD DATA 失败，标记为不支持并回退
+            self.logger.warning(f"LOAD DATA INFILE 执行失败: {e}，回退到批量插入模式")
+            self._load_data_supported = False
+            return self._bulk_insert_fallback(df, table_name, columns, conn)
+            
+        finally:
+            # 清理临时文件
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except Exception:
+                    pass
+    
+    def _bulk_insert_fallback(self, df: pd.DataFrame, table_name: str,
+                               columns: List[str], conn=None) -> int:
+        """批量插入回退方案"""
+        # 转换为元组列表
+        data_tuples = [tuple(row) for row in df.values]
         # 使用批量插入
-        inserted = self.db.bulk_insert(table_name, target_cols, data_tuples, self.BATCH_SIZE)
-        
-        return inserted
+        return self.db.bulk_insert(table_name, columns, data_tuples, self.BATCH_SIZE, conn)
     
     # 支持的日期时间格式列表
     DATETIME_FORMATS = [
@@ -510,7 +615,7 @@ class DataProcessor:
         return data_dirs
     
     def _process_csv_files(self):
-        """处理所有 CSV 文件（高性能版）"""
+        """处理所有 CSV 文件（高性能版 - 使用 LOAD DATA INFILE + 连接复用）"""
         self.logger.info("正在处理 CSV 文件并上传到数据库...")
         
         # 查找数据目录
@@ -520,7 +625,7 @@ class DataProcessor:
             self.logger.warning("未找到任何数据目录")
             return
         
-        # 按目录分组处理
+        # 按目录分组处理，使用连接复用
         for table_name, subdir in data_dirs.items():
             self.logger.info(f"处理目录: {subdir.relative_to(self.work_dir)} -> 表: {table_name}")
             
@@ -533,20 +638,25 @@ class DataProcessor:
             
             total_rows = 0
             start_time = time.time()
+            table_created = False
             
-            for i, csv_file in enumerate(csv_files, 1):
-                try:
-                    rows = self._process_csv_file_fast(csv_file, table_name)
-                    total_rows += rows
-                    
-                    # 每处理 10 个文件报告一次进度
-                    if i % 10 == 0:
-                        elapsed = round(time.time() - start_time, 1)
-                        self.logger.info(f"进度: {i}/{len(csv_files)} 文件, 已导入 {total_rows} 行, 耗时 {elapsed}s")
+            # 使用连接复用：一个表的所有 CSV 文件共用一个连接
+            with self.db.get_fast_connection() as conn:
+                for i, csv_file in enumerate(csv_files, 1):
+                    try:
+                        rows, table_created = self._process_csv_file_fast(
+                            csv_file, table_name, conn, table_created
+                        )
+                        total_rows += rows
                         
-                except Exception as e:
-                    rel_path = csv_file.relative_to(self.work_dir)
-                    self.logger.error(f"CSV 处理失败 {rel_path}: {e}")
+                        # 每处理 10 个文件报告一次进度
+                        if i % 10 == 0:
+                            elapsed = round(time.time() - start_time, 1)
+                            self.logger.info(f"进度: {i}/{len(csv_files)} 文件, 已导入 {total_rows} 行, 耗时 {elapsed}s")
+                            
+                    except Exception as e:
+                        rel_path = csv_file.relative_to(self.work_dir)
+                        self.logger.error(f"CSV 处理失败 {rel_path}: {e}")
             
             elapsed = round(time.time() - start_time, 2)
             speed = round(total_rows / elapsed) if elapsed > 0 else 0
