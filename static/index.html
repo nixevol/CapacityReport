@@ -61,6 +61,9 @@
                         <h1>数据上传与处理</h1>
                     </div>
                     <div class="page-header-actions">
+                        <button class="btn btn-sm btn-outline" id="newProcess" style="display: none;" title="新建任务">
+                            <span>🔄</span> 新建任务
+                        </button>
                         <button class="theme-toggle" id="themeToggle" title="切换主题">
                             <span>🌓</span>
                         </button>
@@ -152,14 +155,6 @@
                                 <div class="log-container" id="logContainer">
                                     <div class="log-content" id="logContent"></div>
                                 </div>
-                            </div>
-                            <div class="card-footer process-actions" id="processActions" style="display: none;">
-                                <button class="btn btn-success" id="downloadResult">
-                                    <span>📥</span> 下载结果
-                                </button>
-                                <button class="btn btn-outline" id="newProcess">
-                                    <span>🔄</span> 新建任务
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -313,6 +308,9 @@
                         <button class="btn btn-sm btn-outline" id="formatScript" title="格式化 SQL">
                             ✨ 格式化
                         </button>
+                        <button class="btn btn-sm btn-success" id="runScript" title="运行脚本">
+                            ▶️ 运行脚本
+                        </button>
                         <button class="theme-toggle" id="themeToggle" title="切换主题">
                             <span>🌓</span>
                         </button>
@@ -331,6 +329,32 @@
                     <div class="script-status-bar">
                         <span id="editorCursor">行 1, 列 1</span>
                         <span id="editorStatus">就绪</span>
+                    </div>
+                    
+                    <!-- 脚本执行状态 -->
+                    <div class="process-section" id="scriptProcessSection" style="display: none; margin-top: 20px;">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-header-left">
+                                    <span class="card-title">脚本执行进度</span>
+                                    <span class="process-status processing" id="scriptProcessStatus">执行中...</span>
+                                </div>
+                                <div class="card-header-right">
+                                    <label class="auto-refresh-toggle">
+                                        <input type="checkbox" id="scriptAutoRefreshLog" checked>
+                                        <span>自动刷新</span>
+                                    </label>
+                                    <button class="btn btn-sm btn-outline" id="scriptManualRefreshLog" title="手动刷新日志">
+                                        <span>🔄</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="log-container" id="scriptLogContainer">
+                                    <div class="log-content" id="scriptLogContent"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -483,24 +507,6 @@
         </div>
     </div>
 
-    <!-- 下载选择对话框 -->
-    <div class="modal" id="downloadModal">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-            <h3>选择下载的数据表</h3>
-            <div class="download-options">
-                <button class="btn btn-lg btn-primary download-option" data-table="4G_结果表">
-                    <span>📊</span> 4G 结果表
-                </button>
-                <button class="btn btn-lg btn-primary download-option" data-table="5G_结果表">
-                    <span>📊</span> 5G 结果表
-                </button>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-outline" id="downloadCancel">关闭</button>
-            </div>
-        </div>
-    </div>
 
     <script src="/static/js/app.js"></script>
 </body>

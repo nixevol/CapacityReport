@@ -560,10 +560,17 @@ class DataProcessor:
     def _convert_int_column(self, series: pd.Series) -> pd.Series:
         """转换整数列"""
         try:
+            # 检测是否包含百分号
+            has_percent = series.astype(str).str.contains('%', regex=False, na=False)
+            
             # 去除百分号和逗号
             cleaned = series.str.replace('%', '', regex=False).str.replace(',', '', regex=False)
-            # 转换为数值，保留为字符串形式（数据库会自动转换）
+            # 转换为数值
             numeric = pd.to_numeric(cleaned, errors='coerce')
+            
+            # 如果有百分号，除以100转换为小数
+            numeric[has_percent] = numeric[has_percent] / 100
+            
             # 四舍五入并转为整数字符串，空值保留为 None
             return numeric.round().fillna(0).astype(int).astype(str).replace('0', None, regex=False)
         except Exception:
@@ -572,10 +579,17 @@ class DataProcessor:
     def _convert_float_column(self, series: pd.Series) -> pd.Series:
         """转换浮点数列"""
         try:
+            # 检测是否包含百分号
+            has_percent = series.astype(str).str.contains('%', regex=False, na=False)
+            
             # 去除百分号和逗号
             cleaned = series.str.replace('%', '', regex=False).str.replace(',', '', regex=False)
             # 转换为数值
             numeric = pd.to_numeric(cleaned, errors='coerce')
+            
+            # 如果有百分号，除以100转换为小数（例如：95% → 0.95）
+            numeric[has_percent] = numeric[has_percent] / 100
+            
             # 保留小数，空值为 None
             return numeric.fillna(0).astype(str).replace('0.0', None, regex=False).replace('0', None, regex=False)
         except Exception:

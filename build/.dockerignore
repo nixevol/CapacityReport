@@ -33,6 +33,9 @@ Dockerfile*
 # MySQL data
 mysql/
 
+# Build directory (exclude build files from image)
+build/
+
 # Temporary files
 *.tmp
 *.temp

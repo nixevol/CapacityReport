@@ -331,56 +331,6 @@ class FileUploader {
         // 不在页面加载时自动检查任务，只在用户导航到上传页面时检查
         // 避免无意义的轮询请求
         
-        // 下载结果按钮
-        $('#downloadResult').addEventListener('click', () => {
-            $('#downloadModal').classList.add('active');
-        });
-        
-        // 下载选项
-        $$('.download-option').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const table = btn.dataset.table;
-                try {
-                    const response = await fetch('/api/download', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            table_name: table,
-                            format: 'xlsx'
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('下载失败');
-                    }
-                    
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${table}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                } catch (error) {
-                    showToast(`下载失败: ${error.message}`, 'error');
-                }
-                $('#downloadModal').classList.remove('active');
-            });
-        });
-        
-        $('#downloadCancel').addEventListener('click', () => {
-            $('#downloadModal').classList.remove('active');
-        });
-        
-        // 关闭模态框点击背景
-        $('#downloadModal .modal-backdrop').addEventListener('click', () => {
-            $('#downloadModal').classList.remove('active');
-        });
-        
         // 新建任务
         $('#newProcess').addEventListener('click', () => {
             this.reset();
@@ -555,7 +505,7 @@ class FileUploader {
                 $('#uploadZone').style.display = 'none';
                 $('#fileList').style.display = 'none';
                 $('#processSection').style.display = 'block';
-                $('#processActions').style.display = 'none';
+                $('#newProcess').style.display = 'none';
                 $('#processStatus').className = 'process-status processing';
                 $('#processStatus').textContent = statusCheck.stage === 'uploading' ? '上传中...' : '处理中...';
                 if (statusCheck.logs && statusCheck.logs.length > 0) {
@@ -834,7 +784,7 @@ class FileUploader {
                 if (status.status === 'completed') {
                     statusEl.textContent = '处理完成';
                     statusEl.className = 'process-status completed';
-                    $('#processActions').style.display = 'flex';
+                    $('#newProcess').style.display = 'inline-flex';
                     // 任务完成，立即停止轮询
                     if (this.pollInterval) {
                         clearInterval(this.pollInterval);
@@ -847,7 +797,7 @@ class FileUploader {
                 } else if (status.status === 'failed') {
                     statusEl.textContent = '处理失败';
                     statusEl.className = 'process-status failed';
-                    $('#processActions').style.display = 'flex';
+                    $('#newProcess').style.display = 'inline-flex';
                     // 任务失败，立即停止轮询
                     if (this.pollInterval) {
                         clearInterval(this.pollInterval);
@@ -954,7 +904,7 @@ class FileUploader {
                 $('#uploadStats').style.display = 'none';
                 this.taskId = result.task_id;
                 $('#processSection').style.display = 'block';
-                $('#processActions').style.display = 'none';
+                $('#newProcess').style.display = 'none';
                 $('#processStatus').className = 'process-status processing';
                 
                 // 根据阶段显示不同状态
@@ -2295,6 +2245,8 @@ class ScriptEditor {
         this.monacoReady = false;
         this.monacoLoading = false;
         this.initAttempted = false;
+        this.taskId = null;
+        this.scriptPollInterval = null;
         
         // 只绑定事件，不立即初始化编辑器
         this.bindEvents();
@@ -2664,6 +2616,179 @@ class ScriptEditor {
         }
     }
     
+    async runScript() {
+        // 检查是否有未保存的修改
+        if (this.isModified) {
+            const confirmed = await showConfirm(
+                '运行脚本',
+                '脚本有未保存的修改，是否先保存再运行？\n\n点击"确定"将先保存脚本，点击"取消"将直接运行当前内容。'
+            );
+            
+            if (confirmed) {
+                await this.saveScript();
+                // 等待保存完成
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        try {
+            // 调用执行脚本 API
+            const result = await api('/script/execute', {
+                method: 'POST'
+            });
+            
+            if (result.success) {
+                this.taskId = result.task_id;
+                showToast('脚本执行任务已启动', 'success');
+                
+                // 跳转到上传页面显示处理进度
+                const navItem = document.querySelector('[data-page="upload"]');
+                if (navItem) {
+                    navItem.click();
+                }
+                
+                // 等待页面切换完成后再设置处理进度
+                setTimeout(() => {
+                    // 使用上传页面的处理逻辑
+                    if (window.fileUploader) {
+                        window.fileUploader.taskId = this.taskId;
+                        
+                        // 显示处理进度区域（使用上传页面的处理区域）
+                        const processSection = document.getElementById('processSection');
+                        if (processSection) {
+                            processSection.style.display = 'block';
+                            const processStatus = document.getElementById('processStatus');
+                            if (processStatus) {
+                                processStatus.className = 'process-status processing';
+                                processStatus.textContent = '执行中...';
+                            }
+                            
+                            // 清空日志
+                            const logContent = document.getElementById('logContent');
+                            if (logContent) {
+                                logContent.innerHTML = '';
+                            }
+                            
+                            // 隐藏上传区域和文件列表
+                            const uploadZone = document.getElementById('uploadZone');
+                            const fileList = document.getElementById('fileList');
+                            if (uploadZone) uploadZone.style.display = 'none';
+                            if (fileList) fileList.style.display = 'none';
+                            
+                            // 使用上传页面的轮询逻辑
+                            if (window.fileUploader.pollStatus) {
+                                window.fileUploader.pollStatus();
+                            }
+                        }
+                    }
+                }, 300);
+            } else {
+                showToast('启动脚本执行失败', 'error');
+            }
+        } catch (error) {
+            if (error.message.includes('已有任务在运行')) {
+                showToast('已有任务在运行，请等待完成', 'warning');
+            } else {
+                showToast(`启动脚本执行失败: ${error.message}`, 'error');
+            }
+        }
+    }
+    
+    pollScriptStatus() {
+        if (this.scriptPollInterval) {
+            clearInterval(this.scriptPollInterval);
+        }
+        
+        const poll = async () => {
+            try {
+                // 检查自动刷新开关
+                const autoRefreshCheckbox = document.getElementById('scriptAutoRefreshLog');
+                if (autoRefreshCheckbox && !autoRefreshCheckbox.checked) {
+                    if (this.scriptPollInterval) {
+                        clearInterval(this.scriptPollInterval);
+                        this.scriptPollInterval = null;
+                    }
+                    return;
+                }
+                
+                // 检查全局任务状态
+                const statusCheck = await api('/task/status');
+                
+                if (!statusCheck.has_active) {
+                    // 任务已完成，停止轮询
+                    if (this.scriptPollInterval) {
+                        clearInterval(this.scriptPollInterval);
+                        this.scriptPollInterval = null;
+                    }
+                    
+                    // 获取最终状态
+                    if (this.taskId) {
+                        const finalStatus = await api('/process/status', {
+                            method: 'POST',
+                            body: JSON.stringify({ task_id: this.taskId })
+                        });
+                        
+                        const processStatus = document.getElementById('scriptProcessStatus');
+                        if (processStatus) {
+                            if (finalStatus.status === 'completed') {
+                                processStatus.className = 'process-status completed';
+                                processStatus.textContent = '执行完成';
+                                showToast('脚本执行完成', 'success');
+                            } else {
+                                processStatus.className = 'process-status failed';
+                                processStatus.textContent = '执行失败';
+                                showToast('脚本执行失败', 'error');
+                            }
+                        }
+                    }
+                    
+                    this.taskId = null;
+                } else if (statusCheck.stage === 'processing' && this.taskId) {
+                    // 获取处理状态和日志
+                    const status = await api('/process/status', {
+                        method: 'POST',
+                        body: JSON.stringify({ task_id: this.taskId })
+                    });
+                    
+                    // 更新日志显示
+                    const logContent = document.getElementById('scriptLogContent');
+                    if (logContent && status.logs) {
+                        logContent.innerHTML = status.logs.map(log => {
+                            let level = 'info';
+                            if (log.includes('[ERROR]')) level = 'error';
+                            else if (log.includes('[WARN]')) level = 'warn';
+                            else if (log.includes('[SUCCESS]')) level = 'success';
+                            return `<div class="log-line ${level}">${log}</div>`;
+                        }).join('');
+                        
+                        // 滚动到底部
+                        logContent.scrollTop = logContent.scrollHeight;
+                    }
+                    
+                    // 更新状态
+                    const processStatus = document.getElementById('scriptProcessStatus');
+                    if (processStatus) {
+                        if (status.status === 'completed') {
+                            processStatus.className = 'process-status completed';
+                            processStatus.textContent = '执行完成';
+                        } else if (status.status === 'failed') {
+                            processStatus.className = 'process-status failed';
+                            processStatus.textContent = '执行失败';
+                        } else {
+                            processStatus.className = 'process-status processing';
+                            processStatus.textContent = '执行中...';
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('轮询脚本执行状态失败:', error);
+            }
+        };
+        
+        poll();
+        this.scriptPollInterval = setInterval(poll, 1000);
+    }
+    
     bindEvents() {
         // 保存按钮
         document.addEventListener('click', (e) => {
@@ -2672,6 +2797,9 @@ class ScriptEditor {
             }
             if (e.target.closest('#formatScript')) {
                 this.formatScript();
+            }
+            if (e.target.closest('#runScript')) {
+                this.runScript();
             }
         });
         

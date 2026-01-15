@@ -783,7 +783,6 @@ async def upload_config(file: UploadFile = File(...)):
     if not file.filename.endswith('.json'):
         raise HTTPException(status_code=400, detail="只支持 JSON 格式的配置文件")
     
-    backup_file = None
     try:
         # 读取文件内容
         content = await file.read()
@@ -793,28 +792,30 @@ async def upload_config(file: UploadFile = File(...)):
         if not isinstance(data, dict):
             raise ValueError("配置文件格式错误：必须是 JSON 对象")
         
-        # 备份当前配置
-        config_file = BASE_DIR / "Configure.json"
-        if config_file.exists():
-            backup_file = BASE_DIR / f"Configure.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            shutil.copy2(config_file, backup_file)
+        # 只对比和更新这三个 key：MySQL_DBInfo、SheetFilter、ExtractField
+        # 有则更新，无则沿用旧的
         
-        # 验证并更新配置
-        # 验证 MySQL 配置
-        mysql_data = data.get("MySQL_DBInfo", {})
-        if not all(key in mysql_data for key in ["host", "port", "user", "passwd", "dbname"]):
-            raise ValueError("配置文件缺少必需的 MySQL 配置项")
+        # 更新 MySQL_DBInfo（如果存在）
+        if "MySQL_DBInfo" in data and isinstance(data["MySQL_DBInfo"], dict):
+            mysql_data = data["MySQL_DBInfo"]
+            if "host" in mysql_data:
+                config.mysql.host = mysql_data["host"]
+            if "port" in mysql_data:
+                config.mysql.port = mysql_data["port"]
+            if "user" in mysql_data:
+                config.mysql.user = mysql_data["user"]
+            if "passwd" in mysql_data:
+                config.mysql.passwd = mysql_data["passwd"]
+            if "dbname" in mysql_data:
+                config.mysql.dbname = mysql_data["dbname"]
         
-        # 更新配置
-        config.mysql.host = mysql_data.get("host", "localhost")
-        config.mysql.port = mysql_data.get("port", 3306)
-        config.mysql.user = mysql_data.get("user", "root")
-        config.mysql.passwd = mysql_data.get("passwd", "")
-        config.mysql.dbname = mysql_data.get("dbname", "CapacityReport")
+        # 更新 SheetFilter（如果存在）
+        if "SheetFilter" in data:
+            config.sheet_filter = data["SheetFilter"] if isinstance(data["SheetFilter"], list) else []
         
-        # 更新其他配置
-        config.sheet_filter = data.get("SheetFilter", [])
-        config.extract_fields = data.get("ExtractField", [])
+        # 更新 ExtractField（如果存在）
+        if "ExtractField" in data:
+            config.extract_fields = data["ExtractField"] if isinstance(data["ExtractField"], list) else []
         
         # 保存配置
         config.save()
@@ -822,8 +823,7 @@ async def upload_config(file: UploadFile = File(...)):
         return {
             "success": True,
             "message": "配置文件上传成功",
-            "update": config.update,
-            "backup": backup_file.name if backup_file and backup_file.exists() else None
+            "update": config.update
         }
         
     except json.JSONDecodeError:
@@ -1155,6 +1155,72 @@ async def get_script_content():
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@app.post("/api/script/execute")
+async def execute_script():
+    """直接执行 SQL 脚本（不经过上传和处理数据）"""
+    import uuid
+    
+    # 检查是否有任务在运行
+    if global_task_lock["locked"]:
+        raise HTTPException(status_code=409, detail="已有任务在运行，请等待完成")
+    
+    # 生成虚拟 task_id
+    task_id = f"script_{uuid.uuid4().hex[:8]}"
+    
+    # 锁定任务状态
+    global_task_lock["locked"] = True
+    global_task_lock["task_id"] = task_id
+    global_task_lock["stage"] = "processing"
+    global_task_lock["started_at"] = datetime.now().isoformat()
+    
+    # 创建日志记录器（不写入文件，只记录到内存）
+    logs: List[str] = []
+    def log_callback(msg: str):
+        logs.append(msg)
+        processing_tasks[task_id] = {"logs": logs, "status": "processing"}
+    
+    logger = ProcessLogger(log_file=None, callback=log_callback)
+    
+    # 初始化任务状态
+    processing_tasks[task_id] = {"logs": logs, "status": "processing"}
+    
+    # 在后台线程执行脚本
+    def run_script():
+        try:
+            logger.info("开始执行 SQL 脚本...")
+            
+            # 创建临时工作目录（虽然不需要，但为了兼容性）
+            temp_work_dir = CACHE_DIR / task_id
+            temp_work_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 执行脚本（使用 DataProcessor 的脚本执行方法）
+            processor = DataProcessor(config, temp_work_dir, logger)
+            processor._execute_sql_script()
+            
+            # 执行成功
+            logger.success("SQL 脚本执行完成")
+            processing_tasks[task_id] = {"logs": logs, "status": "completed"}
+            
+            # 清理临时目录
+            if temp_work_dir.exists():
+                shutil.rmtree(temp_work_dir, ignore_errors=True)
+            
+        except Exception as e:
+            logger.error(f"SQL 脚本执行失败: {str(e)}")
+            processing_tasks[task_id] = {"logs": logs, "status": "failed"}
+        finally:
+            # 解锁全局状态
+            global_task_lock["locked"] = False
+            global_task_lock["task_id"] = None
+            global_task_lock["stage"] = None
+            global_task_lock["started_at"] = None
+    
+    thread = Thread(target=run_script)
+    thread.start()
+    
+    return {"success": True, "message": "脚本执行任务已启动", "task_id": task_id}
 
 
 @app.post("/api/script/save")

@@ -855,7 +855,7 @@ body {
 
 /* ==================== 处理区域 ==================== */
 .process-section {
-    margin-top: 24px;
+    margin-top: 12px;
 }
 
 .process-header {
@@ -892,8 +892,7 @@ body {
 
 .log-container {
     height: calc(100vh - 280px);
-    min-height: 400px;
-    max-height: 600px;
+    min-height: 300px;
     overflow-y: auto;
     background: var(--td-bg-color-page);
     border-radius: var(--td-radius-default);

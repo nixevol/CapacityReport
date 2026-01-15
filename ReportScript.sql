@@ -290,9 +290,12 @@ CREATE TABLE IF NOT EXISTS `4G_结果表` (
 		ROUND(AVG(`下行流量_GB`),6) AS `下行流量（GB）`,
 		ROUND(AVG(`用户面平均激活UE数`),6) AS `用户面平均激活UE数`,
 		ROUND(AVG(`RRC连接建立最大用户数`),6) AS `YY-RRC连接建立最大用户数`,
-		ROUND(AVG(`上行PUSCH利用率`) / 100,6) AS `上行PUSCH利用率`,
-		ROUND(AVG(`下行PDSCH利用率`) / 100,6) AS `下行PDSCH利用率`,
-		ROUND(AVG(`PDCCH资源利用率`) / 100,6) AS `PDCCH资源利用率`,
+		-- ROUND(AVG(`上行PUSCH利用率`) / 100,6) AS `上行PUSCH利用率`,  -- 旧版本：除以100（数据已在前端处理为小数）
+		ROUND(AVG(`上行PUSCH利用率`),6) AS `上行PUSCH利用率`,
+		-- ROUND(AVG(`下行PDSCH利用率`) / 100,6) AS `下行PDSCH利用率`,  -- 旧版本：除以100（数据已在前端处理为小数）
+		ROUND(AVG(`下行PDSCH利用率`),6) AS `下行PDSCH利用率`,
+		-- ROUND(AVG(`PDCCH资源利用率`) / 100,6) AS `PDCCH资源利用率`,  -- 旧版本：除以100（数据已在前端处理为小数）
+		ROUND(AVG(`PDCCH资源利用率`),6) AS `PDCCH资源利用率`,
 		ROUND(AVG(`用户面最大激活UE数`),6) AS `用户面最大激活UE数`
 	FROM 4G_MAX GROUP BY CGI, `基站名称`, `小区名称`
 );
@@ -450,9 +453,12 @@ CREATE TABLE IF NOT EXISTS `5G_结果表` (
 		ROUND(AVG(`RRC连接最大连接用户数`),6) AS `RRC连接最大连接用户数`,
 		ROUND(AVG(`RRC连接平均连接用户数`),6) AS `RRC连接平均连接用户数`,
 		ROUND(AVG(`小区最大激活UE数`),6) AS `小区最大激活UE数`,
-		ROUND(AVG(`上行PRB平均利用率`) / 100,6) AS `上行PRB平均利用率`,
-		ROUND(AVG(`下行PRB平均利用率`) / 100,6) AS `下行PRB平均利用率`,
-		ROUND(AVG(`PDCCH信道动态CCE占用率`) / 100,6) AS `PDCCH信道CCE占用率（动态）(%)`,
+		-- ROUND(AVG(`上行PRB平均利用率`) / 100,6) AS `上行PRB平均利用率`,  -- 旧版本：除以100（数据已在前端处理为小数）
+		ROUND(AVG(`上行PRB平均利用率`),6) AS `上行PRB平均利用率`,
+		-- ROUND(AVG(`下行PRB平均利用率`) / 100,6) AS `下行PRB平均利用率`,  -- 旧版本：除以100（数据已在前端处理为小数）
+		ROUND(AVG(`下行PRB平均利用率`),6) AS `下行PRB平均利用率`,
+		-- ROUND(AVG(`PDCCH信道动态CCE占用率`) / 100,6) AS `PDCCH信道CCE占用率（动态）(%)`,  -- 旧版本：除以100（数据已在前端处理为小数）
+		ROUND(AVG(`PDCCH信道动态CCE占用率`),6) AS `PDCCH信道CCE占用率（动态）(%)`,
 		ROUND(AVG(`小区下行RLC_SDU字节数_MByte`),6) AS `小区下行RLC SDU字节数(MByte)`,
 		ROUND(AVG(`小区上行RLC_SDU字节数_MByte`),6) AS `小区上行RLC SDU字节数(MByte)`,
 		ROUND(AVG(`平均单Flow流量_MB`),6) AS `单Flow流量(MB)`
