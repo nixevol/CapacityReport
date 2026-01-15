@@ -111,13 +111,24 @@ function showConfirm(title, message) {
 
 // API 调用
 async function api(endpoint, options = {}) {
-    const response = await fetch(`/api${endpoint}`, {
+    // 如果没有指定 method 且没有 body，默认使用 GET
+    const method = options.method || (options.body ? 'POST' : 'GET');
+    
+    const fetchOptions = {
+        method: method,
         headers: {
             'Content-Type': 'application/json',
             ...options.headers
         },
         ...options
-    });
+    };
+    
+    // GET 请求不应该有 body
+    if (method === 'GET' && fetchOptions.body) {
+        delete fetchOptions.body;
+    }
+    
+    const response = await fetch(`/api${endpoint}`, fetchOptions);
     
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: response.statusText }));
@@ -460,13 +471,11 @@ class FileUploader {
     updateUploadStats() {
         const stats = {
             total: this.files.length,
-            uploading: this.files.filter(f => f.status === 'uploading').length,
             success: this.files.filter(f => f.status === 'uploaded').length,
             error: this.files.filter(f => f.status === 'error').length
         };
         
         $('#statsTotal').textContent = stats.total;
-        $('#statsUploading').textContent = stats.uploading;
         $('#statsSuccess').textContent = stats.success;
         $('#statsError').textContent = stats.error;
         
@@ -536,15 +545,23 @@ class FileUploader {
         $('#totalProgress').style.display = 'none';
         $('#uploadStats').style.display = 'none';
         
-        // 显示处理区域（上传中状态）
-        $('#processSection').style.display = 'block';
-        $('#processActions').style.display = 'none';
-        $('#logContent').innerHTML = '<div class="log-line info">正在上传文件...</div>';
-        $('#processStatus').className = 'process-status processing';
-        $('#processStatus').textContent = '上传中...';
+        // 隐藏处理区域（上传完成前不显示）
+        $('#processSection').style.display = 'none';
         
-        // 强制浏览器重绘
-        $('#processSection').offsetHeight;
+        // 显示文件列表和进度信息
+        $('#fileList').style.display = 'block';
+        $('#totalProgress').style.display = 'block';
+        $('#uploadStats').style.display = 'flex';
+        
+        // 初始化进度显示
+        $('#totalPercent').textContent = '0%';
+        $('#totalProgressBar').style.width = '0%';
+        
+        // 保持所有文件为等待上传状态（不立即改为上传中）
+        this.files.forEach((fileData, index) => {
+            this.updateFileStatus(index, 'pending', 0);
+        });
+        this.updateUploadStats();
         
         this.isUploading = true;
         $('#startUpload').disabled = true;
@@ -566,10 +583,40 @@ class FileUploader {
                 // 上传进度事件
                 xhr.upload.addEventListener('progress', (e) => {
                     if (e.lengthComputable) {
-                        const progress = Math.round((e.loaded / e.total) * 100);
-                        // 更新日志显示进度
-                        $('#logContent').innerHTML = `<div class="log-line info">正在上传文件... ${progress}%</div>`;
-                        $('#processStatus').textContent = `上传中 ${progress}%`;
+                        const totalProgress = Math.round((e.loaded / e.total) * 100);
+                        const fileCount = this.files.length;
+                        
+                        // 更新总进度条
+                        $('#totalPercent').textContent = `${totalProgress}%`;
+                        $('#totalProgressBar').style.width = `${totalProgress}%`;
+                        
+                        // 根据总进度计算当前应该处理到第几个文件
+                        // 每个文件占 100/fileCount 的进度
+                        const progressPerFile = 100 / fileCount;
+                        const currentFileIndex = Math.floor(totalProgress / progressPerFile);
+                        const currentFileProgress = (totalProgress % progressPerFile) / progressPerFile * 100;
+                        
+                        // 更新每个文件的状态
+                        this.files.forEach((fileData, index) => {
+                            if (index < currentFileIndex) {
+                                // 已完成的文件
+                                this.updateFileStatus(index, 'uploaded', 100);
+                            } else if (index === currentFileIndex) {
+                                // 当前正在上传的文件
+                                const fileProgress = Math.min(100, Math.max(0, Math.round(currentFileProgress)));
+                                this.updateFileStatus(index, 'uploading', fileProgress);
+                                
+                                // 滚动到当前正在上传的文件
+                                const fileItem = $(`#file-item-${index}`);
+                                if (fileItem) {
+                                    fileItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                            } else {
+                                // 还未开始的文件
+                                this.updateFileStatus(index, 'pending', 0);
+                            }
+                        });
+                        this.updateUploadStats();
                     }
                 });
                 
@@ -606,10 +653,25 @@ class FileUploader {
             this.taskId = taskId;
             console.log('上传完成，任务ID:', taskId);
             
+            // 将所有文件状态改为已完成
+            this.files.forEach((fileData, index) => {
+                this.updateFileStatus(index, 'uploaded', 100);
+            });
+            this.updateUploadStats();
+            
             // 注意：锁定已在后端上传接口中完成，这里不需要再次锁定
             
-            // 更新UI显示上传完成
+            // 隐藏上传进度，显示处理区域
+            $('#totalProgress').style.display = 'none';
+            $('#uploadStats').style.display = 'none';
+            $('#fileList').style.display = 'none';
+            
+            // 显示处理区域（上传完成后才显示）
+            $('#processSection').style.display = 'block';
+            const processActions = $('#processActions');
+            if (processActions) processActions.style.display = 'none';
             $('#logContent').innerHTML = `<div class="log-line success">上传完成: ${result.file_count || this.files.length} 个文件</div>`;
+            $('#processStatus').className = 'process-status processing';
             $('#processStatus').textContent = '准备开始处理...';
             showToast(`上传完成: ${result.file_count || this.files.length} 个文件`, 'success');
             
@@ -626,6 +688,13 @@ class FileUploader {
         } catch (error) {
             showToast(`上传失败: ${error.message}`, 'error');
             console.error('上传失败:', error);
+            
+            // 将所有文件状态改为失败
+            this.files.forEach((fileData, index) => {
+                this.updateFileStatus(index, 'error', 0);
+            });
+            this.updateUploadStats();
+            
             // 上传失败，解锁全局任务（后端会自动处理，但这里也尝试解锁）
             if (this.taskId) {
                 try {
@@ -669,7 +738,8 @@ class FileUploader {
             
             // 显示处理区域
             $('#processSection').style.display = 'block';
-            $('#processActions').style.display = 'none';
+            const processActions = $('#processActions');
+        if (processActions) processActions.style.display = 'none';
             $('#processStatus').className = 'process-status processing';
             $('#processStatus').textContent = '处理中...';
             $('#logContent').innerHTML = '<div class="log-line info">处理任务已启动，等待日志...</div>';
@@ -771,6 +841,11 @@ class FileUploader {
                         else if (log.includes('[WARN]')) level = 'warn';
                         return `<div class="log-line ${level}">${log}</div>`;
                     }).join('');
+                } else if (status.status === 'processing') {
+                    // 处理中但还没有日志，显示等待信息
+                    if (!logContent.innerHTML || logContent.innerHTML.trim() === '') {
+                        logContent.innerHTML = '<div class="log-line info">等待处理开始...</div>';
+                    }
                 }
                 
                 // 自动滚动到底部（仅在自动刷新开启时）
@@ -813,13 +888,20 @@ class FileUploader {
                 
             } catch (error) {
                 console.error('轮询状态失败:', error);
-                // 如果请求失败（如 404），可能是任务ID错误
+                // 如果请求失败（如 404），可能是任务ID错误或任务已完成
                 if (error.message && error.message.includes('404')) {
-                    clearInterval(this.pollInterval);
-                    showToast('任务状态获取失败', 'error');
-                    $('#processStatus').textContent = '状态获取失败';
+                    // 任务不存在，停止轮询并恢复界面
+                    if (this.pollInterval) {
+                        clearInterval(this.pollInterval);
+                        this.pollInterval = null;
+                    }
+                    showToast('任务不存在或已完成', 'warning');
+                    $('#processStatus').textContent = '任务不存在';
                     $('#processStatus').className = 'process-status failed';
                     this.restoreUploadUI();
+                } else {
+                    // 其他错误（如网络错误），继续轮询但显示错误提示
+                    console.warn('轮询状态失败，继续重试:', error);
                 }
             }
         };
@@ -847,6 +929,16 @@ class FileUploader {
                     else if (log.includes('[WARN]')) level = 'warn';
                     return `<div class="log-line ${level}">${log}</div>`;
                 }).join('');
+                // 滚动到底部
+                const container = $('#logContainer');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            } else if (status.status === 'processing') {
+                // 处理中但还没有日志，显示等待信息
+                if (!logContent.innerHTML || logContent.innerHTML.trim() === '') {
+                    logContent.innerHTML = '<div class="log-line info">等待处理开始...</div>';
+                }
             }
             
             // 不自动滚动，让用户自己控制
@@ -881,11 +973,17 @@ class FileUploader {
         
         this.updateFileList();
         // 隐藏处理区域
-        $('#processSection').style.display = 'none';
-        $('#processActions').style.display = 'none';
-        $('#processStatus').className = 'process-status processing';
-        $('#processStatus').textContent = '处理中...';
-        $('#logContent').innerHTML = '';
+        const processSection = $('#processSection');
+        if (processSection) processSection.style.display = 'none';
+        const processActions = $('#processActions');
+        if (processActions) processActions.style.display = 'none';
+        const processStatus = $('#processStatus');
+        if (processStatus) {
+            processStatus.className = 'process-status processing';
+            processStatus.textContent = '处理中...';
+        }
+        const logContent = $('#logContent');
+        if (logContent) logContent.innerHTML = '';
         // 恢复显示上传区域
         this.restoreUploadUI();
         console.log('任务已重置，UI 已恢复');
@@ -2096,7 +2194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 历史数据大小已在处理历史页面显示，不再在侧边栏显示
     
-    console.log('CapacityReport v2.0.0 已加载');
+    console.log('CapacityReport v2.0.1 已加载');
     
     // 重启服务按钮事件（使用事件委托，支持所有页面的重启按钮）
     document.addEventListener('click', async (e) => {

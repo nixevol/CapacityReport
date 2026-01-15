@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title CapacityReport v2.0.0 [自动重启模式]
+title CapacityReport v2.0.1 [自动重启模式]
 
 echo ========================================
 echo   CapacityReport - 容量报表处理程序

@@ -30,7 +30,7 @@ from app.history import HistoryManager
 app = FastAPI(
     title="CapacityReport",
     description="容量报表数据处理系统",
-    version="2.0.0"
+    version="2.0.1"
 )
 
 # CORS 配置
@@ -103,7 +103,7 @@ async def health_check():
     return {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
-        "version": "2.0.0",
+        "version": "2.0.1",
         "uptime_pid": os.getpid(),
         "checks": checks
     }
@@ -396,13 +396,18 @@ async def start_processing(task_id: str = Body(..., embed=True)):
     logs: List[str] = []
     def log_callback(msg: str):
         logs.append(msg)
-        processing_tasks[task_id] = {"logs": logs, "status": "processing"}
+        # 确保每次日志更新都同步到 processing_tasks
+        if task_id in processing_tasks:
+            processing_tasks[task_id]["logs"] = logs.copy()
+            processing_tasks[task_id]["status"] = "processing"
+        else:
+            processing_tasks[task_id] = {"logs": logs.copy(), "status": "processing"}
     
     logger = ProcessLogger(log_file=log_file, callback=log_callback)
     
     # 更新状态
     history_manager.update(task_id, status="processing")
-    processing_tasks[task_id] = {"logs": logs, "status": "processing"}
+    processing_tasks[task_id] = {"logs": [], "status": "processing"}
     
     # 更新全局锁定状态为处理中
     global_task_lock["locked"] = True
@@ -453,22 +458,31 @@ async def start_processing(task_id: str = Body(..., embed=True)):
 @app.post("/api/process/status")
 async def get_processing_status(task_id: str = Body(..., embed=True)):
     """获取处理任务状态和日志（task_id 放在 POST body 中）"""
-    # 优先从文件读取日志（实时写入，保证最新）
-    logs = history_manager.get_logs(task_id)
-    
-    # 检查内存中的实时状态（用于获取状态）
+    # 检查内存中的实时状态（优先使用内存中的日志，实时更新）
     if task_id in processing_tasks:
+        task_info = processing_tasks[task_id]
+        # 如果内存中有日志，优先使用内存中的（实时更新）
+        if "logs" in task_info and task_info["logs"]:
+            return {
+                "task_id": task_id,
+                "status": task_info["status"],
+                "logs": task_info["logs"]  # 使用内存中的实时日志
+            }
+        # 如果内存中没有日志，尝试从文件读取
+        logs = history_manager.get_logs(task_id)
         return {
             "task_id": task_id,
-            "status": processing_tasks[task_id]["status"],
+            "status": task_info["status"],
             "logs": logs  # 使用文件中的日志
         }
     
-    # 从历史记录获取
+    # 从历史记录获取（任务已完成）
     record = history_manager.get(task_id)
     if not record:
         raise HTTPException(status_code=404, detail="任务不存在")
     
+    # 从文件读取日志
+    logs = history_manager.get_logs(task_id)
     return {
         "task_id": task_id,
         "status": record.status,
@@ -1118,7 +1132,7 @@ async def get_service_status():
     """获取服务运行状态"""
     return {
         "status": "running",
-        "version": "2.0.0",
+        "version": "2.0.1",
         "platform": platform.system(),
         "supervisor": is_supervisor_running(),
         "pid": os.getpid(),
@@ -1179,12 +1193,17 @@ async def execute_script():
     logs: List[str] = []
     def log_callback(msg: str):
         logs.append(msg)
-        processing_tasks[task_id] = {"logs": logs, "status": "processing"}
+        # 确保每次日志更新都同步到 processing_tasks
+        if task_id in processing_tasks:
+            processing_tasks[task_id]["logs"] = logs.copy()
+            processing_tasks[task_id]["status"] = "processing"
+        else:
+            processing_tasks[task_id] = {"logs": logs.copy(), "status": "processing"}
     
     logger = ProcessLogger(log_file=None, callback=log_callback)
     
     # 初始化任务状态
-    processing_tasks[task_id] = {"logs": logs, "status": "processing"}
+    processing_tasks[task_id] = {"logs": [], "status": "processing"}
     
     # 在后台线程执行脚本
     def run_script():
@@ -1256,6 +1275,6 @@ async def save_script_content(content: str = Body(..., embed=True)):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"CapacityReport v2.0.0")
+    print(f"CapacityReport v2.0.1")
     print(f"配置更新时间: {config.update}")
     uvicorn.run("app.main:app", host="0.0.0.0", port=9081, reload=False)

@@ -687,27 +687,46 @@ class DataProcessor:
         with open(SQL_SCRIPT, 'r', encoding='utf-8') as f:
             sql_text = f.read()
         
-        sqls = sqlparse.split(sql_text)
-        total = len(sqls)
+        if not sql_text or not sql_text.strip():
+            self.logger.warning("SQL 脚本文件为空，跳过执行")
+            return
         
+        sqls = sqlparse.split(sql_text)
+        # 过滤掉空语句和注释
+        valid_sqls = []
+        for sql in sqls:
+            sql = sql.strip()
+            if sql and not sql.startswith('#'):
+                valid_sqls.append(sql)
+        
+        if not valid_sqls:
+            self.logger.warning("SQL 脚本中没有有效的 SQL 语句（可能全是注释或空行）")
+            return
+        
+        total = len(valid_sqls)
+        self.logger.info(f"共找到 {total} 条有效的 SQL 语句")
+        
+        executed_count = 0
         with self.db.get_connection() as conn:
             with conn.cursor() as cursor:
-                for i, sql in enumerate(sqls, 1):
-                    sql = sql.strip()
-                    if not sql or sql.startswith('#'):
-                        continue
-                    
+                for i, sql in enumerate(valid_sqls, 1):
                     start_time = time.time()
                     preview = sql[:80].replace('\n', ' ')
                     self.logger.info(f"执行 SQL ({i}/{total}): {preview}...")
                     
                     try:
                         cursor.execute(sql)
+                        executed_count += 1
                         elapsed = round(time.time() - start_time, 2)
-                        self.logger.info(f"完成，耗时 {elapsed} 秒")
+                        affected_rows = cursor.rowcount if cursor.rowcount >= 0 else 0
+                        if affected_rows > 0:
+                            self.logger.info(f"完成，耗时 {elapsed} 秒，影响 {affected_rows} 行")
+                        else:
+                            self.logger.info(f"完成，耗时 {elapsed} 秒")
                     except Exception as e:
                         self.logger.error(f"SQL 执行失败: {e}")
+                        # 继续执行下一条 SQL，不中断
                 
                 conn.commit()
         
-        self.logger.success("SQL 脚本执行完成")
+        self.logger.success(f"SQL 脚本执行完成，共执行 {executed_count}/{total} 条语句")
