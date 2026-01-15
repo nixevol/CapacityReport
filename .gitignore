@@ -35,7 +35,7 @@ env/
 
 # 项目特定目录
 cache/
-
+dist/
 # 日志文件
 *.log
 logs/
