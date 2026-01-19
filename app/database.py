@@ -47,7 +47,16 @@ class DatabaseManager:
     
     @contextmanager
     def get_connection(self):
-        """获取 PyMySQL 连接（上下文管理器）"""
+        """
+        获取 PyMySQL 连接（上下文管理器）
+        
+        注意：此方法创建的是独立连接（非连接池），适用于：
+        - 需要在整个操作过程中保持同一 session 的场景
+        - 使用临时表（TEMPORARY TABLE）的场景（临时表是 session 级别的）
+        - 需要事务一致性的长时间操作
+        
+        如果需要高性能的短连接操作，请使用 engine 属性（连接池）
+        """
         mysql = self.config.mysql
         conn = pymysql.connect(
             host=mysql.host,

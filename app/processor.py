@@ -676,8 +676,57 @@ class DataProcessor:
             speed = round(total_rows / elapsed) if elapsed > 0 else 0
             self.logger.success(f"表 {table_name} 导入完成: {total_rows} 行, 耗时 {elapsed}s, 速度 {speed} 行/秒")
     
+    @staticmethod
+    def parse_sql_script(sql_text: str) -> List[str]:
+        """
+        解析 SQL 脚本，提取有效的 SQL 语句
+        
+        改进的SQL分割逻辑：直接按分号分割，更可靠
+        这样可以确保所有以分号结尾的语句都被正确识别
+        
+        Args:
+            sql_text: SQL 脚本文本内容
+            
+        Returns:
+            有效的 SQL 语句列表
+        """
+        if not sql_text or not sql_text.strip():
+            return []
+        
+        # 改进的SQL分割逻辑：直接按分号分割，更可靠
+        # 这样可以确保所有以分号结尾的语句都被正确识别
+        parts = sql_text.split(';')
+        valid_sqls = []
+        
+        for part in parts:
+            # 处理多行语句：移除以#开头的注释行，但保留SQL语句
+            lines = []
+            for line in part.split('\n'):
+                line = line.strip()
+                # 跳过空行和整行注释
+                if line and not line.startswith('#'):
+                    lines.append(line)
+            
+            if lines:
+                # 合并多行语句，保留换行符（MySQL支持多行SQL）
+                cleaned_sql = '\n'.join(lines)
+                cleaned_sql = cleaned_sql.strip()
+                # 跳过空语句（可能只剩下注释）
+                if cleaned_sql:
+                    valid_sqls.append(cleaned_sql)
+        
+        return valid_sqls
+    
     def _execute_sql_script(self):
-        """执行 SQL 脚本"""
+        """
+        执行 SQL 脚本
+        
+        重要说明：
+        - 使用 get_connection() 获取独立连接（非连接池），确保整个脚本在同一 session 中执行
+        - 临时表（TEMPORARY TABLE）是 session 级别的，必须在同一连接中创建和使用
+        - 如果使用连接池，不同 SQL 语句可能分配到不同连接，导致临时表不可见
+        - 因此整个脚本必须在同一个连接中顺序执行，不能使用连接池
+        """
         if not SQL_SCRIPT.exists():
             self.logger.warning("SQL 脚本文件不存在，跳过")
             return
@@ -691,13 +740,8 @@ class DataProcessor:
             self.logger.warning("SQL 脚本文件为空，跳过执行")
             return
         
-        sqls = sqlparse.split(sql_text)
-        # 过滤掉空语句和注释
-        valid_sqls = []
-        for sql in sqls:
-            sql = sql.strip()
-            if sql and not sql.startswith('#'):
-                valid_sqls.append(sql)
+        # 使用抽离的解析函数
+        valid_sqls = self.parse_sql_script(sql_text)
         
         if not valid_sqls:
             self.logger.warning("SQL 脚本中没有有效的 SQL 语句（可能全是注释或空行）")
@@ -707,6 +751,8 @@ class DataProcessor:
         self.logger.info(f"共找到 {total} 条有效的 SQL 语句")
         
         executed_count = 0
+        # 使用独立连接（非连接池），确保整个脚本在同一 session 中执行
+        # 这对于临时表（TEMPORARY TABLE）至关重要，因为临时表是 session 级别的
         with self.db.get_connection() as conn:
             with conn.cursor() as cursor:
                 for i, sql in enumerate(valid_sqls, 1):
