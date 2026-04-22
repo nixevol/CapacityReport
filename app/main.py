@@ -59,7 +59,7 @@ from app.history import HistoryManager
 app = FastAPI(
     title="CapacityReport",
     description="容量报表数据处理系统",
-    version="2.0.1",
+    version="2.0.2",
     docs_url=None,
     redoc_url=None,
     openapi_url=None
