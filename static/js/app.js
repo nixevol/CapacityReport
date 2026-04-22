@@ -114,10 +114,13 @@ async function api(endpoint, options = {}) {
     // 如果没有指定 method 且没有 body，默认使用 GET
     const method = options.method || (options.body ? 'POST' : 'GET');
     
+    const token = localStorage.getItem('token');
+    
     const fetchOptions = {
         method: method,
         headers: {
             'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             ...options.headers
         },
         ...options
@@ -130,12 +133,58 @@ async function api(endpoint, options = {}) {
     
     const response = await fetch(`/api${endpoint}`, fetchOptions);
     
+    if (response.status === 401 && endpoint !== '/login') {
+        localStorage.removeItem('token');
+        showLoginModal();
+        throw new Error('未授权或登录已过期，请重新登录');
+    }
+    
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: response.statusText }));
         throw new Error(error.detail || '请求失败');
     }
     
     return response.json();
+}
+
+function showLoginModal() {
+    const modal = $('#loginModal');
+    if (modal) {
+        modal.classList.add('active');
+        const loginBtn = $('#loginBtn');
+        const loginInput = $('#loginPassword');
+        loginInput.focus();
+        
+        const handleLogin = async () => {
+            const password = loginInput.value;
+            if (!password) {
+                showToast('请输入密码', 'warning');
+                return;
+            }
+            try {
+                loginBtn.disabled = true;
+                loginBtn.textContent = '登录中...';
+                const res = await api('/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ password })
+                });
+                if (res.success && res.token) {
+                    localStorage.setItem('token', res.token);
+                    modal.classList.remove('active');
+                    showToast('登录成功', 'success');
+                    loginInput.value = '';
+                    window.location.reload();
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+            }
+        };
+        
+        loginBtn.onclick = handleLogin;
+    }
 }
 
 
@@ -629,6 +678,10 @@ class FileUploader {
                         } catch {
                             resolve({ success: true });
                         }
+                    } else if (xhr.status === 401) {
+                        localStorage.removeItem('token');
+                        showLoginModal();
+                        reject(new Error('未授权或登录已过期，请重新登录'));
                     } else {
                         reject(new Error('上传失败'));
                     }
@@ -641,6 +694,10 @@ class FileUploader {
                 
                 // 开始上传
                 xhr.open('POST', '/api/upload');
+                const token = localStorage.getItem('token');
+                if (token) {
+                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                }
                 xhr.send(formData);
             });
             

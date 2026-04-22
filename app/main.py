@@ -15,10 +15,39 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from threading import Thread
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Body
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Body, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import base64
+import hmac
+import hashlib
+import time
+
+SECRET_KEY = "CapaReportSecretKey2026"
+ADMIN_PASSWORD = "admin" # 默认管理密码
+
+def create_jwt_token(data: dict, expires_in: int = 86400 * 30) -> str:
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
+    payload_data = data.copy()
+    payload_data["exp"] = int(time.time()) + expires_in
+    payload = base64.urlsafe_b64encode(json.dumps(payload_data).encode()).decode().rstrip("=")
+    signature = base64.urlsafe_b64encode(hmac.new(SECRET_KEY.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()).decode().rstrip("=")
+    return f"{header}.{payload}.{signature}"
+
+def verify_jwt_token(token: str) -> dict:
+    try:
+        header, payload, signature = token.split(".")
+        expected_sig = base64.urlsafe_b64encode(hmac.new(SECRET_KEY.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()).decode().rstrip("=")
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+        payload_padded = payload + "=" * ((4 - len(payload) % 4) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload_padded).decode())
+        if "exp" in data and data["exp"] < int(time.time()):
+            return None
+        return data
+    except Exception:
+        return None
 
 from app.config import AppConfig, CACHE_DIR, BASE_DIR
 from app.database import DatabaseManager
@@ -30,7 +59,10 @@ from app.history import HistoryManager
 app = FastAPI(
     title="CapacityReport",
     description="容量报表数据处理系统",
-    version="2.0.1"
+    version="2.0.1",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None
 )
 
 # CORS 配置
@@ -59,6 +91,30 @@ global_task_lock: Dict[str, Any] = {
     "stage": None,  # "uploading" 或 "processing"
     "started_at": None
 }
+
+
+# ==================== 认证中间件 ====================
+
+@app.middleware("http")
+async def jwt_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and path != "/api/login":
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "未授权，请提供有效的Token"})
+        token = auth_header.split(" ")[1]
+        payload = verify_jwt_token(token)
+        if not payload:
+            return JSONResponse(status_code=401, content={"detail": "Token无效或已过期"})
+    return await call_next(request)
+
+
+@app.post("/api/login")
+async def login(password: str = Body(..., embed=True)):
+    if password != ADMIN_PASSWORD:
+        return JSONResponse(status_code=401, content={"detail": "密码错误"})
+    token = create_jwt_token({"user": "admin"})
+    return {"success": True, "token": token}
 
 
 # ==================== 健康检查 ====================

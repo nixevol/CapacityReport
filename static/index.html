@@ -490,6 +490,21 @@
         </div>
     </div>
 
+    <!-- 登录对话框 -->
+    <div class="modal" id="loginModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 id="loginTitle">系统登录</h3>
+            <p>由于安全原因，请先验证您的密码</p>
+            <div class="form-group" style="margin-top: 16px;">
+                <input type="password" id="loginPassword" class="form-input" placeholder="请输入密码以继续" onkeydown="if(event.key==='Enter') document.getElementById('loginBtn').click()">
+            </div>
+            <div class="modal-actions" style="margin-top: 24px;">
+                <button class="btn btn-primary" id="loginBtn" style="width: 100%;">登录</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 确认对话框 -->
     <div class="modal" id="confirmModal">
         <div class="modal-backdrop"></div>
