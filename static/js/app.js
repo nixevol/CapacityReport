@@ -156,6 +156,8 @@ function showLoginModal() {
         loginInput.focus();
         
         const handleLogin = async () => {
+            const usernameInput = $('#loginUsername');
+            const username = usernameInput ? usernameInput.value : 'root';
             const password = loginInput.value;
             if (!password) {
                 showToast('请输入密码', 'warning');
@@ -166,7 +168,7 @@ function showLoginModal() {
                 loginBtn.textContent = '登录中...';
                 const res = await api('/login', {
                     method: 'POST',
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ username, password })
                 });
                 if (res.success && res.token) {
                     localStorage.setItem('token', res.token);

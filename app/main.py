@@ -110,10 +110,10 @@ async def jwt_middleware(request: Request, call_next):
 
 
 @app.post("/api/login")
-async def login(password: str = Body(..., embed=True)):
-    if password != ADMIN_PASSWORD:
-        return JSONResponse(status_code=401, content={"detail": "密码错误"})
-    token = create_jwt_token({"user": "admin"})
+async def login(username: str = Body(..., embed=True), password: str = Body(..., embed=True)):
+    if username != "root" or password != ADMIN_PASSWORD:
+        return JSONResponse(status_code=401, content={"detail": "账号或密码错误"})
+    token = create_jwt_token({"user": username})
     return {"success": True, "token": token}
 
 

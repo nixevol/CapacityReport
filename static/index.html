@@ -495,8 +495,13 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content">
             <h3 id="loginTitle">系统登录</h3>
-            <p>由于安全原因，请先验证您的密码</p>
+            <p>由于安全原因，请先验证您的身份</p>
             <div class="form-group" style="margin-top: 16px;">
+                <label>账号</label>
+                <input type="text" id="loginUsername" class="form-input" value="root" readonly style="background-color: var(--td-bg-color-component); color: var(--td-text-color-secondary); cursor: not-allowed;">
+            </div>
+            <div class="form-group" style="margin-top: 16px;">
+                <label>密码</label>
                 <input type="password" id="loginPassword" class="form-input" placeholder="请输入密码以继续" onkeydown="if(event.key==='Enter') document.getElementById('loginBtn').click()">
             </div>
             <div class="modal-actions" style="margin-top: 24px;">
