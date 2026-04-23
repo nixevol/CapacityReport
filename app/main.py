@@ -33,7 +33,7 @@ def _ensure_auth_ini():
     """确保 auth.ini 存在，不存在则创建默认配置"""
     if not os.path.exists(AUTH_INI_PATH):
         cfg = configparser.ConfigParser()
-        cfg["auth"] = {"username": "root", "password": "admin"}
+        cfg["auth"] = {"username": "root", "password": "Capacity"}
         with open(AUTH_INI_PATH, "w", encoding="utf-8") as f:
             cfg.write(f)
 
@@ -44,7 +44,7 @@ def get_auth_config():
     cfg.read(AUTH_INI_PATH, encoding="utf-8")
     return {
         "username": cfg.get("auth", "username", fallback="root"),
-        "password": cfg.get("auth", "password", fallback="admin")
+        "password": cfg.get("auth", "password", fallback="Capacity")
     }
 
 def save_auth_password(new_password: str):
