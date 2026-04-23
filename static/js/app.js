@@ -147,83 +147,16 @@ async function api(endpoint, options = {}) {
     return response.json();
 }
 
-function showLoginPage() {
-    const loginPage = $('#loginPage');
-    const appContainer = $('#appContainer');
-    if (loginPage) loginPage.style.display = 'flex';
-    if (appContainer) appContainer.style.display = 'none';
-    const loginInput = $('#loginPassword');
-    if (loginInput) {
-        loginInput.value = '';
-        loginInput.focus();
-    }
-}
-
-function hideLoginPage() {
-    const loginPage = $('#loginPage');
-    const appContainer = $('#appContainer');
-    if (loginPage) loginPage.style.display = 'none';
-    if (appContainer) appContainer.style.display = '';
-}
-
-function initLoginEvents() {
-    const loginBtn = $('#loginBtn');
-    const loginInput = $('#loginPassword');
-    if (!loginBtn || !loginInput) return;
-
-    loginInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') loginBtn.click();
-    });
-
-    loginBtn.addEventListener('click', async () => {
-        const usernameInput = $('#loginUsername');
-        const username = usernameInput ? usernameInput.value : 'root';
-        const password = loginInput.value;
-        if (!password) {
-            showToast('请输入密码', 'warning');
-            return;
-        }
-        try {
-            loginBtn.disabled = true;
-            loginBtn.textContent = '登录中...';
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ detail: '登录失败' }));
-                throw new Error(err.detail || '账号或密码错误');
-            }
-            const data = await res.json();
-            if (data.success && data.token) {
-                localStorage.setItem('token', data.token);
-                hideLoginPage();
-                showToast('登录成功', 'success');
-                loginInput.value = '';
-                // 如果应用尚未初始化，执行初始化
-                if (!window.fileUploader) {
-                    initApp();
-                }
-            }
-        } catch (err) {
-            showToast(err.message, 'error');
-        } finally {
-            loginBtn.disabled = false;
-            loginBtn.textContent = '登录';
-        }
-    });
-}
-
 function showLoginModal() {
     localStorage.removeItem('token');
-    showLoginPage();
+    document.cookie = 'token=; path=/; max-age=0';
+    window.location.href = '/';
 }
 
 function logout() {
     localStorage.removeItem('token');
-    showLoginPage();
-    showToast('已退出登录', 'info');
+    document.cookie = 'token=; path=/; max-age=0';
+    window.location.href = '/';
 }
 
 
@@ -2275,36 +2208,7 @@ async function updateCacheSize() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 初始化登录事件（始终注册，不依赖登录状态）
-    initLoginEvents();
-
-    // 检查 token 有效性
-    const token = localStorage.getItem('token');
-    if (!token) {
-        showLoginPage();
-        // 主题管理在登录页也需要
-        new ThemeManager();
-        return;
-    }
-
-    // 用一个轻量接口验证 token 是否仍然有效
-    fetch('/api/config', {
-        headers: { 'Authorization': `Bearer ${token}` }
-    }).then(res => {
-        if (res.status === 401) {
-            localStorage.removeItem('token');
-            showLoginPage();
-            new ThemeManager();
-            return;
-        }
-        // token 有效，初始化应用
-        hideLoginPage();
-        initApp();
-    }).catch(() => {
-        // 网络错误时也尝试初始化（可能稍后恢复）
-        hideLoginPage();
-        initApp();
-    });
+    initApp();
 });
 
 function initApp() {

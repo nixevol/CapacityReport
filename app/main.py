@@ -168,11 +168,16 @@ async def health_check():
 # ==================== 页面路由 ====================
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    """返回主页"""
-    index_file = STATIC_DIR / "index.html"
-    if index_file.exists():
-        return HTMLResponse(content=index_file.read_text(encoding='utf-8'))
+async def index(request: Request):
+    """根据登录状态返回对应页面"""
+    token = request.cookies.get("token")
+    if token and verify_jwt_token(token):
+        index_file = STATIC_DIR / "index.html"
+        if index_file.exists():
+            return HTMLResponse(content=index_file.read_text(encoding='utf-8'))
+    login_file = STATIC_DIR / "login.html"
+    if login_file.exists():
+        return HTMLResponse(content=login_file.read_text(encoding='utf-8'))
     return HTMLResponse(content="<h1>CapacityReport</h1><p>Static files not found.</p>")
 
 
