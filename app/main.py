@@ -24,8 +24,37 @@ import hmac
 import hashlib
 import time
 
+import configparser
+
 SECRET_KEY = "CapaReportSecretKey2026"
-ADMIN_PASSWORD = "admin" # 默认管理密码
+AUTH_INI_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "auth.ini")
+
+def _ensure_auth_ini():
+    """确保 auth.ini 存在，不存在则创建默认配置"""
+    if not os.path.exists(AUTH_INI_PATH):
+        cfg = configparser.ConfigParser()
+        cfg["auth"] = {"username": "root", "password": "admin"}
+        with open(AUTH_INI_PATH, "w", encoding="utf-8") as f:
+            cfg.write(f)
+
+def get_auth_config():
+    """从 auth.ini 读取认证配置"""
+    _ensure_auth_ini()
+    cfg = configparser.ConfigParser()
+    cfg.read(AUTH_INI_PATH, encoding="utf-8")
+    return {
+        "username": cfg.get("auth", "username", fallback="root"),
+        "password": cfg.get("auth", "password", fallback="admin")
+    }
+
+def save_auth_password(new_password: str):
+    """更新 auth.ini 中的密码"""
+    _ensure_auth_ini()
+    cfg = configparser.ConfigParser()
+    cfg.read(AUTH_INI_PATH, encoding="utf-8")
+    cfg.set("auth", "password", new_password)
+    with open(AUTH_INI_PATH, "w", encoding="utf-8") as f:
+        cfg.write(f)
 
 def create_jwt_token(data: dict, expires_in: int = 86400 * 30) -> str:
     header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
@@ -111,10 +140,26 @@ async def jwt_middleware(request: Request, call_next):
 
 @app.post("/api/login")
 async def login(username: str = Body(..., embed=True), password: str = Body(..., embed=True)):
-    if username != "root" or password != ADMIN_PASSWORD:
+    auth = get_auth_config()
+    if username != auth["username"] or password != auth["password"]:
         return JSONResponse(status_code=401, content={"detail": "账号或密码错误"})
     token = create_jwt_token({"user": username})
     return {"success": True, "token": token}
+
+
+@app.post("/api/change-password")
+async def change_password(
+    current_password: str = Body(..., embed=True),
+    new_password: str = Body(..., embed=True)
+):
+    """修改登录密码"""
+    auth = get_auth_config()
+    if current_password != auth["password"]:
+        return JSONResponse(status_code=400, content={"detail": "当前密码错误"})
+    if len(new_password) < 4:
+        return JSONResponse(status_code=400, content={"detail": "新密码长度不能少于4位"})
+    save_auth_password(new_password)
+    return {"success": True, "message": "密码修改成功"}
 
 
 # ==================== 健康检查 ====================
@@ -159,7 +204,7 @@ async def health_check():
     return {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
-        "version": "2.0.1",
+        "version": "2.0.2",
         "uptime_pid": os.getpid(),
         "checks": checks
     }
@@ -1193,7 +1238,7 @@ async def get_service_status():
     """获取服务运行状态"""
     return {
         "status": "running",
-        "version": "2.0.1",
+        "version": "2.0.2",
         "platform": platform.system(),
         "supervisor": is_supervisor_running(),
         "pid": os.getpid(),
@@ -1336,6 +1381,6 @@ async def save_script_content(content: str = Body(..., embed=True)):
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"CapacityReport v2.0.1")
+    print(f"CapacityReport v2.0.2")
     print(f"配置更新时间: {config.update}")
     uvicorn.run("app.main:app", host="0.0.0.0", port=9081, reload=False)

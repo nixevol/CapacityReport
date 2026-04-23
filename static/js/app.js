@@ -2225,7 +2225,7 @@ function initApp() {
     // 恢复上次访问的页面
     navigation.restorePage();
     
-    console.log('CapacityReport v2.0.1 已加载');
+    console.log('CapacityReport v2.0.2 已加载');
     
     // 退出登录按钮事件（事件委托）
     document.addEventListener('click', (e) => {
@@ -2235,6 +2235,37 @@ function initApp() {
             logout();
         }
     });
+
+    // 修改密码按钮事件
+    const changePwdBtn = $('#changePassword');
+    if (changePwdBtn) {
+        changePwdBtn.addEventListener('click', async () => {
+            const currentPwd = $('#currentPassword')?.value;
+            const newPwd = $('#newPassword')?.value;
+            const confirmPwd = $('#confirmPassword')?.value;
+
+            if (!currentPwd) { showToast('请输入当前密码', 'warning'); return; }
+            if (!newPwd) { showToast('请输入新密码', 'warning'); return; }
+            if (newPwd.length < 4) { showToast('新密码长度不能少于4位', 'warning'); return; }
+            if (newPwd !== confirmPwd) { showToast('两次输入的新密码不一致', 'warning'); return; }
+
+            try {
+                const res = await api('/change-password', {
+                    method: 'POST',
+                    body: JSON.stringify({ current_password: currentPwd, new_password: newPwd })
+                });
+                if (res.success) {
+                    showToast('密码修改成功，请重新登录', 'success');
+                    $('#currentPassword').value = '';
+                    $('#newPassword').value = '';
+                    $('#confirmPassword').value = '';
+                    setTimeout(() => logout(), 1500);
+                }
+            } catch (err) {
+                showToast(err.message || '密码修改失败', 'error');
+            }
+        });
+    }
     
     // 重启服务按钮事件（使用事件委托，支持所有页面的重启按钮）
     document.addEventListener('click', async (e) => {

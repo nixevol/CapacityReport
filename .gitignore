@@ -44,6 +44,9 @@ logs/
 .env
 .env.local
 
+# 认证配置（含密码）
+auth.ini
+
 # 数据库
 *.db
 *.sqlite

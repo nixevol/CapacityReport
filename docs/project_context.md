@@ -12,6 +12,14 @@
   - **API 401 处理**: `showLoginModal()` 函数保留，内部清除 token 后 `window.location.href = '/'` 跳转到登录页。
 - **涉及文件**: `static/login.html`（新增）、`app/main.py`、`static/index.html`、`static/js/app.js`、`static/css/style.css`
 
+### 2026-04-23: 退出 SVG 图标 + INI 密码配置 + 修改密码功能
+- **退出按钮图标**: Unicode `⏻` 在浏览器中不显示，替换为明确的 SVG 退出图标（门+箭头样式）。
+- **密码外部配置**: 账号密码从 `main.py` 硬编码移到 `auth.ini` 文件。使用 `configparser` 读写，每次登录/改密码都实时读取。`auth.ini` 已加入 `.gitignore`。首次运行不存在时自动创建默认配置 `root/admin`。
+- **修改密码功能**: 
+  - 后端 `/api/change-password` 接口，验证当前密码后写入新密码到 `auth.ini`。
+  - 前端设置页左侧列新增"修改登录密码"卡片（当前密码 + 新密码 + 确认新密码），修改成功后自动退出重新登录。
+- **涉及文件**: `auth.ini`（新增）、`app/main.py`、`static/index.html`、`static/js/app.js`、`.gitignore`
+
 ### 2026-04-22: 增加 JWT 鉴权和接口安全控制
 - **问题背景**: 网管部门通报安全问题，扫描到项目存在暴露的 API 文档（/docs, /redoc, /openapi.json），并且 API 接口没有使用授权控制，要求快速增加鉴权。
 - **架构变更**:
