@@ -2466,7 +2466,7 @@ function initApp() {
             window.scriptEditor.ensureEditor();
         }, 300);
     }
-});
+}
 
 
 // ==================== 脚本编辑器类 ====================
