@@ -2,6 +2,16 @@
 
 ## 最近更新记录
 
+### 2026-04-23: 鉴权改为全屏登录页模式 + 退出登录
+- **问题**: 之前的鉴权方案只在 API 层拦截 401 后弹出登录弹窗，但主页面 HTML 内容已经完整渲染并暴露给用户（未登录也能看到界面），不符合安全预期。
+- **修复方案**:
+  - **登录页独立化**: 将登录从弹窗模式（`loginModal`）改为独立全屏登录页面（`#loginPage`），未登录时主内容区 `#appContainer` 设为 `display:none`，只显示登录页。
+  - **Token 启动校验**: `DOMContentLoaded` 时先检查 `localStorage` 中的 token，无 token 直接显示登录页；有 token 则用 `/api/config` 接口验证有效性，401 则跳回登录页。
+  - **退出登录功能**: 每个页面 header 右上角新增退出按钮（`⏻` 图标，`.logout-btn` 类），事件委托统一处理，清除 token 后显示登录页。
+  - **登录后免刷新**: 登录成功后如果应用模块未初始化则调用 `initApp()` 完成初始化，无需 `window.location.reload()`。
+- **涉及文件**: `static/index.html`、`static/js/app.js`、`static/css/style.css`
+- **注意事项**: `showLoginModal()` 函数保留作为兼容入口（API 返回 401 时调用），内部已重定向到 `showLoginPage()`。
+
 ### 2026-04-22: 增加 JWT 鉴权和接口安全控制
 - **问题背景**: 网管部门通报安全问题，扫描到项目存在暴露的 API 文档（/docs, /redoc, /openapi.json），并且 API 接口没有使用授权控制，要求快速增加鉴权。
 - **架构变更**:

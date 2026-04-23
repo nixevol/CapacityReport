@@ -12,7 +12,27 @@
     <script src="/static/lib/monaco/vs/loader.js"></script>
 </head>
 <body>
-    <div class="app">
+    <!-- 登录页面（未登录时显示） -->
+    <div class="login-page" id="loginPage">
+        <div class="login-container">
+            <div class="login-logo">📊</div>
+            <h2 class="login-title">CapacityReport</h2>
+            <p class="login-subtitle">容量报表处理系统</p>
+            <div class="login-form">
+                <div class="form-group">
+                    <label>账号</label>
+                    <input type="text" id="loginUsername" class="form-input" value="root" readonly style="background-color: var(--td-bg-color-component); color: var(--td-text-color-secondary); cursor: not-allowed;">
+                </div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>密码</label>
+                    <input type="password" id="loginPassword" class="form-input" placeholder="请输入密码" autofocus>
+                </div>
+                <button class="btn btn-primary btn-lg" id="loginBtn" style="width: 100%; margin-top: 24px;">登录</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app" id="appContainer" style="display: none;">
         <!-- 侧边栏导航 -->
         <aside class="sidebar" id="sidebar">
             <div class="logo">
@@ -73,6 +93,7 @@
                                 <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
                         </button>
+                        <button class="logout-btn" id="logoutBtn" title="退出登录">⏻</button>
                     </div>
                 </header>
 
@@ -183,6 +204,7 @@
                                 <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
                         </button>
+                        <button class="logout-btn" id="logoutBtn" title="退出登录">⏻</button>
                     </div>
                 </header>
                 <div class="page-body">
@@ -217,6 +239,7 @@
                                 <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
                         </button>
+                        <button class="logout-btn" id="logoutBtn" title="退出登录">⏻</button>
                     </div>
                 </header>
                 <div class="page-body" style="display: flex; flex-direction: column; height: calc(100% - 64px);">
@@ -316,6 +339,7 @@
                                 <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
                         </button>
+                        <button class="logout-btn" id="logoutBtn" title="退出登录">⏻</button>
                     </div>
                 </header>
                 <div class="page-body script-page-body">
@@ -381,6 +405,7 @@
                                 <line x1="8" y1="4" x2="8" y2="6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
                         </button>
+                        <button class="logout-btn" id="logoutBtn" title="退出登录">⏻</button>
                     </div>
                 </header>
                 <div class="page-body settings-page-body">
@@ -490,25 +515,7 @@
         </div>
     </div>
 
-    <!-- 登录对话框 -->
-    <div class="modal" id="loginModal">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-            <h3 id="loginTitle">系统登录</h3>
-            <p>由于安全原因，请先验证您的身份</p>
-            <div class="form-group" style="margin-top: 16px;">
-                <label>账号</label>
-                <input type="text" id="loginUsername" class="form-input" value="root" readonly style="background-color: var(--td-bg-color-component); color: var(--td-text-color-secondary); cursor: not-allowed;">
-            </div>
-            <div class="form-group" style="margin-top: 16px;">
-                <label>密码</label>
-                <input type="password" id="loginPassword" class="form-input" placeholder="请输入密码以继续" onkeydown="if(event.key==='Enter') document.getElementById('loginBtn').click()">
-            </div>
-            <div class="modal-actions" style="margin-top: 24px;">
-                <button class="btn btn-primary" id="loginBtn" style="width: 100%;">登录</button>
-            </div>
-        </div>
-    </div>
+
 
     <!-- 确认对话框 -->
     <div class="modal" id="confirmModal">
