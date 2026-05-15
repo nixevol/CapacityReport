@@ -190,6 +190,410 @@ body {
   max-height: 360px;
 }
 
+.upload-page-body {
+  --upload-brand-color: #0052d9;
+  --upload-brand-color-hover: #0034b5;
+  --upload-brand-color-light: #ecf2fe;
+  --upload-success-color: #00a870;
+  --upload-success-color-light: #e8f8f2;
+  --upload-error-color: #e34d59;
+  --upload-error-color-light: #fdecee;
+  --upload-text-primary: rgba(0, 0, 0, 0.9);
+  --upload-text-secondary: rgba(0, 0, 0, 0.6);
+  --upload-text-placeholder: rgba(0, 0, 0, 0.4);
+  --upload-bg-container: #ffffff;
+  --upload-bg-container-hover: #f3f3f3;
+  --upload-bg-secondary: #f3f3f3;
+  --upload-border-color: #dcdcdc;
+  --upload-border-color-light: #e7e7e7;
+  --upload-radius: 6px;
+  --upload-radius-large: 12px;
+  --upload-transition: 0.2s cubic-bezier(0.38, 0, 0.24, 1);
+  padding: 10px 18px 24px;
+}
+
+.upload-page-body .upload-zone {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 32px 24px;
+  flex-direction: column;
+  text-align: center;
+  background: var(--upload-bg-container);
+  border: 1px dashed var(--upload-border-color);
+  border-radius: var(--upload-radius-large);
+  cursor: pointer;
+  transition: all var(--upload-transition);
+}
+
+.upload-page-body .upload-zone:hover,
+.upload-page-body .upload-zone.dragover {
+  background: var(--upload-brand-color-light);
+  border-color: var(--upload-brand-color);
+}
+
+.upload-page-body .upload-zone.dragover {
+  border-style: solid;
+}
+
+.upload-page-body .upload-zone.disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.upload-page-body .upload-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  color: var(--upload-brand-color);
+  background: var(--upload-brand-color-light);
+  border-radius: 50%;
+}
+
+.upload-page-body .upload-zone h3 {
+  margin: 0 0 8px;
+  color: var(--upload-text-primary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.upload-page-body .upload-zone p {
+  margin: 0 0 4px;
+  color: var(--upload-text-secondary);
+  font-size: 14px;
+}
+
+.upload-page-body .upload-hint {
+  margin-top: 12px !important;
+  color: var(--upload-brand-color) !important;
+  font-size: 13px !important;
+}
+
+.upload-page-body .file-list {
+  max-height: none;
+  margin-top: 20px;
+}
+
+.upload-page-body .file-list-header,
+.upload-page-body .file-list-footer,
+.upload-page-body .card-header,
+.upload-page-body .card-header-left,
+.upload-page-body .card-header-right,
+.upload-page-body .total-progress-header,
+.upload-page-body .upload-stats,
+.upload-page-body .upload-stats-item,
+.upload-page-body .file-item,
+.upload-page-body .file-item-status {
+  display: flex;
+  align-items: center;
+}
+
+.upload-page-body .file-list-header,
+.upload-page-body .file-list-footer,
+.upload-page-body .card-header,
+.upload-page-body .total-progress-header {
+  justify-content: space-between;
+}
+
+.upload-page-body .file-list-header {
+  margin-bottom: 12px;
+}
+
+.upload-page-body .file-list-header h4 {
+  margin: 0;
+  color: var(--upload-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.upload-page-body .file-list-footer {
+  margin-top: 16px;
+}
+
+.upload-page-body #fileCount {
+  color: var(--upload-text-secondary);
+  font-size: 13px;
+}
+
+.upload-page-body .total-progress {
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.upload-page-body .total-progress-header {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.upload-page-body .total-progress-header .label {
+  color: var(--upload-text-secondary);
+}
+
+.upload-page-body .total-progress-header .percent {
+  color: var(--upload-brand-color);
+  font-weight: 600;
+}
+
+.upload-page-body .total-progress-bar {
+  height: 6px;
+  overflow: hidden;
+  background: var(--upload-bg-secondary);
+  border-radius: 3px;
+}
+
+.upload-page-body .total-progress-bar-inner {
+  height: 100%;
+  background: linear-gradient(90deg, var(--upload-brand-color), #618dff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.upload-page-body .upload-stats {
+  gap: 16px;
+  margin: 0 16px 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  background: var(--upload-bg-secondary);
+  border-radius: var(--upload-radius);
+}
+
+.upload-page-body .upload-stats-item {
+  gap: 6px;
+}
+
+.upload-page-body .upload-stats-item .count {
+  color: var(--upload-text-primary);
+  font-weight: 600;
+}
+
+.upload-page-body .upload-stats-item.success .count {
+  color: var(--upload-success-color);
+}
+
+.upload-page-body .upload-stats-item.error .count {
+  color: var(--upload-error-color);
+}
+
+.upload-page-body .file-items {
+  max-height: 240px;
+  margin-top: 20px;
+  overflow-y: auto;
+  background: var(--upload-bg-container);
+  border: 1px solid var(--upload-border-color-light);
+  border-radius: var(--upload-radius);
+}
+
+.upload-page-body .file-item {
+  position: relative;
+  padding: 10px 16px;
+  flex-wrap: wrap;
+  color: var(--upload-text-primary);
+  font-size: 13px;
+  border-bottom: 1px solid var(--upload-border-color-light);
+  transition: background var(--upload-transition);
+}
+
+.upload-page-body .file-item:last-child {
+  border-bottom: 0;
+}
+
+.upload-page-body .file-item:hover {
+  background: var(--upload-bg-container-hover);
+}
+
+.upload-page-body .file-item.uploading {
+  background: var(--upload-brand-color-light);
+}
+
+.upload-page-body .file-item.uploaded {
+  background: var(--upload-success-color-light);
+}
+
+.upload-page-body .file-item.error {
+  background: var(--upload-error-color-light);
+}
+
+.upload-page-body .file-item-icon {
+  flex: 0 0 auto;
+  margin-right: 10px;
+  color: var(--upload-brand-color);
+  font-size: 16px;
+}
+
+.upload-page-body .file-item-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    "Courier New",
+    monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.upload-page-body .file-item-size {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: var(--upload-text-placeholder);
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    "Courier New",
+    monospace;
+  font-size: 12px;
+}
+
+.upload-page-body .file-item-status {
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-left: 12px;
+  font-size: 12px;
+}
+
+.upload-page-body .file-item-status.pending {
+  color: var(--upload-text-placeholder);
+}
+
+.upload-page-body .file-item-status.uploading {
+  color: var(--upload-brand-color);
+  font-weight: 500;
+}
+
+.upload-page-body .file-item-status.uploaded {
+  color: var(--upload-success-color);
+}
+
+.upload-page-body .file-item-status.error {
+  color: var(--upload-error-color);
+}
+
+.upload-page-body .file-progress {
+  width: 100%;
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: var(--upload-bg-secondary);
+  border-radius: 2px;
+}
+
+.upload-page-body .file-progress-bar {
+  height: 100%;
+  background: var(--upload-brand-color);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.upload-page-body .file-item.uploaded .file-progress-bar {
+  background: var(--upload-success-color);
+}
+
+.upload-page-body .file-item.error .file-progress-bar {
+  background: var(--upload-error-color);
+}
+
+.upload-page-body .process-section {
+  margin-top: 12px;
+}
+
+.upload-page-body .upload-process-card {
+  background: var(--upload-bg-container);
+  border: 1px solid var(--upload-border-color-light);
+  border-radius: var(--upload-radius-large);
+  transition: all var(--upload-transition);
+}
+
+.upload-page-body .card-header {
+  min-height: 58px;
+  padding: 16px 20px;
+  color: var(--upload-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--upload-border-color-light);
+}
+
+.upload-page-body .card-header-left,
+.upload-page-body .card-header-right {
+  gap: 12px;
+}
+
+.upload-page-body .card-title {
+  color: var(--upload-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.upload-page-body .card-body {
+  padding: 20px;
+}
+
+.upload-page-body .process-status {
+  padding: 4px 12px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--upload-brand-color);
+  border-radius: 10px;
+}
+
+.upload-page-body .process-status.processing {
+  animation: upload-status-pulse 1.5s infinite;
+}
+
+.upload-page-body .process-status.completed {
+  background: var(--upload-success-color);
+}
+
+.upload-page-body .process-status.failed {
+  background: var(--upload-error-color);
+}
+
+.upload-page-body .task-alert {
+  margin-bottom: 12px;
+}
+
+.upload-page-body .log-container {
+  min-height: 300px;
+  height: calc(100vh - 360px);
+  padding: 16px;
+  overflow-y: auto;
+  background: #eef1f4;
+  border: 1px solid var(--upload-border-color-light);
+  border-radius: var(--upload-radius);
+}
+
+.upload-page-body .log-content {
+  margin: 0;
+  color: var(--upload-text-secondary);
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    "Courier New",
+    monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+@keyframes upload-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
 .log-panel,
 .script-log {
   min-height: 320px;
