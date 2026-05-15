@@ -71,7 +71,8 @@ cd ..
 访问地址：
 
 ```text
-http://localhost:9081
+新版前端：http://localhost:9081
+旧版前端：http://localhost:9082
 ```
 
 开发前端时可运行：

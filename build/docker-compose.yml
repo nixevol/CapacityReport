@@ -16,6 +16,7 @@ services:
     restart: unless-stopped
     ports:
       - "19081:9081"
+      - "19082:9082"
     volumes:
       # 持久化数据
       - ./cache:/app/cache

@@ -36,8 +36,12 @@ MYSQL_HOST = "capacity-mysql"
 MYSQL_PORT = 3306
 
 # 应用端口映射
-APP_PORT_HOST = 19081
-APP_PORT_CONTAINER = 9081
+APP_NEW_PORT_HOST = 19081
+APP_NEW_PORT_CONTAINER = 9081
+APP_OLD_PORT_HOST = 19082
+APP_OLD_PORT_CONTAINER = 9082
+APP_PORT_HOST = APP_NEW_PORT_HOST
+APP_PORT_CONTAINER = APP_NEW_PORT_CONTAINER
 MYSQL_PORT_HOST = 13306
 MYSQL_PORT_CONTAINER = 3306
 
@@ -294,7 +298,8 @@ check_port() {{
     fi
 {{}}
 
-check_port {APP_PORT_HOST} "App"
+check_port {APP_NEW_PORT_HOST} "New frontend"
+check_port {APP_OLD_PORT_HOST} "Old frontend"
 check_port {MYSQL_PORT_HOST} "MySQL"
 
 echo ""
@@ -441,7 +446,8 @@ echo "=========================================="
 echo "Deployment completed!"
 echo "=========================================="
 echo ""
-echo "Access: http://localhost:{APP_PORT_HOST}"
+echo "New frontend: http://localhost:{APP_NEW_PORT_HOST}"
+echo "Old frontend: http://localhost:{APP_OLD_PORT_HOST}"
 echo ""
 echo "Commands:"
 echo "  Logs:    $DOCKER_COMPOSE_CMD logs -f"
@@ -637,7 +643,8 @@ echo "=========================================="
 echo "Update completed!"
 echo "=========================================="
 echo ""
-echo "Application: http://localhost:{APP_PORT_HOST}"
+echo "New frontend: http://localhost:{APP_NEW_PORT_HOST}"
+echo "Old frontend: http://localhost:{APP_OLD_PORT_HOST}"
 echo ""
 echo "Database status:"
 if docker ps --format "{{.Names}}" | grep -q "capacity-mysql"; then

@@ -40,7 +40,8 @@ if not exist "frontend\dist\index.html" (
 :loop
 echo.
 echo [%date% %time%] Starting service...
-echo [INFO] Service URL: http://localhost:9081
+echo [INFO] New frontend: http://localhost:9081
+echo [INFO] Old frontend: http://localhost:9082
 echo [INFO] Close this window to stop the service.
 echo.
 
