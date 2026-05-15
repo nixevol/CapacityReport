@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-15：修复 Windows 启动脚本编码问题
+
+- `run.bat` 改为纯 ASCII 输出，并规范为 CRLF 行尾，避免 Windows `cmd` 在 PowerShell 中执行 UTF-8 中文批处理时把提示文本解析成碎片命令。
+- 启动脚本仍使用 `.venv\Scripts\python.exe`、检查 Python 依赖和 `frontend/dist/index.html`，实际启动方式保持 `python -m app.main` 不变。
+- 后续如需中文启动提示，优先放到 PowerShell 脚本或应用日志中，不建议直接写入 `.bat`。
+
 ## 2026-05-15：后端拆分与前端迁移
 
 ### 当前架构
