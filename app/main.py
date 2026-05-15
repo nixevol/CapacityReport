@@ -15,6 +15,7 @@ from app.config import BASE_DIR
 APP_VERSION = "2.0.2"
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
 FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
+FRONTEND_OLD_DIR = BASE_DIR / "frontend_old"
 
 
 def create_app() -> FastAPI:
@@ -73,6 +74,16 @@ def register_routes(app: FastAPI) -> None:
 
 
 def register_frontend(app: FastAPI) -> None:
+    @app.get("/old", include_in_schema=False)
+    async def serve_old_frontend():
+        index_file = FRONTEND_OLD_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+        return JSONResponse(status_code=503, content={"detail": "旧版前端入口文件不存在"})
+
+    if FRONTEND_OLD_DIR.exists():
+        app.mount("/old", StaticFiles(directory=str(FRONTEND_OLD_DIR), html=True), name="frontend_old")
+
     if FRONTEND_ASSETS_DIR.exists():
         app.mount("/assets", StaticFiles(directory=str(FRONTEND_ASSETS_DIR)), name="assets")
 

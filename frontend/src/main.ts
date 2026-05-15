@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import naive from 'naive-ui';
 
 import App from './App.vue';
+import { router } from './router';
 import './styles.css';
 
-createApp(App).use(naive).mount('#app');
-
+createApp(App).use(router).use(naive).mount('#app');

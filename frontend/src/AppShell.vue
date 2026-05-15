@@ -13,11 +13,12 @@
         <div class="brand-text">CapacityReport</div>
       </div>
       <n-menu
-        v-model:value="activeMenu"
+        :value="activeMenu"
         class="app-menu"
         :collapsed-width="64"
         :collapsed-icon-size="22"
         :options="menuOptions"
+        @update:value="handleMenuChange"
       />
       <div class="sider-footer">
         <span>v2.0</span>
@@ -41,18 +42,15 @@
       </n-layout-header>
 
       <n-layout-content class="content">
-        <FileWorkflow v-if="activeMenu === 'workflow'" />
-        <HistoryPanel v-else-if="activeMenu === 'history'" />
-        <DatabasePanel v-else-if="activeMenu === 'database'" />
-        <ScriptPanel v-else-if="activeMenu === 'script'" />
-        <SettingsPanel v-else />
+        <RouterView />
       </n-layout-content>
     </n-layout>
   </n-layout>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, h, ref, type Component } from 'vue';
+import { computed, h, ref, type Component } from 'vue';
+import { RouterView, useRoute, useRouter } from 'vue-router';
 import { useMessage, type MenuOption, NIcon } from 'naive-ui';
 import {
   CloudUploadOutline,
@@ -66,16 +64,14 @@ import {
 import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
 import type { LoginResponse } from './types';
 import LoginView from './components/LoginView.vue';
-import FileWorkflow from './components/FileWorkflow.vue';
-import HistoryPanel from './components/HistoryPanel.vue';
-import DatabasePanel from './components/DatabasePanel.vue';
-import SettingsPanel from './components/SettingsPanel.vue';
 
 const message = useMessage();
-const ScriptPanel = defineAsyncComponent(() => import('./components/ScriptPanel.vue'));
+const route = useRoute();
+const router = useRouter();
 const token = ref(getToken());
-const activeMenu = ref('workflow');
 const loginLoading = ref(false);
+const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
+type MenuKey = (typeof menuKeys)[number];
 
 const menuOptions: MenuOption[] = [
   { label: '数据上传', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
@@ -85,8 +81,12 @@ const menuOptions: MenuOption[] = [
   { label: '系统设置', key: 'settings', icon: renderIcon(SettingsOutline) }
 ];
 
+const activeMenu = computed<MenuKey>(() => {
+  return isMenuKey(route.name) ? route.name : 'workflow';
+});
+
 const currentTitle = computed(() => {
-  return String(menuOptions.find(item => item.key === activeMenu.value)?.label || '');
+  return String(route.meta.title || menuOptions.find(item => item.key === activeMenu.value)?.label || '');
 });
 
 setUnauthorizedHandler(() => {
@@ -111,6 +111,17 @@ async function handleLogin(payload: { username: string; password: string }) {
 function logout() {
   clearToken();
   token.value = '';
+}
+
+function handleMenuChange(key: string | number) {
+  if (!isMenuKey(key) || key === activeMenu.value) {
+    return;
+  }
+  void router.push({ name: key });
+}
+
+function isMenuKey(value: unknown): value is MenuKey {
+  return typeof value === 'string' && menuKeys.includes(value as MenuKey);
 }
 
 function renderIcon(icon: Component) {
