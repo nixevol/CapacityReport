@@ -38,7 +38,7 @@
             </span>
           </span>
         </div>
-        <n-button size="tiny" text :loading="testing" class="connection-test" @click="testConnection">
+        <n-button size="tiny" text :loading="testing" class="connection-test" @click="testConnection(true)">
           重新检测
         </n-button>
       </section>
@@ -174,7 +174,7 @@ onMounted(() => {
       }
     ]
   });
-  void testConnection();
+  void testConnection(false);
   void loadTables();
 });
 
@@ -182,11 +182,17 @@ onBeforeUnmount(() => {
   resetPageHeader();
 });
 
-async function testConnection() {
+async function testConnection(showSuccessToast = true) {
   testing.value = true;
   try {
     const result = await apiPost<ApiMessage>('/api/database/test');
-    message[result.success ? 'success' : 'error'](result.message || '连接测试完成');
+    if (result.success) {
+      if (showSuccessToast) {
+        message.success(result.message || '连接测试完成');
+      }
+    } else {
+      message.error(result.message || '数据库连接测试失败');
+    }
     databaseInfo.value = await apiGet<DatabaseInfo>('/api/database/info');
   } catch (error) {
     message.error(error instanceof Error ? error.message : '数据库连接测试失败');

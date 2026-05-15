@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-15：取消数据管理页初始化成功提示
+
+- `frontend/src/components/DatabasePanel.vue` 进入页面时仍会自动执行数据库连接检测和数据库信息刷新，但连接成功不再弹出 toast，避免切换到数据管理页时产生无意义提示。
+- 用户手动点击“重新检测”时仍保留成功提示；连接失败或接口异常仍会显示错误 toast。
+- 已执行 `npm run build`，构建通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-15：优化新版前端图标和侧边栏选中态
 
 - `frontend/src/composables/pageHeader.ts` 的页头动作图标从 emoji 字符串改为 Vue 组件，页面按钮统一传入 `@vicons/ionicons5` 图标组件，构建后随前端资源本地打包，适合内网运行。
