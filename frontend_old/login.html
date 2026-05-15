@@ -161,6 +161,21 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        const LEGACY_TOKEN_KEY = 'token';
+        const APP_TOKEN_KEY = 'capacity_report_token';
+
+        function getLegacyHomePath() {
+            const path = window.location.pathname;
+            return path === '/old/login.html' || path.startsWith('/old/') ? '/old' : '/';
+        }
+
+        function setAuthToken(token) {
+            if (!token) return;
+            localStorage.setItem(APP_TOKEN_KEY, token);
+            localStorage.setItem(LEGACY_TOKEN_KEY, token);
+            document.cookie = `token=${encodeURIComponent(token)}; path=/; max-age=${86400 * 30}; SameSite=Lax`;
+        }
+
         function showToast(msg, type) {
             const t = document.getElementById('toast');
             t.textContent = msg;
@@ -197,11 +212,9 @@
 
                 const data = await res.json();
                 if (data.success && data.token) {
-                    localStorage.setItem('token', data.token);
-                    // 设置 cookie 供后端 / 路由判断
-                    document.cookie = `token=${data.token}; path=/; max-age=${86400 * 30}; SameSite=Lax`;
+                    setAuthToken(data.token);
                     showToast('登录成功', 'success');
-                    setTimeout(() => { window.location.href = '/'; }, 300);
+                    setTimeout(() => { window.location.href = getLegacyHomePath(); }, 300);
                 }
             } catch (err) {
                 showToast(err.message, 'error');

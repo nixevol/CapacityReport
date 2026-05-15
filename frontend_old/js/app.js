@@ -5,6 +5,38 @@
 
 // ==================== 工具函数 ====================
 
+const LEGACY_TOKEN_KEY = 'token';
+const APP_TOKEN_KEY = 'capacity_report_token';
+
+function getLegacyLoginPath() {
+    const path = window.location.pathname;
+    return path === '/old' || path.startsWith('/old/') ? '/old/login.html' : '/login.html';
+}
+
+function getAuthToken() {
+    return localStorage.getItem(APP_TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY) || '';
+}
+
+function clearAuthToken() {
+    localStorage.removeItem(APP_TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    document.cookie = 'token=; path=/; max-age=0';
+}
+
+function redirectToLogin() {
+    const loginPath = getLegacyLoginPath();
+    if (window.location.pathname !== loginPath) {
+        window.location.replace(loginPath);
+    }
+}
+
+function requireAuthToken() {
+    if (getAuthToken()) return true;
+    clearAuthToken();
+    redirectToLogin();
+    return false;
+}
+
 function $(selector) {
     return document.querySelector(selector);
 }
@@ -114,7 +146,7 @@ async function api(endpoint, options = {}) {
     // 如果没有指定 method 且没有 body，默认使用 GET
     const method = options.method || (options.body ? 'POST' : 'GET');
     
-    const token = localStorage.getItem('token');
+    const token = getAuthToken();
     
     const fetchOptions = {
         method: method,
@@ -134,7 +166,7 @@ async function api(endpoint, options = {}) {
     const response = await fetch(`/api${endpoint}`, fetchOptions);
     
     if (response.status === 401 && endpoint !== '/login') {
-        localStorage.removeItem('token');
+        clearAuthToken();
         showLoginModal();
         throw new Error('未授权或登录已过期，请重新登录');
     }
@@ -148,15 +180,13 @@ async function api(endpoint, options = {}) {
 }
 
 function showLoginModal() {
-    localStorage.removeItem('token');
-    document.cookie = 'token=; path=/; max-age=0';
-    window.location.href = '/';
+    clearAuthToken();
+    redirectToLogin();
 }
 
 function logout() {
-    localStorage.removeItem('token');
-    document.cookie = 'token=; path=/; max-age=0';
-    window.location.href = '/';
+    clearAuthToken();
+    window.location.href = getLegacyLoginPath();
 }
 
 
@@ -651,7 +681,7 @@ class FileUploader {
                             resolve({ success: true });
                         }
                     } else if (xhr.status === 401) {
-                        localStorage.removeItem('token');
+                        clearAuthToken();
                         showLoginModal();
                         reject(new Error('未授权或登录已过期，请重新登录'));
                     } else {
@@ -666,7 +696,7 @@ class FileUploader {
                 
                 // 开始上传
                 xhr.open('POST', '/api/upload');
-                const token = localStorage.getItem('token');
+                const token = getAuthToken();
                 if (token) {
                     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
                 }
@@ -2208,6 +2238,9 @@ async function updateCacheSize() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (!requireAuthToken()) {
+        return;
+    }
     initApp();
 });
 
