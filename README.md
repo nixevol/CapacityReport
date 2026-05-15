@@ -1,143 +1,120 @@
 # CapacityReport - 容量报表处理系统
 
-支持 Excel/CSV 文件上传、数据提取、清洗和导入 MySQL 数据库。
+CapacityReport 用于每周导入 Excel/CSV 数据，按 `Configure.json` 与 `ReportScript.sql` 完成清洗、入库和报表处理。系统面向内网运行，后端由 FastAPI 提供接口，前端由 Vue 3 构建后交给 FastAPI 托管。
 
 ## 技术栈
 
-- **后端**: FastAPI + Uvicorn + Supervisor
-- **前端**: 原生 JavaScript + HTML/CSS
-- **数据库**: MySQL 8.0+ (PyMySQL + SQLAlchemy)
-- **数据处理**: Pandas + OpenPyXL
-- **部署**: Docker + Docker Compose
-
-## 数据库要求
-
-- **MySQL**: >= 8.0, < 9.0
-- **字符集**: utf8mb4
-- **必需功能**: LOAD DATA LOCAL INFILE
+- 后端：FastAPI + Uvicorn + Supervisor
+- 前端：Vue 3 + TypeScript + Vite + Naive UI
+- 数据库：MySQL 8.0+，通过 PyMySQL + SQLAlchemy 访问
+- 数据处理：Pandas + OpenPyXL
+- 部署：Docker + Docker Compose
 
 ## 目录结构
 
-```
+```text
 CapaReport/
-├── app/                    # 应用代码
-│   ├── main.py            # FastAPI 入口
-│   ├── processor.py      # 数据处理
-│   ├── database.py        # 数据库管理
-│   ├── history.py         # 历史记录
-│   └── config.py          # 配置管理
-├── build/                  # 构建脚本和配置
-│   ├── build.py           # 统一构建脚本
-│   ├── Dockerfile         # Docker 镜像定义
-│   ├── docker-compose.yml # Docker Compose 编排
-│   └── mysql/             # MySQL 配置
-├── static/                 # 前端静态文件
-│   ├── index.html
-│   ├── css/
-│   └── js/
+├── app/
+│   ├── api/routers/        # FastAPI 路由模块
+│   ├── services/           # 运行时服务能力
+│   ├── utils/              # 文件和通用工具
+│   ├── main.py             # FastAPI 入口和前端托管
+│   ├── auth.py             # 登录、密码和 Token
+│   ├── state.py            # 运行期共享状态
+│   ├── processor.py        # 数据处理主流程
+│   ├── database.py         # 数据库访问
+│   ├── history.py          # 历史记录
+│   └── config.py           # 配置读写
+├── frontend/
+│   ├── src/                # Vue 3 + TypeScript 源码
+│   ├── package.json
+│   └── vite.config.ts
+├── build/                  # Docker 与离线部署构建脚本
+├── docs/project_context.md # 项目上下文记录
 ├── Configure.json          # 应用配置
 ├── ReportScript.sql        # SQL 处理脚本
-├── requirements.txt       # Python 依赖
-└── supervisord.conf       # Supervisor 配置
+├── requirements.txt        # Python 依赖
+├── run.bat                 # Windows 本地启动脚本
+└── supervisord.conf        # 容器内进程管理配置
 ```
 
 ## 本地运行
 
-### 前置要求
+前置要求：
 
-- Python >= 3.10, < 3.14
-- MySQL >= 8.0, < 9.0
+- Windows 10
+- Python >= 3.10，项目虚拟环境由 `uv` 创建
+- Node.js，建议使用当前 LTS 或更新版本
+- MySQL >= 8.0
 
-### 安装依赖
+安装后端依赖：
 
-```bash
-pip install -r requirements.txt
+```powershell
+uv pip install -r requirements.txt
 ```
 
-### 配置数据库
+安装并构建前端：
 
-编辑 `Configure.json`，设置 MySQL 连接信息：
-
-```json
-{
-  "MySQL_DBInfo": {
-    "host": "127.0.0.1",
-    "port": 3306,
-    "user": "root",
-    "passwd": "your_password",
-    "dbname": "CapacityReport"
-  }
-}
+```powershell
+cd frontend
+npm install
+npm run build
+cd ..
 ```
 
-### 启动服务
+启动服务：
 
-**Windows**:
-```bash
-run.bat
+```powershell
+.\run.bat
 ```
 
-**Linux**:
-```bash
-supervisord -c supervisord.conf
+访问地址：
+
+```text
+http://localhost:9081
 ```
 
-访问: http://localhost:9081
+开发前端时可运行：
 
-## Docker 编译与部署
-
-### 构建部署包
-
-```bash
-python build/build.py
+```powershell
+cd frontend
+npm run dev
 ```
 
-选择构建类型：
-- `1` - 完整部署包（MySQL + 应用）
-- `2` - 更新包（仅应用）
-
-输出文件在 `dist/` 目录：
-- `capacity-report-full.tar.gz` - 完整部署包
-- `capacity-report-update.tar.gz` - 更新包
-
-### 部署
-
-**完整部署**:
-```bash
-tar -xzf capacity-report-full.tar.gz
-cd capacity-report-full
-sh deploy.sh
-```
-
-**更新应用**:
-```bash
-tar -xzf capacity-report-update.tar.gz
-cd capacity-report-update
-sh update.sh
-```
-
-### 配置说明
-
-Docker 环境配置在 `build/build.py` 文件头部：
-- 默认镜像版本
-- 数据库账号密码
-- 端口映射
-
-部署包中的 `Configure.json` 会自动更新为 Docker 环境配置。
+Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。
 
 ## 配置
 
-`Configure.json` 主要配置项：
+`Configure.json` 主要包含：
 
-- `MySQL_DBInfo` - 数据库连接信息
-- `SheetFilter` - Excel Sheet 过滤规则
-- `ExtractField` - 字段映射配置
+- `MySQL_DBInfo`：MySQL 连接信息
+- `SheetFilter`：Excel Sheet 过滤规则
+- `ExtractField`：字段抽取映射配置
 
-## API 端点
+登录账号密码保存在本地 `auth.ini`，首次运行会自动创建默认配置。`auth.ini` 已被 `.gitignore` 忽略。
 
-- `POST /api/upload` - 上传文件
-- `POST /api/process/start` - 启动处理
-- `GET /api/process/status` - 查询状态
-- `GET /api/history` - 获取历史记录
-- `POST /api/service/restart` - 重启服务
-- `GET /api/health` - 健康检查
+## Docker 构建与部署
+
+离线部署包由 `build/build.py` 生成：
+
+```powershell
+python build/build.py
+```
+
+脚本提供两种构建：
+
+- `1`：完整部署包，包含 MySQL 镜像和应用镜像
+- `2`：更新包，只包含应用镜像
+
+Docker 镜像构建采用多阶段流程：先在 Node 阶段执行前端构建，再把 `frontend/dist` 复制到 Python 运行镜像内。
+
+## 主要接口
+
+- `POST /api/login`：登录
+- `POST /api/change-password`：修改密码
+- `POST /api/upload`：上传文件
+- `POST /api/process/start`：启动处理
+- `POST /api/process/status`：查询处理状态
+- `GET /api/history`：历史记录
+- `POST /api/service/restart`：重启服务
+- `GET /health`：健康检查

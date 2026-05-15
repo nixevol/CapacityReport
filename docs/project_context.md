@@ -1,34 +1,51 @@
-# 项目上下文记忆 (Project Context)
+# 项目上下文记录
 
-## 最近更新记录
+## 2026-05-15：后端拆分与前端迁移
 
-### 2026-04-23: 登录页后端级别隔离 + 退出登录
-- **问题**: 之前登录页和主页面在同一个 HTML 文件中，即使前端隐藏了主内容，用户仍能通过查看源码看到完整的主页面 HTML。
-- **最终方案 — 后端级别隔离**:
-  - **独立 `login.html`**: 创建 `static/login.html` 作为独立登录页面，自包含样式和逻辑，不引用主程序任何 JS/CSS。
-  - **后端路由鉴权**: `app/main.py` 的 `/` 路由从 cookie 中读取 `token` 并验证，有效则返回 `index.html`，无效则返回 `login.html`。**未登录时服务器根本不会返回 `index.html` 的内容**。
-  - **Cookie + localStorage 双存储**: 登录成功后 token 同时存入 cookie（供后端 `/` 路由判断）和 localStorage（供前端 API 请求 Bearer header）。
-  - **退出登录**: 每个页面 header 右上角有退出按钮（`⏻`），清除 cookie + localStorage 后跳转到 `/`（后端自动返回登录页）。
-  - **API 401 处理**: `showLoginModal()` 函数保留，内部清除 token 后 `window.location.href = '/'` 跳转到登录页。
-- **涉及文件**: `static/login.html`（新增）、`app/main.py`、`static/index.html`、`static/js/app.js`、`static/css/style.css`
+### 当前架构
 
-### 2026-04-23: 退出 SVG 图标 + INI 密码配置 + 修改密码功能
-- **退出按钮图标**: Unicode `⏻` 在浏览器中不显示，替换为明确的 SVG 退出图标（门+箭头样式）。
-- **密码外部配置**: 账号密码从 `main.py` 硬编码移到 `auth.ini` 文件。使用 `configparser` 读写，每次登录/改密码都实时读取。`auth.ini` 已加入 `.gitignore`。首次运行不存在时自动创建默认配置 `root/admin`。
-- **修改密码功能**: 
-  - 后端 `/api/change-password` 接口，验证当前密码后写入新密码到 `auth.ini`。
-  - 前端设置页左侧列新增"修改登录密码"卡片（当前密码 + 新密码 + 确认新密码），修改成功后自动退出重新登录。
-- **涉及文件**: `auth.ini`（新增）、`app/main.py`、`static/index.html`、`static/js/app.js`、`.gitignore`
+- 后端入口收敛到 `app/main.py`，只负责创建 FastAPI 应用、注册中间件、注册路由和托管前端构建产物。
+- API 按业务拆分到 `app/api/routers/`：
+  - `auth.py`：登录和修改密码。
+  - `upload.py`：上传会话和文件上传。
+  - `tasks.py`：任务锁、处理启动、处理状态。
+  - `history.py`：历史记录、日志和记录删除。
+  - `database.py`：数据库测试、表查询、表维护和导出。
+  - `config.py`：配置读取、保存、上传和下载。
+  - `cache.py`：缓存大小统计。
+  - `service.py`：服务状态和重启。
+  - `script.py`：SQL 脚本读取、保存和执行。
+  - `health.py`：健康检查。
+- 运行时共享状态放在 `app/state.py`，包括配置实例、历史管理器、处理任务、上传会话和全局任务锁。
+- 登录、密码文件和 Token 逻辑放在 `app/auth.py`，继续使用本地 `auth.ini`。
+- 服务重启检测和进程退出逻辑放在 `app/services/runtime.py`。
+- 文件大小等工具函数放在 `app/utils/files.py`。
 
-### 2026-04-22: 增加 JWT 鉴权和接口安全控制
-- **问题背景**: 网管部门通报安全问题，扫描到项目存在暴露的 API 文档（/docs, /redoc, /openapi.json），并且 API 接口没有使用授权控制，要求快速增加鉴权。
-- **架构变更**:
-  - FastAPI 初始化时关闭 `docs_url`、`redoc_url` 和 `openapi_url`。
-  - 由于依赖环境限制（`uv` 虚拟环境被破坏），为实现快速且无额外依赖的 JWT 方案，在 `app/main.py` 中自行使用 Python 标准库 `hmac`、`hashlib`、`base64` 实现了原生的 JWT `create_jwt_token` 和 `verify_jwt_token`。
-  - 在 `app/main.py` 增加了一个登录接口 `/api/login`，密码验证通过后下发 token。当前密码硬编码为 `admin`。
-  - 添加了全局路由中间件 `@app.middleware("http") jwt_middleware`，拦截所有 `/api/` 路由（除登录外），验证请求头 `Authorization: Bearer <token>` 是否合法或过期。
-- **前端适配**:
-  - `static/index.html` 增加了 `loginModal`（系统登录弹出框）。
-  - `static/js/app.js` 的 `api` 统一调用封装修改，支持在请求头附带 token；同时增加对 401 状态码的拦截，一旦失效将移除 token 并在页面弹出 `showLoginModal`。
-  - `static/js/app.js` 在处理 XHR 文件上传时，一并增加了 token 的拼装及 401 处理。
-- **经验教训**: 在部署内网或暴露环境前，快速关闭 Swagger OpenAPI 的自带页面十分重要。为了绕过环境管理工具或网络导致库安装失败，通过原生标准库提供足够安全的 JWT 校验能极大提升应急处理效率。
+### 前端
+
+- 旧 `static/` 原生 HTML/CSS/JS 已替换为 `frontend/`。
+- 前端技术栈为 Vue 3 + TypeScript + Vite + Naive UI。
+- 构建产物位于 `frontend/dist`，由 FastAPI 根路由托管；`/assets` 映射到 `frontend/dist/assets`。
+- 未构建前端时，后端会返回 503，并提示执行 `cd frontend && npm install && npm run build`。
+- Vite 开发服务器将 `/api` 和 `/health` 代理到后端 `http://localhost:9081`。
+
+### 部署与运行
+
+- Windows 本地运行使用 `run.bat`，优先使用 uv 创建的 `.venv\Scripts\python.exe`。
+- `run.bat` 会检查 Python 依赖和 `frontend/dist/index.html`，缺少前端产物时要求先构建前端。
+- Docker 构建改为多阶段：
+  - `node:22-slim` 阶段安装前端依赖并执行 `npm run build`。
+  - `python:3.13.11-slim` 阶段安装后端依赖，复制应用代码，再复制前端构建产物。
+- `.dockerignore` 只排除 `frontend/node_modules`、`frontend/dist` 等本地产物，不再排除完整前端源码。
+
+### 依赖与清理
+
+- Python 依赖保留当前代码实际使用项：`fastapi`、`uvicorn[standard]`、`python-multipart`、`pymysql`、`sqlalchemy`、`cryptography`、`pandas`、`openpyxl`、`chardet`、`supervisor`。
+- 已移除未使用的 `sqlparse`、`aiofiles`、`python-dateutil`。
+- 旧静态目录、根目录打包产物、日志和 Python 编译缓存属于可清理产物，不应提交。
+
+### 注意事项
+
+- 当前项目按每周整包替换使用，不维护旧版 API 兼容层；但核心处理流程、配置文件和 `ReportScript.sql` 仍沿用现有语义。
+- `ReportScript.sql` 是业务处理链路的一部分，重构接口或前端时不要改写 SQL 语义。
+- `auth.ini`、`cache/`、`dist/`、`frontend/dist/`、`frontend/node_modules/` 均为本地运行或构建产物，不进入版本库。

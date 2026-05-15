@@ -18,57 +18,57 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
+# Virtual environments
 .venv/
 venv/
 ENV/
 env/
-.ENV
+.ENV/
 
-# IDE
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Build output and runtime data
+dist/
+cache/
+logs/
+uploads/
+build/temp/
+CapacityReportData/
+
+# Local configuration and secrets
+.env
+.env.local
+auth.ini
+
+# Logs
+*.log
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Data files uploaded or generated during weekly processing
+*.zip
+*.xlsx
+*.xls
+*.csv
+
+# IDE and OS
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
-
-# 项目特定目录
-cache/
-dist/
-# 日志文件
-*.log
-logs/
-
-# 环境变量
-.env
-.env.local
-
-# 认证配置（含密码）
-auth.ini
-
-# 数据库
-*.db
-*.sqlite
-*.sqlite3
-
-# 临时文件
-*.tmp
-*.temp
-*.bak
-*.cache
-
-# 系统文件
 Thumbs.db
 desktop.ini
-
-# 上传的文件
-uploads/
-*.zip
-*.xlsx
-*.xls
-*.csv
-
-
-# build 临时目录
-build/temp/

@@ -1,0 +1,190 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  color: #20242a;
+  background: #eef1f4;
+  font-family:
+    Inter,
+    "Segoe UI",
+    "Microsoft YaHei",
+    Arial,
+    sans-serif;
+}
+
+.app-layout {
+  min-height: 100vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 16px;
+  border-bottom: 1px solid #e6e9ee;
+}
+
+.brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  background: #2458a6;
+  border-radius: 8px;
+}
+
+.brand-mark.large {
+  width: 44px;
+  height: 44px;
+  font-size: 15px;
+}
+
+.brand-text {
+  overflow: hidden;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  padding: 0 20px;
+  background: #fff;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.page-subtitle,
+.muted-line {
+  margin-top: 2px;
+  color: #6a7280;
+  font-size: 12px;
+}
+
+.content {
+  min-width: 0;
+  padding: 16px;
+}
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(238, 241, 244, 0.94)),
+    #eef1f4;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(21, 38, 62, 0.16);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.login-brand h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.login-brand p {
+  margin: 3px 0 0;
+  color: #687282;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.file-list,
+.history-list,
+.table-list {
+  max-height: 360px;
+}
+
+.log-panel {
+  min-height: 320px;
+  padding: 12px;
+  background: #101418;
+  border-radius: 6px;
+}
+
+.script-editor textarea,
+.json-editor textarea {
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    "Courier New",
+    monospace;
+}
+
+.section-label {
+  margin-bottom: 8px;
+  color: #333b46;
+  font-weight: 700;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.restart-button {
+  margin-top: 16px;
+}
+
+.n-card {
+  border-radius: 8px;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .content {
+    padding: 12px;
+  }
+
+  .page-subtitle {
+    display: none;
+  }
+
+  .table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

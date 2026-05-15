@@ -2,12 +2,13 @@
 数据库连接与操作模块 - 性能优化版
 """
 import pymysql
-import sqlalchemy
-from sqlalchemy import create_engine, text, event
-from sqlalchemy.pool import QueuePool
 from urllib.parse import quote
-from typing import Any, Dict, List, Optional, Tuple
 from contextlib import contextmanager
+from typing import Any, Dict, List, Optional, Tuple
+
+import sqlalchemy
+from sqlalchemy import create_engine
+from sqlalchemy.pool import QueuePool
 
 from app.config import AppConfig
 

@@ -1,4 +1,4 @@
-# Web Framework
+# Web framework
 fastapi
 uvicorn[standard]
 python-multipart
@@ -8,15 +8,10 @@ pymysql
 sqlalchemy
 cryptography
 
-# Data Processing
+# Data processing
 pandas
 openpyxl
 chardet
-sqlparse
 
-# Utilities
-aiofiles
-python-dateutil
-
-# Process Manager
+# Process manager
 supervisor

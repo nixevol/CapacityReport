@@ -2,30 +2,37 @@
 .git
 .gitignore
 
-# Python
-__pycache__
+# Python cache and virtual environments
+__pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-.env
-.venv
+.venv/
 venv/
 ENV/
-dist/
+env/
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Frontend local artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
-# Cache and logs
+# Runtime and package output
 cache/
 logs/
-*.log
+dist/
+uploads/
 CapacityReportData/
-# Docker
+error.log
+*.log
+
+# Build helper output
+build/temp/
+
+# Local-only files
+.env
+.env.local
+auth.ini
+
+# Deployment files copied separately by build.py
 docker-compose*.yml
 Dockerfile*
 .dockerignore
@@ -33,18 +40,13 @@ Dockerfile*
 # MySQL data
 mysql/
 
-# Build directory (exclude build files from image)
-build/
-
-# Temporary files
+# Temporary and OS files
 *.tmp
 *.temp
 .temp/
-
-# OS files
 .DS_Store
 Thumbs.db
 
-# Documentation
+# Documentation is not required in the runtime image.
 *.md
 !README.md

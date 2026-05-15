@@ -1,19 +1,18 @@
 """
 数据处理核心模块 - 性能优化版
 """
+import chardet
 import os
-import re
+import shutil
+import tempfile
 import time
 import zipfile
 import multiprocessing
-import numpy as np
 import pandas as pd
-import sqlparse
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from io import StringIO
 
 from app.config import AppConfig, SQL_SCRIPT
 from app.database import DatabaseManager
@@ -259,7 +258,6 @@ class DataProcessor:
     
     def _detect_encoding(self, file_path: Path) -> str:
         """快速检测文件编码（只读取前 8KB）"""
-        import chardet
         with open(file_path, 'rb') as f:
             # 只读取前 8KB，足够检测编码，比 64KB 快很多
             result = chardet.detect(f.read(8192))
@@ -377,7 +375,6 @@ class DataProcessor:
         temp_dir = self.work_dir / '.temp'
         if temp_dir.exists():
             try:
-                import shutil
                 shutil.rmtree(temp_dir)
             except Exception:
                 pass
@@ -405,8 +402,7 @@ class DataProcessor:
         如果失败则自动回退到 bulk_insert 方式
         临时文件放在工作目录的 .temp 子目录中
         """
-        import tempfile
-        
+
         # 检测是否支持 LOAD DATA INFILE
         if not self._check_load_data_support():
             # 不支持，直接使用 bulk_insert
