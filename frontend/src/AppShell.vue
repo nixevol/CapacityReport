@@ -2,7 +2,7 @@
   <LoginView v-if="!token" :loading="loginLoading" @login="handleLogin" />
   <n-layout v-else has-sider class="app-layout">
     <n-layout-sider
-      bordered
+      class="app-sider"
       collapse-mode="width"
       :collapsed-width="64"
       :width="224"
@@ -14,17 +14,21 @@
       </div>
       <n-menu
         v-model:value="activeMenu"
+        class="app-menu"
         :collapsed-width="64"
         :collapsed-icon-size="22"
         :options="menuOptions"
       />
+      <div class="sider-footer">
+        <span>v2.0</span>
+        <span>CapacityReport</span>
+      </div>
     </n-layout-sider>
 
     <n-layout>
       <n-layout-header bordered class="topbar">
-        <div>
+        <div class="topbar-title">
           <div class="page-title">{{ currentTitle }}</div>
-          <div class="page-subtitle">容量报表处理与数据维护</div>
         </div>
         <n-space align="center">
           <n-tag size="small" type="success" round>已登录</n-tag>
@@ -48,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, ref, type Component } from 'vue';
+import { computed, defineAsyncComponent, h, ref, type Component } from 'vue';
 import { useMessage, type MenuOption, NIcon } from 'naive-ui';
 import {
   CloudUploadOutline,
@@ -65,19 +69,19 @@ import LoginView from './components/LoginView.vue';
 import FileWorkflow from './components/FileWorkflow.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import DatabasePanel from './components/DatabasePanel.vue';
-import ScriptPanel from './components/ScriptPanel.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 
 const message = useMessage();
+const ScriptPanel = defineAsyncComponent(() => import('./components/ScriptPanel.vue'));
 const token = ref(getToken());
 const activeMenu = ref('workflow');
 const loginLoading = ref(false);
 
 const menuOptions: MenuOption[] = [
-  { label: '处理任务', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
+  { label: '数据上传', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
   { label: '处理历史', key: 'history', icon: renderIcon(FileTrayFullOutline) },
-  { label: '数据表', key: 'database', icon: renderIcon(ServerOutline) },
-  { label: 'SQL 脚本', key: 'script', icon: renderIcon(ConstructOutline) },
+  { label: '数据管理', key: 'database', icon: renderIcon(ServerOutline) },
+  { label: '脚本编辑', key: 'script', icon: renderIcon(ConstructOutline) },
   { label: '系统设置', key: 'settings', icon: renderIcon(SettingsOutline) }
 ];
 
