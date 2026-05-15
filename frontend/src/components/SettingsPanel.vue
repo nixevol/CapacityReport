@@ -136,7 +136,9 @@
             class="field-remove-button"
             @click="removeFieldMapping(index)"
           >
-            ×
+            <template #icon>
+              <n-icon><CloseOutline /></n-icon>
+            </template>
           </n-button>
 
           <div class="field-mapping-header">
@@ -188,6 +190,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useMessage, type SelectOption } from 'naive-ui';
+import { CloseOutline, CloudDownloadOutline, CloudUploadOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type { ApiMessage, AppConfig } from '../types';
@@ -251,8 +254,8 @@ const visibleFieldMappings = computed(() => {
 onMounted(() => {
   setPageHeader({
     actions: [
-      { key: 'download-config', label: '下载配置', icon: '📥', onClick: downloadConfig },
-      { key: 'upload-config', label: '上传配置', icon: '📤', onClick: () => configInput.value?.click() }
+      { key: 'download-config', label: '下载配置', icon: CloudDownloadOutline, onClick: downloadConfig },
+      { key: 'upload-config', label: '上传配置', icon: CloudUploadOutline, onClick: () => configInput.value?.click() }
     ]
   });
   void loadConfig();

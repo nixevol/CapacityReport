@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-15：优化新版前端图标和侧边栏选中态
+
+- `frontend/src/composables/pageHeader.ts` 的页头动作图标从 emoji 字符串改为 Vue 组件，页面按钮统一传入 `@vicons/ionicons5` 图标组件，构建后随前端资源本地打包，适合内网运行。
+- `AppShell.vue` 的折叠侧边栏按钮、主题切换按钮和各页面页头动作已移除 emoji 图标；当前前端源码中仅保留主品牌图标 `📊`。
+- `styles.css` 优化侧边栏菜单选中态：展开态使用浅色背景、品牌色描边和左侧短标记，折叠态收敛为居中的 40px 图标块，避免选中背景过宽。
+- 本次只执行 `npm run build` 做构建验证，未按用户要求启动浏览器或 headless Chrome。
+
 ## 2026-05-15：修复新版前端夜间模式组件颜色
 
 - 新增 `frontend/src/composables/theme.ts` 作为前端共享主题状态，统一读写 `localStorage.theme` 并同步 `document.documentElement[data-theme]`。

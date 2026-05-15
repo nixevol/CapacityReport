@@ -122,6 +122,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
+import { TrashOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, download } from '../api/client';
 import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
@@ -165,7 +166,7 @@ onMounted(() => {
       {
         key: 'drop-all-tables',
         label: '删除全部表',
-        icon: '🗑️',
+        icon: TrashOutline,
         type: 'error',
         variant: 'solid',
         disabled: computed(() => tables.value.length === 0),

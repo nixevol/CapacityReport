@@ -30,7 +30,7 @@
     <n-layout>
       <n-layout-header bordered class="topbar page-header">
         <button class="sidebar-toggle" type="button" title="展开/收起侧边栏" @click="toggleSidebar">
-          ☰
+          <n-icon><MenuOutline /></n-icon>
         </button>
         <div class="page-header-content">
           <h1>{{ currentTitle }}</h1>
@@ -53,14 +53,14 @@
               @click="runHeaderAction(action)"
             >
               <template v-if="actionIcon(action)" #icon>
-                <span class="button-emoji">{{ actionIcon(action) }}</span>
+                <n-icon><component :is="actionIcon(action)" /></n-icon>
               </template>
               {{ actionLabel(action) }}
             </n-button>
           </template>
 
           <button class="theme-toggle" type="button" title="切换主题" @click="toggleTheme">
-            <span>🌓</span>
+            <n-icon><MoonOutline /></n-icon>
           </button>
           <button class="restart-btn" type="button" title="重启服务" @click="restartService">
             <n-icon><PowerOutline /></n-icon>
@@ -89,6 +89,8 @@ import {
   ConstructOutline,
   FileTrayFullOutline,
   LogOutOutline,
+  MenuOutline,
+  MoonOutline,
   PowerOutline,
   ServerOutline,
   SettingsOutline
@@ -203,7 +205,7 @@ function actionLabel(action: PageHeaderAction) {
 }
 
 function actionIcon(action: PageHeaderAction) {
-  return resolveHeaderValue(action.icon, '');
+  return resolveHeaderValue(action.icon) ?? null;
 }
 
 function actionTitle(action: PageHeaderAction) {

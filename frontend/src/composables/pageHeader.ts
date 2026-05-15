@@ -1,11 +1,11 @@
-import { shallowReactive, unref, type Ref } from 'vue';
+import { shallowReactive, unref, type Component, type Ref } from 'vue';
 
 type HeaderValue<T> = T | Ref<T> | (() => T);
 
 export interface PageHeaderAction {
   key: string;
   label: HeaderValue<string>;
-  icon?: HeaderValue<string>;
+  icon?: HeaderValue<Component>;
   title?: HeaderValue<string>;
   kind?: 'button' | 'text';
   type?: 'default' | 'primary' | 'success' | 'warning' | 'error';
@@ -33,7 +33,9 @@ export function resetPageHeader() {
   pageHeader.actions = [];
 }
 
-export function resolveHeaderValue<T>(value: HeaderValue<T> | undefined, fallback: T): T {
+export function resolveHeaderValue<T>(value: HeaderValue<T> | undefined): T | undefined;
+export function resolveHeaderValue<T>(value: HeaderValue<T> | undefined, fallback: T): T;
+export function resolveHeaderValue<T>(value: HeaderValue<T> | undefined, fallback?: T): T | undefined {
   if (typeof value === 'function') {
     return (value as () => T)();
   }

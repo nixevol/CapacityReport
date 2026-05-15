@@ -3,7 +3,7 @@
     <n-spin v-if="loading" class="page-loading" />
 
     <div v-else-if="records.length === 0" class="empty-state history-empty-state">
-      <span class="empty-icon">📭</span>
+      <n-icon class="empty-icon"><FileTrayOutline /></n-icon>
       <p>暂无处理记录</p>
     </div>
 
@@ -53,6 +53,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
+import { FileTrayOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
@@ -73,11 +74,11 @@ const hasRecords = computed(() => records.value.length > 0);
 onMounted(() => {
   setPageHeader({
     actions: [
-      { key: 'refresh-history', label: '刷新', icon: '🔄', loading, onClick: loadHistory },
+      { key: 'refresh-history', label: '刷新', icon: RefreshOutline, loading, onClick: loadHistory },
       {
         key: 'clear-history',
         label: '清空历史',
-        icon: '🗑️',
+        icon: TrashOutline,
         type: 'error',
         variant: 'solid',
         disabled: computed(() => !hasRecords.value),

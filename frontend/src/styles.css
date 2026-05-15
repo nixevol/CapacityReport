@@ -196,14 +196,15 @@ select {
 
 .app-menu {
   flex: 1;
-  padding: 12px 8px;
+  padding: 16px 8px;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
 .app-menu .n-menu-item-content {
+  position: relative;
   height: 40px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   padding: 0 16px !important;
   color: var(--td-text-color-secondary);
   border-radius: var(--td-radius-default);
@@ -216,14 +217,50 @@ select {
 }
 
 .app-menu .n-menu-item-content:hover {
-  color: var(--td-text-color-primary);
+  color: var(--td-brand-color);
   background: var(--td-bg-color-container-hover);
 }
 
 .app-menu .n-menu-item-content--selected {
   color: var(--td-brand-color);
-  font-weight: 500;
+  font-weight: 600;
   background: var(--td-brand-color-light);
+  box-shadow: inset 0 0 0 1px var(--td-brand-color-focus);
+}
+
+.app-menu .n-menu-item-content--selected::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 6px;
+  width: 3px;
+  background: var(--td-brand-color);
+  border-radius: 3px;
+}
+
+.app-menu .n-menu-item-content--selected .n-menu-item-content__icon {
+  color: var(--td-brand-color);
+}
+
+.n-layout-sider--collapsed .app-menu {
+  padding: 16px 8px;
+}
+
+.n-layout-sider--collapsed .app-menu .n-menu-item-content {
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 4px;
+  padding: 0 !important;
+}
+
+.n-layout-sider--collapsed .app-menu .n-menu-item-content--selected::before {
+  display: none;
+}
+
+.n-layout-sider--collapsed .app-menu .n-menu-item-content__icon {
+  margin-right: 0 !important;
 }
 
 .sider-footer {
@@ -257,9 +294,14 @@ select {
 }
 
 .sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 32px;
+  height: 32px;
   margin-top: 2px;
-  padding: 8px;
+  padding: 0;
   color: var(--td-text-color-secondary);
   font-size: 18px;
   line-height: 1;
@@ -306,19 +348,15 @@ select {
   white-space: nowrap;
 }
 
-.button-emoji {
-  display: inline-block;
-  line-height: 1;
-}
-
 .theme-toggle,
 .restart-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  width: 32px;
   height: 32px;
-  padding: 0 12px;
+  padding: 0;
   color: var(--td-text-color-primary);
   font-size: 14px;
   white-space: nowrap;
@@ -344,6 +382,8 @@ select {
   background: var(--td-error-color-light);
 }
 
+.sidebar-toggle svg,
+.theme-toggle svg,
 .restart-btn svg {
   display: block;
   width: 16px;
@@ -828,6 +868,9 @@ select {
 }
 
 .empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 42px;
   line-height: 1;
 }

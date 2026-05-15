@@ -32,6 +32,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import { useMessage } from 'naive-ui';
+import { BrushOutline, PlayOutline, SaveOutline } from '@vicons/ionicons5';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
@@ -96,9 +97,25 @@ onMounted(async () => {
     subtitle: computed(() => scriptPath.value || 'ReportScript.sql'),
     actions: [
       { key: 'script-modified', kind: 'text', label: modifiedText },
-      { key: 'save-script', label: computed(() => (isModified.value ? '保存 *' : '保存')), icon: '💾', type: 'primary', variant: 'solid', loading: saving, onClick: saveScript },
-      { key: 'format-script', label: '格式化', icon: '✨', onClick: formatScript },
-      { key: 'run-script', label: '运行脚本', icon: '▶️', type: 'success', variant: 'solid', loading: executing, onClick: executeScript }
+      {
+        key: 'save-script',
+        label: computed(() => (isModified.value ? '保存 *' : '保存')),
+        icon: SaveOutline,
+        type: 'primary',
+        variant: 'solid',
+        loading: saving,
+        onClick: saveScript
+      },
+      { key: 'format-script', label: '格式化', icon: BrushOutline, onClick: formatScript },
+      {
+        key: 'run-script',
+        label: '运行脚本',
+        icon: PlayOutline,
+        type: 'success',
+        variant: 'solid',
+        loading: executing,
+        onClick: executeScript
+      }
     ]
   });
 
