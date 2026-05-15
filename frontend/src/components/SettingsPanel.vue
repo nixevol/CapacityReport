@@ -1,12 +1,11 @@
 <template>
   <div class="settings-workspace">
+    <input ref="configInput" class="hidden-input" type="file" accept=".json" @change="uploadConfigFile" />
+
     <div class="settings-column">
       <n-card title="数据库配置" size="small" class="work-card">
         <template #header-extra>
-          <n-space>
-            <n-button size="small" tertiary :loading="loading" @click="loadConfig">刷新</n-button>
-            <n-button size="small" tertiary :loading="testingDb" @click="testDatabase">测试连接</n-button>
-          </n-space>
+          <span class="muted-line">更新时间：{{ configUpdate || '-' }}</span>
         </template>
 
         <n-form label-placement="top">
@@ -37,15 +36,19 @@
               </n-form-item>
             </n-gi>
           </n-grid>
-          <div class="card-actions">
-            <span class="muted-line">更新时间：{{ configUpdate || '-' }}</span>
-            <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
-          </div>
         </n-form>
+
+        <template #footer>
+          <n-space justify="end">
+            <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
+            <n-button :loading="testingDb" @click="testDatabase">测试连接</n-button>
+          </n-space>
+        </template>
       </n-card>
 
       <n-card title="Sheet 过滤规则" size="small" class="work-card">
         <n-space vertical>
+          <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
           <div class="filter-tags">
             <n-tag
               v-for="(filter, index) in sheetFilters"
@@ -65,14 +68,16 @@
             />
             <n-button @click="addSheetFilter">添加</n-button>
           </n-input-group>
-          <div class="card-actions">
-            <span class="muted-line">匹配这些关键词的 Sheet 会跳过处理</span>
-            <n-button type="primary" :loading="savingSheetFilter" @click="saveSheetFilter">保存规则</n-button>
-          </div>
         </n-space>
+
+        <template #footer>
+          <n-space justify="end">
+            <n-button type="primary" :loading="savingSheetFilter" @click="saveSheetFilter">保存规则</n-button>
+          </n-space>
+        </template>
       </n-card>
 
-      <n-card title="登录密码" size="small" class="work-card">
+      <n-card title="修改登录密码" size="small" class="work-card">
         <n-form label-placement="top">
           <n-form-item label="当前密码">
             <n-input v-model:value="passwordForm.current_password" type="password" show-password-on="click" />
@@ -80,60 +85,38 @@
           <n-form-item label="新密码">
             <n-input v-model:value="passwordForm.new_password" type="password" show-password-on="click" />
           </n-form-item>
-          <n-form-item label="确认密码">
+          <n-form-item label="确认新密码">
             <n-input v-model:value="passwordForm.confirm_password" type="password" show-password-on="click" />
           </n-form-item>
-          <div class="card-actions">
-            <span />
-            <n-button type="primary" :loading="changingPassword" @click="changePassword">修改密码</n-button>
-          </div>
         </n-form>
-      </n-card>
 
-      <n-card title="配置文件与服务" size="small" class="work-card">
-        <n-space vertical>
-          <n-space>
-            <n-button @click="downloadConfig">下载配置</n-button>
-            <n-button @click="configInput?.click()">上传配置</n-button>
-            <input ref="configInput" class="hidden-input" type="file" accept=".json" @change="uploadConfigFile" />
+        <template #footer>
+          <n-space justify="end">
+            <n-button type="primary" :loading="changingPassword" @click="changePassword">修改密码</n-button>
           </n-space>
-
-          <n-descriptions v-if="serviceStatus" bordered size="small" :column="2">
-            <n-descriptions-item label="状态">{{ serviceStatus.status }}</n-descriptions-item>
-            <n-descriptions-item label="版本">{{ serviceStatus.version }}</n-descriptions-item>
-            <n-descriptions-item label="系统">{{ serviceStatus.platform }}</n-descriptions-item>
-            <n-descriptions-item label="进程">{{ serviceStatus.pid }}</n-descriptions-item>
-          </n-descriptions>
-
-          <div class="card-actions">
-            <n-button size="small" tertiary @click="loadServiceStatus">刷新状态</n-button>
-            <n-button type="warning" tertiary @click="confirmRestart">重启服务</n-button>
-          </div>
-        </n-space>
+        </template>
       </n-card>
+
     </div>
 
     <n-card size="small" class="work-card field-mapping-card">
       <template #header>
-        <div class="field-card-title">
-          <span>字段提取配置</span>
-          <n-tag size="small" round>{{ extractFields.length }} 个字段</n-tag>
+        <div class="field-card-header">
+          <div class="field-card-title-row">
+            <div class="field-card-title">
+              <span>字段映射配置</span>
+              <n-tag size="small" round>{{ extractFields.length }} 个字段</n-tag>
+            </div>
+            <n-input
+              v-model:value="fieldSearch"
+              size="small"
+              clearable
+              class="field-search"
+              placeholder="搜索字段..."
+            />
+          </div>
+          <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
         </div>
-      </template>
-      <template #header-extra>
-        <n-space align="center">
-          <n-input
-            v-model:value="fieldSearch"
-            size="small"
-            clearable
-            class="field-search"
-            placeholder="搜索字段或提取来源"
-          />
-          <n-button size="small" @click="addFieldMapping">添加字段</n-button>
-          <n-button size="small" type="primary" :loading="savingExtractFields" @click="saveExtractFields">
-            保存映射
-          </n-button>
-        </n-space>
       </template>
 
       <n-scrollbar class="field-mapping-scroll">
@@ -189,16 +172,26 @@
           </div>
         </div>
       </n-scrollbar>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="addFieldMapping">添加字段</n-button>
+          <n-button type="primary" :loading="savingExtractFields" @click="saveExtractFields">
+            保存映射
+          </n-button>
+        </n-space>
+      </template>
     </n-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useDialog, useMessage, type SelectOption } from 'naive-ui';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { useMessage, type SelectOption } from 'naive-ui';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
-import type { ApiMessage, AppConfig, ServiceStatus } from '../types';
+import type { ApiMessage, AppConfig } from '../types';
+import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 interface ExtractFieldConfig {
   Field: string;
@@ -208,7 +201,6 @@ interface ExtractFieldConfig {
 }
 
 const message = useMessage();
-const dialog = useDialog();
 const configInput = ref<HTMLInputElement | null>(null);
 const configUpdate = ref('');
 const loading = ref(false);
@@ -217,7 +209,6 @@ const savingMysql = ref(false);
 const savingSheetFilter = ref(false);
 const savingExtractFields = ref(false);
 const changingPassword = ref(false);
-const serviceStatus = ref<ServiceStatus | null>(null);
 const sheetFilters = ref<string[]>([]);
 const newSheetFilter = ref('');
 const extractFields = ref<ExtractFieldConfig[]>([]);
@@ -258,8 +249,17 @@ const visibleFieldMappings = computed(() => {
 });
 
 onMounted(() => {
+  setPageHeader({
+    actions: [
+      { key: 'download-config', label: '下载配置', icon: '📥', onClick: downloadConfig },
+      { key: 'upload-config', label: '上传配置', icon: '📤', onClick: () => configInput.value?.click() }
+    ]
+  });
   void loadConfig();
-  void loadServiceStatus();
+});
+
+onBeforeUnmount(() => {
+  resetPageHeader();
 });
 
 async function loadConfig() {
@@ -451,33 +451,6 @@ async function uploadConfigFile(event: Event) {
     await loadConfig();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '上传配置失败');
-  }
-}
-
-async function loadServiceStatus() {
-  try {
-    serviceStatus.value = await apiGet<ServiceStatus>('/api/service/status');
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '读取运行状态失败');
-  }
-}
-
-function confirmRestart() {
-  dialog.warning({
-    title: '重启服务',
-    content: '确认重启后端服务？',
-    positiveText: '重启',
-    negativeText: '取消',
-    onPositiveClick: restartService
-  });
-}
-
-async function restartService() {
-  try {
-    const result = await apiPost<ApiMessage>('/api/service/restart');
-    message.success(result.message || '服务正在重启');
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '重启服务失败');
   }
 }
 

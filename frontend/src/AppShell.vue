@@ -4,12 +4,13 @@
     <n-layout-sider
       class="app-sider"
       collapse-mode="width"
+      :collapsed="sidebarCollapsed"
       :collapsed-width="64"
-      :width="224"
-      show-trigger
+      :width="220"
+      @update:collapsed="sidebarCollapsed = $event"
     >
       <div class="brand">
-        <div class="brand-mark">CR</div>
+        <div class="brand-mark">📊</div>
         <div class="brand-text">CapacityReport</div>
       </div>
       <n-menu
@@ -21,24 +22,55 @@
         @update:value="handleMenuChange"
       />
       <div class="sider-footer">
-        <span>v2.0</span>
-        <span>CapacityReport</span>
+        <span>版本：v2.0.2</span>
+        <span>Power by：NIXEVOL</span>
       </div>
     </n-layout-sider>
 
     <n-layout>
-      <n-layout-header bordered class="topbar">
-        <div class="topbar-title">
-          <div class="page-title">{{ currentTitle }}</div>
+      <n-layout-header bordered class="topbar page-header">
+        <button class="sidebar-toggle" type="button" title="展开/收起侧边栏" @click="toggleSidebar">
+          ☰
+        </button>
+        <div class="page-header-content">
+          <h1>{{ currentTitle }}</h1>
+          <span v-if="pageSubtitle" class="page-subtitle" :title="pageSubtitle">{{ pageSubtitle }}</span>
         </div>
-        <n-space align="center">
-          <n-tag size="small" type="success" round>已登录</n-tag>
-          <n-button tertiary circle title="退出登录" @click="logout">
+        <div class="page-header-actions">
+          <template v-for="action in pageHeader.actions" :key="action.key">
+            <span v-if="action.kind === 'text'" class="header-info-text">
+              {{ actionLabel(action) }}
+            </span>
+            <n-button
+              v-else
+              size="small"
+              :type="action.type === 'default' ? undefined : action.type"
+              :tertiary="action.variant !== 'solid'"
+              :text="action.variant === 'text'"
+              :loading="actionLoading(action)"
+              :disabled="actionDisabled(action)"
+              :title="actionTitle(action)"
+              @click="runHeaderAction(action)"
+            >
+              <template v-if="actionIcon(action)" #icon>
+                <span class="button-emoji">{{ actionIcon(action) }}</span>
+              </template>
+              {{ actionLabel(action) }}
+            </n-button>
+          </template>
+
+          <button class="theme-toggle" type="button" title="切换主题" @click="toggleTheme">
+            <span>🌓</span>
+          </button>
+          <button class="restart-btn" type="button" title="重启服务" @click="restartService">
+            <n-icon><PowerOutline /></n-icon>
+          </button>
+          <n-button tertiary circle title="退出登录" class="logout-button" @click="logout">
             <template #icon>
               <n-icon><LogOutOutline /></n-icon>
             </template>
           </n-button>
-        </n-space>
+        </div>
       </n-layout-header>
 
       <n-layout-content class="content">
@@ -49,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, ref, type Component } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { useMessage, type MenuOption, NIcon } from 'naive-ui';
 import {
@@ -57,6 +89,7 @@ import {
   ConstructOutline,
   FileTrayFullOutline,
   LogOutOutline,
+  PowerOutline,
   ServerOutline,
   SettingsOutline
 } from '@vicons/ionicons5';
@@ -64,12 +97,15 @@ import {
 import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
 import type { LoginResponse } from './types';
 import LoginView from './components/LoginView.vue';
+import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
 
 const message = useMessage();
 const route = useRoute();
 const router = useRouter();
 const token = ref(getToken());
 const loginLoading = ref(false);
+const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
+const theme = ref(localStorage.getItem('theme') || 'light');
 const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
 
@@ -88,6 +124,24 @@ const activeMenu = computed<MenuKey>(() => {
 const currentTitle = computed(() => {
   return String(route.meta.title || menuOptions.find(item => item.key === activeMenu.value)?.label || '');
 });
+const pageSubtitle = computed(() => resolveHeaderValue(pageHeader.subtitle || '', ''));
+
+document.documentElement.setAttribute('data-theme', theme.value);
+
+onMounted(() => {
+  window.addEventListener('dragover', preventWindowFileDrop, { capture: true });
+  window.addEventListener('drop', preventWindowFileDrop, { capture: true });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('dragover', preventWindowFileDrop, { capture: true });
+  window.removeEventListener('drop', preventWindowFileDrop, { capture: true });
+});
+
+watch(
+  () => route.name,
+  () => resetPageHeader()
+);
 
 setUnauthorizedHandler(() => {
   token.value = '';
@@ -113,6 +167,26 @@ function logout() {
   token.value = '';
 }
 
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  localStorage.setItem('sidebarCollapsed', sidebarCollapsed.value ? 'true' : 'false');
+}
+
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', theme.value);
+  document.documentElement.setAttribute('data-theme', theme.value);
+}
+
+async function restartService() {
+  try {
+    await apiPost('/api/service/restart');
+    message.success('服务正在重启');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '重启服务失败');
+  }
+}
+
 function handleMenuChange(key: string | number) {
   if (!isMenuKey(key) || key === activeMenu.value) {
     return;
@@ -126,5 +200,40 @@ function isMenuKey(value: unknown): value is MenuKey {
 
 function renderIcon(icon: Component) {
   return () => h(NIcon, null, { default: () => h(icon) });
+}
+
+function actionLabel(action: PageHeaderAction) {
+  return resolveHeaderValue(action.label, '');
+}
+
+function actionIcon(action: PageHeaderAction) {
+  return resolveHeaderValue(action.icon, '');
+}
+
+function actionTitle(action: PageHeaderAction) {
+  return resolveHeaderValue(action.title, actionLabel(action));
+}
+
+function actionLoading(action: PageHeaderAction) {
+  return resolveHeaderValue(action.loading, false);
+}
+
+function actionDisabled(action: PageHeaderAction) {
+  return resolveHeaderValue(action.disabled, false);
+}
+
+function runHeaderAction(action: PageHeaderAction) {
+  void action.onClick?.();
+}
+
+function preventWindowFileDrop(event: DragEvent) {
+  const types = Array.from(event.dataTransfer?.types || []);
+  if (!types.includes('Files')) {
+    return;
+  }
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy';
+  }
 }
 </script>

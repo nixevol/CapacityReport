@@ -2,13 +2,6 @@
   <div class="database-workspace">
     <aside class="database-sidebar-pane">
       <section class="database-table-pane">
-        <div class="database-table-actions">
-          <n-button size="small" tertiary :loading="loadingTables" @click="loadTables">刷新数据表</n-button>
-          <n-button size="small" tertiary type="error" :disabled="tables.length === 0" @click="confirmDropAll">
-            删除全部
-          </n-button>
-        </div>
-
         <div class="database-table-list-wrap">
           <n-empty v-if="tables.length === 0 && !loadingTables" description="暂无数据表" />
           <n-spin v-else-if="loadingTables" class="database-list-loading" size="small" />
@@ -126,12 +119,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 
 import { apiGet, apiPost, download } from '../api/client';
 import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
+import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type RowData = Record<string, unknown>;
 type DownloadFormat = 'csv' | 'xlsx';
@@ -166,8 +160,25 @@ const columns = computed<DataTableColumns<RowData>>(() => {
 });
 
 onMounted(() => {
+  setPageHeader({
+    actions: [
+      {
+        key: 'drop-all-tables',
+        label: '删除全部表',
+        icon: '🗑️',
+        type: 'error',
+        variant: 'solid',
+        disabled: computed(() => tables.value.length === 0),
+        onClick: confirmDropAll
+      }
+    ]
+  });
   void testConnection();
   void loadTables();
+});
+
+onBeforeUnmount(() => {
+  resetPageHeader();
 });
 
 async function testConnection() {
@@ -342,9 +353,10 @@ function formatCell(value: unknown): string {
 .database-workspace {
   display: flex;
   gap: 20px;
-  height: calc(100vh - 92px);
-  min-height: 560px;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
+  padding: 24px 32px;
 }
 
 .database-sidebar-pane {
@@ -358,9 +370,9 @@ function formatCell(value: unknown): string {
 .database-table-pane,
 .database-content-pane,
 .database-server-info {
-  background: #fff;
-  border: 1px solid #dfe4ec;
-  border-radius: 6px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
 }
 
 .database-table-pane {
@@ -368,16 +380,6 @@ function formatCell(value: unknown): string {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-}
-
-.database-table-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 46px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #e6eaf0;
 }
 
 .database-table-list-wrap {
@@ -403,36 +405,37 @@ function formatCell(value: unknown): string {
   min-height: 38px;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
-  color: #1f2933;
+  padding: 10px 16px;
+  color: var(--td-text-color-primary);
   font: inherit;
   text-align: left;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #e8ecf2;
+  border-bottom: 1px solid var(--td-border-color-light);
   cursor: pointer;
+  transition: all var(--td-transition);
 }
 
 .database-table-item:hover {
-  background: #f4f7fb;
+  background: var(--td-bg-color-container-hover);
 }
 
 .database-table-item.active {
-  color: #0052d9;
-  font-weight: 600;
-  background: #ecf2fe;
+  color: var(--td-brand-color);
+  font-weight: 500;
+  background: var(--td-brand-color-light);
 }
 
 .table-dot {
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
-  background: #9aa4b2;
+  background: var(--td-text-color-placeholder);
   border-radius: 50%;
 }
 
 .database-table-item.active .table-dot {
-  background: #0052d9;
+  background: var(--td-brand-color);
 }
 
 .table-name {
@@ -447,7 +450,7 @@ function formatCell(value: unknown): string {
   flex-shrink: 0;
   padding: 10px 12px 28px;
   font-size: 12px;
-  background: #f8fafc;
+  background: var(--td-bg-color-secondarycontainer);
 }
 
 .server-info-item {
@@ -459,11 +462,11 @@ function formatCell(value: unknown): string {
 }
 
 .server-info-item:not(:last-of-type) {
-  border-bottom: 1px dashed #dfe4ec;
+  border-bottom: 1px dashed var(--td-border-color-light);
 }
 
 .info-label {
-  color: #4f5b6b;
+  color: var(--td-text-color-secondary);
 }
 
 .info-value {
@@ -484,18 +487,18 @@ function formatCell(value: unknown): string {
 }
 
 .status-badge.success {
-  color: #00a870;
-  background: #dff7ed;
+  color: var(--td-success-color);
+  background: var(--td-success-color-light);
 }
 
 .status-badge.warning {
-  color: #ed7b2f;
-  background: #fff1e6;
+  color: var(--td-warning-color);
+  background: var(--td-warning-color-light);
 }
 
 .status-badge.unknown {
-  color: #8b95a4;
-  background: #edf1f6;
+  color: var(--td-text-color-placeholder);
+  background: var(--td-bg-color-container-hover);
 }
 
 .connection-test {
@@ -518,9 +521,9 @@ function formatCell(value: unknown): string {
   justify-content: space-between;
   gap: 12px;
   min-height: 48px;
-  padding: 8px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e6eaf0;
+  padding: 12px 16px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-bottom: 1px solid var(--td-border-color-light);
 }
 
 .toolbar-left {
@@ -533,8 +536,8 @@ function formatCell(value: unknown): string {
 .current-table {
   overflow: hidden;
   max-width: 42vw;
-  color: #1f2933;
-  font-weight: 700;
+  color: var(--td-text-color-primary);
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -542,9 +545,9 @@ function formatCell(value: unknown): string {
 .row-count {
   flex: 0 0 auto;
   padding: 2px 8px;
-  color: #667386;
+  color: var(--td-text-color-secondary);
   font-size: 12px;
-  background: #edf1f6;
+  background: var(--td-bg-color-component);
   border-radius: 10px;
 }
 
@@ -573,7 +576,7 @@ function formatCell(value: unknown): string {
 .columns-collapse {
   flex: 0 0 auto;
   padding: 0 14px 12px;
-  border-top: 1px solid #e6eaf0;
+  border-top: 1px solid var(--td-border-color-light);
 }
 
 .database-pagination {
@@ -582,15 +585,15 @@ function formatCell(value: unknown): string {
   justify-content: space-between;
   gap: 12px;
   min-height: 48px;
-  padding: 8px 14px;
-  background: #f8fafc;
-  border-top: 1px solid #e6eaf0;
+  padding: 12px 16px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-top: 1px solid var(--td-border-color-light);
 }
 
 .pagination-total {
   flex: 0 0 auto;
-  color: #667386;
-  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
 }
 
 @media (max-width: 1180px) {
@@ -598,6 +601,7 @@ function formatCell(value: unknown): string {
     flex-direction: column;
     height: auto;
     min-height: 0;
+    padding: 16px;
   }
 
   .database-sidebar-pane {

@@ -1,46 +1,31 @@
 <template>
-  <div class="script-workspace">
-    <n-card size="small" class="work-card script-editor-pane">
-      <template #header>
-        <div class="script-card-title">
-          <span>脚本编辑</span>
-          <n-tag v-if="isModified" size="small" type="warning">已修改</n-tag>
-          <n-tag v-else size="small" type="success">已保存</n-tag>
+  <div class="script-page-body">
+    <div class="script-editor-container">
+      <div ref="editorHost" class="script-editor" />
+    </div>
+
+    <div class="script-status-bar">
+      <span>{{ cursorText }}</span>
+      <span>{{ editorStatus }}</span>
+      <span>{{ lineCount }} 行</span>
+    </div>
+
+    <div v-if="taskStatus" class="process-section script-process-section">
+      <div class="upload-process-card">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="card-title">脚本执行进度</span>
+            <span class="process-status" :class="statusClass">{{ statusText }}</span>
+          </div>
+          <div class="card-header-right">
+            <n-button size="small" tertiary :disabled="!taskId" @click="refreshStatus">刷新</n-button>
+          </div>
         </div>
-      </template>
-      <template #header-extra>
-        <n-space>
-          <n-button size="small" tertiary :loading="loading" @click="loadScript">重新加载</n-button>
-          <n-button size="small" type="primary" :loading="saving" @click="saveScript">保存</n-button>
-          <n-button size="small" type="warning" :loading="executing" @click="executeScript">执行</n-button>
-        </n-space>
-      </template>
-
-      <div class="script-editor-toolbar">
-        <span class="script-path" :title="scriptPath">{{ scriptPath || 'ReportScript.sql' }}</span>
-        <span class="script-modified">修改时间：{{ modified || '-' }}</span>
+        <div class="card-body">
+          <n-log :log="logText" language="text" trim class="script-log" />
+        </div>
       </div>
-
-      <div ref="editorHost" class="monaco-editor-host" />
-
-      <div class="script-status-bar">
-        <span>{{ cursorText }}</span>
-        <span>{{ lineCount }} 行</span>
-        <span>{{ editorStatus }}</span>
-      </div>
-    </n-card>
-
-    <n-card title="执行状态" size="small" class="work-card script-log-pane">
-      <template #header-extra>
-        <n-space>
-          <n-tag v-if="taskStatus" :type="statusType">{{ statusText }}</n-tag>
-          <n-button size="small" tertiary :disabled="!taskId" @click="refreshStatus">刷新</n-button>
-        </n-space>
-      </template>
-
-      <n-empty v-if="!taskStatus" description="脚本尚未执行" />
-      <n-log v-else :log="logText" language="text" trim class="script-log" />
-    </n-card>
+    </div>
   </div>
 </template>
 
@@ -53,6 +38,7 @@ import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 
 import { apiGet, apiPost } from '../api/client';
 import type { ApiMessage, ScriptContent, TaskStatus } from '../types';
+import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type MonacoGlobal = typeof globalThis & {
   MonacoEnvironment?: {
@@ -81,13 +67,14 @@ const executing = ref(false);
 const taskId = ref('');
 const taskStatus = ref<TaskStatus | null>(null);
 let timer: number | undefined;
+let themeObserver: MutationObserver | undefined;
 let applyingRemoteContent = false;
 
 const logText = computed(() => taskStatus.value?.logs?.join('\n') || '等待执行日志');
-const statusType = computed(() => {
-  if (taskStatus.value?.status === 'completed') return 'success';
-  if (taskStatus.value?.status === 'failed') return 'error';
-  return 'info';
+const statusClass = computed(() => {
+  if (taskStatus.value?.status === 'completed') return 'completed';
+  if (taskStatus.value?.status === 'failed') return 'failed';
+  return 'processing';
 });
 const statusText = computed(() => {
   const status = taskStatus.value?.status;
@@ -102,15 +89,29 @@ const editorStatus = computed(() => {
   if (saving.value) return '保存中';
   return isModified.value ? '未保存' : '就绪';
 });
+const modifiedText = computed(() => (modified.value ? `最后修改: ${modified.value}` : '最后修改: -'));
 
 onMounted(async () => {
+  setPageHeader({
+    subtitle: computed(() => scriptPath.value || 'ReportScript.sql'),
+    actions: [
+      { key: 'script-modified', kind: 'text', label: modifiedText },
+      { key: 'save-script', label: computed(() => (isModified.value ? '保存 *' : '保存')), icon: '💾', type: 'primary', variant: 'solid', loading: saving, onClick: saveScript },
+      { key: 'format-script', label: '格式化', icon: '✨', onClick: formatScript },
+      { key: 'run-script', label: '运行脚本', icon: '▶️', type: 'success', variant: 'solid', loading: executing, onClick: executeScript }
+    ]
+  });
+
   await nextTick();
   createEditor();
+  observeTheme();
   await loadScript();
 });
 
 onBeforeUnmount(() => {
+  resetPageHeader();
   stopPolling();
+  themeObserver?.disconnect();
   for (const disposable of disposables) {
     disposable.dispose();
   }
@@ -123,17 +124,25 @@ function createEditor() {
   editor.value = monaco.editor.create(editorHost.value, {
     value: '-- 正在加载 ReportScript.sql',
     language: 'sql',
-    theme: 'vs',
+    theme: currentEditorTheme(),
     fontSize: 14,
-    fontFamily: "'Cascadia Code', Consolas, 'Courier New', monospace",
+    fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace",
     lineNumbers: 'on',
     minimap: { enabled: true },
     automaticLayout: true,
     scrollBeyondLastLine: false,
-    roundedSelection: false,
+    roundedSelection: true,
     renderLineHighlight: 'all',
     tabSize: 4,
-    wordWrap: 'off'
+    insertSpaces: true,
+    wordWrap: 'on',
+    folding: true,
+    showFoldingControls: 'always',
+    bracketPairColorization: { enabled: true },
+    guides: {
+      bracketPairs: true,
+      indentation: true
+    }
   });
 
   disposables.push(
@@ -193,6 +202,17 @@ async function saveScript() {
   }
 }
 
+async function formatScript() {
+  const action = editor.value?.getAction('editor.action.formatDocument');
+  if (!action) {
+    message.warning('当前编辑器没有可用的格式化动作');
+    return;
+  }
+
+  await action.run();
+  message.success('格式化完成');
+}
+
 async function executeScript() {
   executing.value = true;
   try {
@@ -236,6 +256,17 @@ function getEditorContent() {
 function updateCursor() {
   const position = editor.value?.getPosition();
   cursorText.value = position ? `行 ${position.lineNumber}，列 ${position.column}` : '行 1，列 1';
+}
+
+function observeTheme() {
+  themeObserver = new MutationObserver(() => {
+    monaco.editor.setTheme(currentEditorTheme());
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+
+function currentEditorTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'vs-dark' : 'vs';
 }
 
 function startPolling() {

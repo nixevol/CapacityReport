@@ -1,90 +1,96 @@
 <template>
-  <n-grid :cols="12" :x-gap="16" :y-gap="16" responsive="screen">
-    <n-gi :span="12" :m="5">
-      <n-card title="处理历史" size="small">
-        <template #header-extra>
-          <n-space>
-            <n-button size="small" tertiary :loading="loading" @click="loadHistory">刷新</n-button>
-            <n-button size="small" type="error" tertiary :disabled="records.length === 0" @click="confirmClear">
-              清空
-            </n-button>
-          </n-space>
-        </template>
+  <div class="history-page-body">
+    <n-spin v-if="loading" class="page-loading" />
 
-        <n-space vertical>
-          <n-alert v-if="cacheSize" type="default" :bordered="false">
-            缓存占用：{{ cacheSize.size_formatted }}，目录 {{ cacheSize.dir_count }} 个
-          </n-alert>
+    <div v-else-if="records.length === 0" class="empty-state history-empty-state">
+      <span class="empty-icon">📭</span>
+      <p>暂无处理记录</p>
+    </div>
 
-          <n-empty v-if="records.length === 0 && !loading" description="暂无历史记录" />
-          <n-scrollbar v-else class="history-list">
-            <n-list bordered>
-              <n-list-item v-for="record in records" :key="record.id">
-                <n-thing :title="record.id" :description="recordSummary(record)">
-                  <template #header-extra>
-                    <n-tag size="small" :type="statusType(record.status)">{{ statusText(record.status) }}</n-tag>
-                  </template>
-                  <template #action>
-                    <n-space>
-                      <n-button size="small" @click="openDetail(record.id)">详情</n-button>
-                      <n-button size="small" tertiary type="error" @click="confirmDelete(record.id)">删除</n-button>
-                    </n-space>
-                  </template>
-                </n-thing>
-              </n-list-item>
-            </n-list>
-          </n-scrollbar>
-        </n-space>
-      </n-card>
-    </n-gi>
-
-    <n-gi :span="12" :m="7">
-      <n-card title="任务详情" size="small">
-        <template #header-extra>
-          <n-button v-if="detail" size="small" tertiary @click="loadRecordSize(detail.id)">计算占用</n-button>
-        </template>
-
-        <n-empty v-if="!detail" description="请选择一条历史记录" />
-        <n-space v-else vertical size="large">
-          <n-descriptions bordered size="small" :column="2">
-            <n-descriptions-item label="任务 ID">{{ detail.id }}</n-descriptions-item>
-            <n-descriptions-item label="状态">{{ statusText(detail.status) }}</n-descriptions-item>
-            <n-descriptions-item label="文件数">{{ detail.file_count }}</n-descriptions-item>
-            <n-descriptions-item label="耗时">{{ formatElapsed(detail.elapsed_time) }}</n-descriptions-item>
-            <n-descriptions-item label="创建时间">{{ formatDate(detail.timestamp) }}</n-descriptions-item>
-            <n-descriptions-item label="占用">{{ recordSize }}</n-descriptions-item>
-            <n-descriptions-item label="工作目录" :span="2">{{ detail.work_dir }}</n-descriptions-item>
-            <n-descriptions-item v-if="detail.error" label="错误" :span="2">{{ detail.error }}</n-descriptions-item>
-          </n-descriptions>
-
-          <div>
-            <div class="section-label">处理日志</div>
-            <n-log :log="detail.logs.join('\n') || '暂无日志'" language="text" trim class="log-panel" />
+    <div v-else class="history-list">
+      <div v-for="record in records" :key="record.id" class="history-item">
+        <div class="history-status" :class="record.status"></div>
+        <div class="history-info">
+          <div class="history-id">{{ record.id }}</div>
+          <div class="history-meta">
+            {{ formatDate(record.timestamp) }} · {{ record.file_count }} 个文件 · {{ formatElapsed(record.elapsed_time) }}
           </div>
-        </n-space>
-      </n-card>
-    </n-gi>
-  </n-grid>
+        </div>
+        <span class="record-size">{{ statusText(record.status) }}</span>
+        <div class="history-actions">
+          <n-button size="small" tertiary @click="openDetail(record.id)">详情</n-button>
+          <n-button size="small" tertiary type="error" @click="confirmDelete(record.id)">删除</n-button>
+        </div>
+      </div>
+    </div>
+
+    <n-modal v-model:show="detailVisible" preset="card" class="history-detail-modal" title="任务详情">
+      <n-empty v-if="!detail" description="暂无详情" />
+      <n-space v-else vertical size="large">
+        <n-descriptions bordered size="small" :column="2">
+          <n-descriptions-item label="任务 ID">{{ detail.id }}</n-descriptions-item>
+          <n-descriptions-item label="状态">{{ statusText(detail.status) }}</n-descriptions-item>
+          <n-descriptions-item label="文件数">{{ detail.file_count }}</n-descriptions-item>
+          <n-descriptions-item label="耗时">{{ formatElapsed(detail.elapsed_time) }}</n-descriptions-item>
+          <n-descriptions-item label="创建时间">{{ formatDate(detail.timestamp) }}</n-descriptions-item>
+          <n-descriptions-item label="占用">
+            <n-button v-if="recordSize === '-'" size="tiny" text @click="loadRecordSize(detail.id)">计算占用</n-button>
+            <span v-else>{{ recordSize }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="工作目录" :span="2">{{ detail.work_dir }}</n-descriptions-item>
+          <n-descriptions-item v-if="detail.error" label="错误" :span="2">{{ detail.error }}</n-descriptions-item>
+        </n-descriptions>
+
+        <div>
+          <div class="section-label">处理日志</div>
+          <n-log :log="detail.logs.join('\n') || '暂无日志'" language="text" trim class="log-panel" />
+        </div>
+      </n-space>
+    </n-modal>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
-import type { TagProps } from 'naive-ui';
 
 import { apiGet, apiPost } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
+import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 const message = useMessage();
 const dialog = useDialog();
 const records = ref<HistoryRecord[]>([]);
 const detail = ref<HistoryDetail | null>(null);
+const detailVisible = ref(false);
 const cacheSize = ref<CacheSize | null>(null);
 const recordSize = ref('-');
 const loading = ref(false);
 
+const totalSizeText = computed(() => `总占用: ${cacheSize.value?.size_formatted || '计算中...'}`);
+const hasRecords = computed(() => records.value.length > 0);
+
 onMounted(() => {
+  setPageHeader({
+    actions: [
+      { key: 'refresh-history', label: '刷新', icon: '🔄', loading, onClick: loadHistory },
+      {
+        key: 'clear-history',
+        label: '清空历史',
+        icon: '🗑️',
+        type: 'error',
+        variant: 'solid',
+        disabled: computed(() => !hasRecords.value),
+        onClick: confirmClear
+      },
+      { key: 'history-size', kind: 'text', label: totalSizeText }
+    ]
+  });
   void loadHistory();
+});
+
+onBeforeUnmount(() => {
+  resetPageHeader();
 });
 
 async function loadHistory() {
@@ -107,6 +113,7 @@ async function openDetail(recordId: string) {
   try {
     detail.value = await apiPost<HistoryDetail>('/api/history/detail', { record_id: recordId });
     recordSize.value = '-';
+    detailVisible.value = true;
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载任务详情失败');
   }
@@ -138,6 +145,7 @@ async function deleteRecord(recordId: string) {
     await apiPost('/api/history/delete', { record_id: recordId });
     if (detail.value?.id === recordId) {
       detail.value = null;
+      detailVisible.value = false;
     }
     message.success('删除成功');
     await loadHistory();
@@ -160,18 +168,12 @@ async function clearHistory() {
   try {
     await apiPost('/api/history/clear');
     detail.value = null;
+    detailVisible.value = false;
     message.success('已清空历史记录');
     await loadHistory();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '清空失败');
   }
-}
-
-function statusType(status: string): TagProps['type'] {
-  if (status === 'completed') return 'success';
-  if (status === 'failed') return 'error';
-  if (status === 'processing') return 'info';
-  return 'default';
 }
 
 function statusText(status: string): string {
@@ -182,10 +184,6 @@ function statusText(status: string): string {
     failed: '失败'
   };
   return map[status] || status;
-}
-
-function recordSummary(record: HistoryRecord): string {
-  return `${formatDate(record.timestamp)} / ${record.file_count} 个文件 / ${formatElapsed(record.elapsed_time)}`;
 }
 
 function formatDate(value: string): string {

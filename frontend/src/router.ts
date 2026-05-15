@@ -9,7 +9,7 @@ const ScriptPanel = () => import('./components/ScriptPanel.vue');
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: { name: 'workflow' } },
-  { path: '/upload', name: 'workflow', component: FileWorkflow, meta: { title: '数据上传' } },
+  { path: '/upload', name: 'workflow', component: FileWorkflow, meta: { title: '数据上传与处理' } },
   { path: '/history', name: 'history', component: HistoryPanel, meta: { title: '处理历史' } },
   { path: '/database', name: 'database', component: DatabasePanel, meta: { title: '数据管理' } },
   { path: '/script', name: 'script', component: ScriptPanel, meta: { title: '脚本编辑' } },

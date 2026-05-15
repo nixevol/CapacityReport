@@ -9,10 +9,10 @@
       @click="openFilePicker"
       @keydown.enter.prevent="openFilePicker"
       @keydown.space.prevent="openFilePicker"
-      @dragenter.prevent="onDragEnter"
-      @dragover.prevent="onDragOver"
+      @dragenter.prevent.stop="onDragEnter"
+      @dragover.prevent.stop="onDragOver"
       @dragleave="onDragLeave"
-      @drop="onDrop"
+      @drop.prevent.stop="onDrop"
     >
       <div class="upload-icon">
         <n-icon size="24"><FolderOpenOutline /></n-icon>
