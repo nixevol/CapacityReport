@@ -210,6 +210,11 @@ select {
   transition: all var(--td-transition);
 }
 
+.app-menu .n-menu-item-content-header,
+.app-menu .n-menu-item-content__icon {
+  color: inherit;
+}
+
 .app-menu .n-menu-item-content:hover {
   color: var(--td-text-color-primary);
   background: var(--td-bg-color-container-hover);
@@ -371,14 +376,25 @@ select {
   border-bottom: 1px solid var(--td-border-color-light);
 }
 
+.work-card > .n-card-header .n-card-header__main,
+.work-card > .n-card-header .n-card-header__extra {
+  color: var(--td-text-color-primary);
+}
+
 .work-card > .n-card__content {
   padding: 16px 20px;
+  color: var(--td-text-color-primary);
 }
 
 .work-card > .n-card__footer {
   padding: 12px 20px;
   background: var(--td-bg-color-container);
   border-top: 1px solid var(--td-border-color-light);
+}
+
+.work-card .n-form-item-label,
+.work-card .n-form-item-label__text {
+  color: var(--td-text-color-secondary);
 }
 
 .login-page {

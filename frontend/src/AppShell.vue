@@ -98,6 +98,7 @@ import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from 
 import type { LoginResponse } from './types';
 import LoginView from './components/LoginView.vue';
 import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
+import { toggleAppTheme } from './composables/theme';
 
 const message = useMessage();
 const route = useRoute();
@@ -105,7 +106,6 @@ const router = useRouter();
 const token = ref(getToken());
 const loginLoading = ref(false);
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
-const theme = ref(localStorage.getItem('theme') || 'light');
 const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
 
@@ -125,8 +125,6 @@ const currentTitle = computed(() => {
   return String(route.meta.title || menuOptions.find(item => item.key === activeMenu.value)?.label || '');
 });
 const pageSubtitle = computed(() => resolveHeaderValue(pageHeader.subtitle || '', ''));
-
-document.documentElement.setAttribute('data-theme', theme.value);
 
 onMounted(() => {
   window.addEventListener('dragover', preventWindowFileDrop, { capture: true });
@@ -173,9 +171,7 @@ function toggleSidebar() {
 }
 
 function toggleTheme() {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('theme', theme.value);
-  document.documentElement.setAttribute('data-theme', theme.value);
+  toggleAppTheme();
 }
 
 async function restartService() {

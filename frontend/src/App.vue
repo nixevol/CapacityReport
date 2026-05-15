@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider>
+  <n-config-provider :theme="naiveTheme">
     <n-message-provider>
       <n-dialog-provider>
         <AppShell />
@@ -9,6 +9,11 @@
 </template>
 
 <script setup lang="ts">
-import AppShell from './AppShell.vue';
-</script>
+import { computed } from 'vue';
+import { darkTheme } from 'naive-ui';
 
+import AppShell from './AppShell.vue';
+import { themeName } from './composables/theme';
+
+const naiveTheme = computed(() => (themeName.value === 'dark' ? darkTheme : undefined));
+</script>
