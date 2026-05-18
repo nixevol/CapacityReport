@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-18：增强 SQL 脚本执行兼容性
+
+- `app/processor.py` 在执行 `ReportScript.sql` 前会为当前数据库 session 临时关闭 `STRICT_TRANS_TABLES`、`STRICT_ALL_TABLES`、`NO_ZERO_DATE` 和 `NO_ZERO_IN_DATE`，兼容脚本中先按字符串导入、再通过 `ALTER TABLE ... MODIFY` 转数值的历史流程。
+- SQL 脚本执行时会记录 `lower_case_table_names`，用于排查 MySQL 表名大小写模式；该配置不能在 session 内修改，当前处理仍依赖统一表名引用。
+- SQL 语句执行失败后不再继续执行后续语句，避免前置 ALTER 失败后继续产生大量 `Unknown column` 和临时表不存在的级联错误，并让任务正确进入失败状态。
+
 ## 2026-05-18：修正历史详情日志滚动条颜色
 
 - `frontend/src/styles.css` 为历史详情 `colored-log-panel` 单独设置滚动条颜色，避免继承全局 hover 颜色后在深色日志背景里不可见。

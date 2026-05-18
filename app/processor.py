@@ -73,6 +73,14 @@ class DataProcessor:
     # Excel 并行处理的最大线程数（根据 CPU 核心数自动调整）
     # 使用 CPU 核心数，但至少为 1，最多不超过 8（避免过多线程导致上下文切换开销）
     MAX_WORKERS = min(max(multiprocessing.cpu_count(), 1), 8)
+    # 业务 SQL 脚本沿用旧流程，部分字段会先以字符串落库再在 ALTER 中转数值。
+    # 在严格模式下 MySQL 会把历史脏值转换警告升级为错误，所以脚本 session 单独放宽这些模式。
+    SQL_SCRIPT_RELAXED_MODES = {
+        "STRICT_TRANS_TABLES",
+        "STRICT_ALL_TABLES",
+        "NO_ZERO_DATE",
+        "NO_ZERO_IN_DATE",
+    }
     
     def __init__(self, config: AppConfig, work_dir: Path, logger: ProcessLogger):
         self.config = config
@@ -712,6 +720,34 @@ class DataProcessor:
                     valid_sqls.append(cleaned_sql)
         
         return valid_sqls
+
+    def _prepare_sql_script_session(self, cursor) -> None:
+        """为业务 SQL 脚本配置更兼容的 MySQL session。"""
+        cursor.execute("SELECT @@SESSION.sql_mode AS sql_mode")
+        row = cursor.fetchone() or {}
+        original_mode = row.get("sql_mode") or ""
+        original_modes = [mode for mode in original_mode.split(",") if mode]
+        relaxed_modes = [
+            mode for mode in original_modes
+            if mode not in self.SQL_SCRIPT_RELAXED_MODES
+        ]
+        relaxed_mode = ",".join(relaxed_modes)
+
+        if relaxed_mode != original_mode:
+            cursor.execute("SET SESSION sql_mode = %s", (relaxed_mode,))
+            removed_modes = sorted(set(original_modes) - set(relaxed_modes))
+            self.logger.info(
+                "SQL 脚本兼容模式已启用，已临时关闭: "
+                + ", ".join(removed_modes)
+            )
+
+        try:
+            cursor.execute("SELECT @@lower_case_table_names AS lower_case_table_names")
+            row = cursor.fetchone() or {}
+            lower_case_table_names = row.get("lower_case_table_names")
+            self.logger.info(f"MySQL 表名大小写模式: lower_case_table_names={lower_case_table_names}")
+        except Exception as exc:
+            self.logger.warning(f"读取 MySQL 表名大小写模式失败: {exc}")
     
     def _execute_sql_script(self):
         """
@@ -751,6 +787,8 @@ class DataProcessor:
         # 这对于临时表（TEMPORARY TABLE）至关重要，因为临时表是 session 级别的
         with self.db.get_connection() as conn:
             with conn.cursor() as cursor:
+                self._prepare_sql_script_session(cursor)
+
                 for i, sql in enumerate(valid_sqls, 1):
                     start_time = time.time()
                     preview = sql[:80].replace('\n', ' ')
@@ -766,8 +804,11 @@ class DataProcessor:
                         else:
                             self.logger.info(f"完成，耗时 {elapsed} 秒")
                     except Exception as e:
+                        conn.rollback()
                         self.logger.error(f"SQL 执行失败: {e}")
-                        # 继续执行下一条 SQL，不中断
+                        raise RuntimeError(
+                            f"SQL 脚本执行中断，第 {i}/{total} 条语句失败: {e}"
+                        ) from e
                 
                 conn.commit()
         
