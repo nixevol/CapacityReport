@@ -7,7 +7,7 @@
       :collapsed="sidebarCollapsed"
       :collapsed-width="64"
       :width="220"
-      show-trigger="bar"
+      show-trigger="arrow-circle"
       @update:collapsed="handleSidebarCollapsed"
     >
       <div class="brand">
