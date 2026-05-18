@@ -124,7 +124,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { TrashOutline } from '@vicons/ionicons5';
@@ -149,6 +150,7 @@ const pageSize = ref(50);
 const loadingTables = ref(false);
 const loadingData = ref(false);
 const testing = ref(false);
+let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 const loadDataInfileText = computed(() => {
@@ -191,6 +193,14 @@ onMounted(() => {
   void loadTables();
 });
 
+onActivated(() => {
+  void loadTables();
+});
+
+onBeforeRouteLeave(() => {
+  resetTableState();
+});
+
 onBeforeUnmount(() => {
   resetPageHeader();
 });
@@ -211,9 +221,11 @@ async function testConnection() {
 }
 
 async function loadTables() {
+  const currentToken = ++tableLoadToken;
   loadingTables.value = true;
   try {
     const result = await apiGet<{ tables: string[] }>('/api/database/tables');
+    if (currentToken !== tableLoadToken) return;
     tables.value = result.tables;
     if (selectedTable.value && !tables.value.includes(selectedTable.value)) {
       selectedTable.value = null;
@@ -222,10 +234,25 @@ async function loadTables() {
       total.value = 0;
     }
   } catch (error) {
+    if (currentToken !== tableLoadToken) return;
     message.error(error instanceof Error ? error.message : '加载数据表失败');
   } finally {
-    loadingTables.value = false;
+    if (currentToken === tableLoadToken) {
+      loadingTables.value = false;
+    }
   }
+}
+
+function resetTableState() {
+  tableLoadToken += 1;
+  tables.value = [];
+  selectedTable.value = null;
+  tableInfo.value = null;
+  rows.value = [];
+  total.value = 0;
+  page.value = 1;
+  loadingTables.value = false;
+  loadingData.value = false;
 }
 
 async function loadTable(table: string) {
