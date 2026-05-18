@@ -2,6 +2,23 @@
   <div class="database-workspace">
     <aside class="database-sidebar-pane">
       <section class="database-table-pane">
+        <div class="database-table-pane-header">
+          <h2>表</h2>
+          <n-button
+            quaternary
+            circle
+            size="small"
+            :loading="loadingTables"
+            :disabled="loadingTables"
+            aria-label="刷新表列表"
+            title="刷新表列表"
+            @click="loadTables"
+          >
+            <template #icon>
+              <n-icon><RefreshOutline /></n-icon>
+            </template>
+          </n-button>
+        </div>
         <div class="database-table-list-wrap">
           <n-empty v-if="tables.length === 0 && !loadingTables" description="暂无数据表" />
           <n-spin v-else-if="loadingTables" class="database-list-loading" size="small" />
@@ -57,8 +74,22 @@
         </div>
         <n-space size="small" class="toolbar-actions">
           <n-button size="small" tertiary :loading="loadingData" @click="reloadTable">刷新</n-button>
-          <n-button size="small" tertiary @click="downloadTable('csv')">CSV</n-button>
-          <n-button size="small" tertiary @click="downloadTable('xlsx')">XLSX</n-button>
+          <n-dropdown
+            trigger="click"
+            :options="downloadOptions"
+            :disabled="downloading"
+            @select="downloadTable"
+          >
+            <n-button size="small" tertiary :loading="downloading" :disabled="downloading">
+              <template #icon>
+                <n-icon><CloudDownloadOutline /></n-icon>
+              </template>
+              <span class="download-button-content">
+                <span>{{ downloadButtonText }}</span>
+                <n-icon class="download-caret"><ChevronDownOutline /></n-icon>
+              </span>
+            </n-button>
+          </n-dropdown>
           <n-button size="small" tertiary type="warning" @click="confirmTruncate">清空</n-button>
           <n-button size="small" tertiary type="error" @click="confirmDrop">删除</n-button>
         </n-space>
@@ -127,8 +158,8 @@
 import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
-import type { DataTableColumns } from 'naive-ui';
-import { TrashOutline } from '@vicons/ionicons5';
+import type { DataTableColumns, DropdownOption } from 'naive-ui';
+import { ChevronDownOutline, CloudDownloadOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, download } from '../api/client';
 import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
@@ -150,9 +181,18 @@ const pageSize = ref(50);
 const loadingTables = ref(false);
 const loadingData = ref(false);
 const testing = ref(false);
+const downloadingFormat = ref<DownloadFormat | null>(null);
 let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
+const downloading = computed(() => Boolean(downloadingFormat.value));
+const downloadButtonText = computed(() => (
+  downloadingFormat.value ? `导出 ${downloadingFormat.value.toUpperCase()}...` : '导出'
+));
+const downloadOptions: DropdownOption[] = [
+  { label: 'CSV', key: 'csv' },
+  { label: 'XLSX', key: 'xlsx' }
+];
 const loadDataInfileText = computed(() => {
   if (testing.value || !databaseInfo.value) return '检测中';
   return databaseInfo.value.load_data_infile ? '可用' : '未启用';
@@ -221,6 +261,8 @@ async function testConnection() {
 }
 
 async function loadTables() {
+  if (loadingTables.value) return;
+
   const currentToken = ++tableLoadToken;
   loadingTables.value = true;
   try {
@@ -305,10 +347,15 @@ function changePageSize(value: number) {
 
 async function downloadTable(format: DownloadFormat) {
   if (!selectedTable.value) return;
+  if (downloadingFormat.value) return;
+
+  downloadingFormat.value = format;
   try {
     await download('/api/download', { table_name: selectedTable.value, format }, `${selectedTable.value}.${format}`);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '导出失败');
+  } finally {
+    downloadingFormat.value = null;
   }
 }
 
@@ -423,6 +470,23 @@ function formatCell(value: unknown): string {
   flex: 1;
   min-height: 0;
   flex-direction: column;
+}
+
+.database-table-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--td-border-color-light);
+}
+
+.database-table-pane-header h2 {
+  margin: 0;
+  color: var(--td-text-color-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
 }
 
 .database-table-list-wrap {
@@ -613,6 +677,16 @@ function formatCell(value: unknown): string {
 
 .toolbar-actions {
   flex: 0 0 auto;
+}
+
+.download-button-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.download-caret {
+  font-size: 13px;
 }
 
 .database-data-body {

@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-18：优化数据管理表列表和导出入口
+
+- `frontend/src/components/DatabasePanel.vue` 的 MySQL 表列表顶部新增“表”标题和刷新图标按钮，刷新按钮复用 `loadTables()` 并在加载中显示 loading，避免重复刷新。
+- 数据表导出从独立 CSV/XLSX 按钮改为 Naive UI 下拉按钮，用户先选择 CSV 或 XLSX 格式再下载。
+- 导出请求期间按钮显示 loading 和当前格式文案，并禁用下拉入口，避免大数据表导出等待期间被重复点击。
+- 已执行 `npm run build`，构建通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：修复数值字段转换失败
 
 - `app/processor.py` 会从 `ReportScript.sql` 的 `ALTER TABLE ... MODIFY COLUMN ... float/int` 自动补全缺失的字段类型提示，配置中未标 `Type` 的数值字段在导入阶段也会按数值清洗和落库。
