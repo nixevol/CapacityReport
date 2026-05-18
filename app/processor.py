@@ -3,6 +3,7 @@
 """
 import chardet
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -73,14 +74,27 @@ class DataProcessor:
     # Excel 并行处理的最大线程数（根据 CPU 核心数自动调整）
     # 使用 CPU 核心数，但至少为 1，最多不超过 8（避免过多线程导致上下文切换开销）
     MAX_WORKERS = min(max(multiprocessing.cpu_count(), 1), 8)
-    # 业务 SQL 脚本沿用旧流程，部分字段会先以字符串落库再在 ALTER 中转数值。
-    # 在严格模式下 MySQL 会把历史脏值转换警告升级为错误，所以脚本 session 单独放宽这些模式。
-    SQL_SCRIPT_RELAXED_MODES = {
-        "STRICT_TRANS_TABLES",
-        "STRICT_ALL_TABLES",
-        "NO_ZERO_DATE",
-        "NO_ZERO_IN_DATE",
+    SQL_ALTER_TABLE_RE = re.compile(
+        r"^\s*ALTER\s+TABLE\s+`?([^`\s]+)`?",
+        re.IGNORECASE | re.DOTALL,
+    )
+    SQL_MODIFY_COLUMN_RE = re.compile(
+        r"MODIFY\s+(?:COLUMN\s+)?`([^`]+)`\s+([A-Za-z]+)",
+        re.IGNORECASE,
+    )
+    SQL_NUMERIC_TYPE_HINTS = {
+        "int": "int",
+        "integer": "int",
+        "bigint": "int",
+        "smallint": "int",
+        "mediumint": "int",
+        "tinyint": "int",
+        "float": "float",
+        "double": "float",
+        "decimal": "float",
+        "numeric": "float",
     }
+    MYSQL_NUMERIC_PATTERN = r"^-?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))([eE][+-]?[0-9]+)?$"
     
     def __init__(self, config: AppConfig, work_dir: Path, logger: ProcessLogger):
         self.config = config
@@ -88,9 +102,11 @@ class DataProcessor:
         self.logger = logger
         self.db = DatabaseManager(config)
         self.results: Dict[str, Any] = {}
+        self._explicit_type_fields: set[str] = set()
         
         # 预编译字段映射，避免重复查找
         self._field_map, self._type_map = self._build_field_map()
+        self._apply_sql_script_type_hints()
         
         # LOAD DATA INFILE 支持状态（在首次使用时检测）
         self._load_data_supported: Optional[bool] = None
@@ -109,6 +125,8 @@ class DataProcessor:
         for field_def in self.config.extract_fields:
             db_field = field_def.get("Field")
             field_type = field_def.get("Type", "string")  # 默认类型为 string
+            if "Type" in field_def:
+                self._explicit_type_fields.add(db_field)
             
             # 记录目标字段的类型
             type_map[db_field] = field_type
@@ -118,6 +136,57 @@ class DataProcessor:
                 field_map[extract_name] = db_field
         
         return field_map, type_map
+
+    def _apply_sql_script_type_hints(self) -> None:
+        """从 ReportScript.sql 的 ALTER 语句补全缺失的数值字段类型。"""
+        if not SQL_SCRIPT.exists():
+            return
+
+        try:
+            sql_text = SQL_SCRIPT.read_text(encoding="utf-8")
+        except Exception as exc:
+            self.logger.warning(f"读取 SQL 脚本字段类型提示失败: {exc}")
+            return
+
+        type_hints = self._extract_sql_script_type_hints(sql_text)
+        applied_count = 0
+        for field_name, field_type in type_hints.items():
+            if field_name not in self._type_map:
+                continue
+            if field_name in self._explicit_type_fields:
+                continue
+            if self._type_map.get(field_name) != field_type:
+                self._type_map[field_name] = field_type
+                applied_count += 1
+
+        if applied_count:
+            self.logger.info(f"已根据 SQL 脚本补全 {applied_count} 个数值字段类型")
+
+    @classmethod
+    def _extract_sql_script_type_hints(cls, sql_text: str) -> Dict[str, str]:
+        """提取 SQL 脚本中 MODIFY COLUMN 的数值类型提示。"""
+        type_hints: Dict[str, str] = {}
+        for _, columns in cls._iter_numeric_alter_columns(sql_text):
+            type_hints.update(columns)
+        return type_hints
+
+    @classmethod
+    def _iter_numeric_alter_columns(cls, sql_text: str) -> Generator[Tuple[str, Dict[str, str]], None, None]:
+        """迭代 ALTER TABLE 语句中需要转数值的字段。"""
+        for statement in cls.parse_sql_script(sql_text):
+            alter_match = cls.SQL_ALTER_TABLE_RE.search(statement)
+            if not alter_match:
+                continue
+
+            table_name = alter_match.group(1)
+            columns: Dict[str, str] = {}
+            for column_name, mysql_type in cls.SQL_MODIFY_COLUMN_RE.findall(statement):
+                field_type = cls.SQL_NUMERIC_TYPE_HINTS.get(mysql_type.lower())
+                if field_type:
+                    columns[column_name] = field_type
+
+            if columns:
+                yield table_name, columns
     
     def process(self) -> Dict[str, Any]:
         """执行完整的数据处理流程"""
@@ -565,18 +634,20 @@ class DataProcessor:
         """转换整数列"""
         try:
             # 检测是否包含百分号
-            has_percent = series.astype(str).str.contains('%', regex=False, na=False)
+            text = series.astype("string")
+            has_percent = text.str.contains('%', regex=False, na=False)
             
-            # 去除百分号和逗号
-            cleaned = series.str.replace('%', '', regex=False).str.replace(',', '', regex=False)
+            # 去除格式字符，保留正常数值含义
+            cleaned = self._clean_numeric_text(text)
             # 转换为数值
             numeric = pd.to_numeric(cleaned, errors='coerce')
             
             # 如果有百分号，除以100转换为小数
             numeric[has_percent] = numeric[has_percent] / 100
             
-            # 四舍五入并转为整数字符串，空值保留为 None
-            return numeric.round().fillna(0).astype(int).astype(str).replace('0', None, regex=False)
+            # 四舍五入并转为整数字符串，空值保留为 NULL，正常 0 不再误判为空值
+            rounded = numeric.round()
+            return rounded.astype("Int64").astype("string").where(rounded.notna(), None)
         except Exception:
             return series
     
@@ -584,20 +655,33 @@ class DataProcessor:
         """转换浮点数列"""
         try:
             # 检测是否包含百分号
-            has_percent = series.astype(str).str.contains('%', regex=False, na=False)
+            text = series.astype("string")
+            has_percent = text.str.contains('%', regex=False, na=False)
             
-            # 去除百分号和逗号
-            cleaned = series.str.replace('%', '', regex=False).str.replace(',', '', regex=False)
+            # 去除格式字符，保留正常数值含义
+            cleaned = self._clean_numeric_text(text)
             # 转换为数值
             numeric = pd.to_numeric(cleaned, errors='coerce')
             
             # 如果有百分号，除以100转换为小数（例如：95% → 0.95）
             numeric[has_percent] = numeric[has_percent] / 100
             
-            # 保留小数，空值为 None
-            return numeric.fillna(0).astype(str).replace('0.0', None, regex=False).replace('0', None, regex=False)
+            # 保留小数，空值保留为 NULL，正常 0 不再误判为空值
+            return numeric.astype("string").where(numeric.notna(), None)
         except Exception:
             return series
+
+    @staticmethod
+    def _clean_numeric_text(series: pd.Series) -> pd.Series:
+        """清理数值文本中的格式字符，不改变正常数字。"""
+        return (
+            series.str.strip()
+            .str.replace(',', '', regex=False)
+            .str.replace('，', '', regex=False)
+            .str.replace('%', '', regex=False)
+            .str.replace('\t', '', regex=False)
+            .str.replace(' ', '', regex=False)
+        )
     
     def _find_data_directories(self) -> Dict[str, Path]:
         """
@@ -722,24 +806,11 @@ class DataProcessor:
         return valid_sqls
 
     def _prepare_sql_script_session(self, cursor) -> None:
-        """为业务 SQL 脚本配置更兼容的 MySQL session。"""
+        """记录业务 SQL 脚本执行所需的 MySQL session 信息。"""
         cursor.execute("SELECT @@SESSION.sql_mode AS sql_mode")
         row = cursor.fetchone() or {}
-        original_mode = row.get("sql_mode") or ""
-        original_modes = [mode for mode in original_mode.split(",") if mode]
-        relaxed_modes = [
-            mode for mode in original_modes
-            if mode not in self.SQL_SCRIPT_RELAXED_MODES
-        ]
-        relaxed_mode = ",".join(relaxed_modes)
-
-        if relaxed_mode != original_mode:
-            cursor.execute("SET SESSION sql_mode = %s", (relaxed_mode,))
-            removed_modes = sorted(set(original_modes) - set(relaxed_modes))
-            self.logger.info(
-                "SQL 脚本兼容模式已启用，已临时关闭: "
-                + ", ".join(removed_modes)
-            )
+        sql_mode = row.get("sql_mode") or ""
+        self.logger.info(f"MySQL SQL 模式: {sql_mode or '空'}")
 
         try:
             cursor.execute("SELECT @@lower_case_table_names AS lower_case_table_names")
@@ -748,6 +819,70 @@ class DataProcessor:
             self.logger.info(f"MySQL 表名大小写模式: lower_case_table_names={lower_case_table_names}")
         except Exception as exc:
             self.logger.warning(f"读取 MySQL 表名大小写模式失败: {exc}")
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        return f"`{identifier.replace('`', '``')}`"
+
+    def _build_mysql_clean_numeric_expr(self, quoted_column: str) -> str:
+        return (
+            f"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
+            f"TRIM(CAST({quoted_column} AS CHAR)), ',', ''), "
+            f"'，', ''), CHAR(37), ''), CHAR(9), ''), ' ', '')"
+        )
+
+    def _normalize_numeric_columns_before_alter(self, cursor, sql: str) -> None:
+        """在 ALTER 转数值前清理空字符串、千分位和异常数值文本。"""
+        alter_match = self.SQL_ALTER_TABLE_RE.search(sql)
+        if not alter_match:
+            return
+
+        table_name = alter_match.group(1)
+        columns: Dict[str, str] = {}
+        for column_name, mysql_type in self.SQL_MODIFY_COLUMN_RE.findall(sql):
+            field_type = self.SQL_NUMERIC_TYPE_HINTS.get(mysql_type.lower())
+            if field_type:
+                columns[column_name] = field_type
+
+        if not columns:
+            return
+
+        quoted_table = self._quote_identifier(table_name)
+        set_clauses = []
+        set_params = []
+        where_clauses = []
+        where_params = []
+
+        for column_name, field_type in columns.items():
+            quoted_column = self._quote_identifier(column_name)
+            clean_expr = self._build_mysql_clean_numeric_expr(quoted_column)
+            value_expr = clean_expr
+            if field_type == "int":
+                value_expr = f"CAST(ROUND(CAST({clean_expr} AS DOUBLE)) AS CHAR)"
+            set_clauses.append(
+                f"{quoted_column} = CASE "
+                f"WHEN {quoted_column} IS NULL OR {clean_expr} = '' OR {clean_expr} NOT REGEXP %s "
+                f"THEN '0' ELSE {value_expr} END"
+            )
+            set_params.append(self.MYSQL_NUMERIC_PATTERN)
+            where_clauses.append(
+                f"{quoted_column} IS NULL "
+                f"OR TRIM(CAST({quoted_column} AS CHAR)) = '' "
+                f"OR {clean_expr} <> TRIM(CAST({quoted_column} AS CHAR)) "
+                f"OR {clean_expr} NOT REGEXP %s"
+            )
+            where_params.append(self.MYSQL_NUMERIC_PATTERN)
+
+        update_sql = (
+            f"UPDATE {quoted_table} SET {', '.join(set_clauses)} "
+            f"WHERE {' OR '.join(f'({clause})' for clause in where_clauses)}"
+        )
+        cursor.execute(update_sql, set_params + where_params)
+        affected_rows = cursor.rowcount if cursor.rowcount >= 0 else 0
+        if affected_rows:
+            self.logger.info(
+                f"已清理 {table_name} 的数值字段格式，影响 {affected_rows} 行"
+            )
     
     def _execute_sql_script(self):
         """
@@ -795,6 +930,7 @@ class DataProcessor:
                     self.logger.info(f"执行 SQL ({i}/{total}): {preview}...")
                     
                     try:
+                        self._normalize_numeric_columns_before_alter(cursor, sql)
                         cursor.execute(sql)
                         executed_count += 1
                         elapsed = round(time.time() - start_time, 2)
