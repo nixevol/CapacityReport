@@ -1,6 +1,7 @@
 <template>
   <div class="upload-page-body">
     <section
+      v-if="!taskInProgress"
       class="upload-zone"
       :class="{ dragover: isDragging, disabled: working }"
       role="button"
@@ -39,7 +40,7 @@
       />
     </section>
 
-    <div v-if="files.length > 0" class="file-list">
+    <div v-if="!taskInProgress && files.length > 0" class="file-list">
       <div class="file-list-header">
         <h4>已选择文件</h4>
         <n-button size="small" text :disabled="working" @click="clearFiles">
@@ -176,6 +177,12 @@ let timer: number | undefined;
 
 const logText = computed(() => taskStatus.value?.logs?.join('\n') || '等待任务开始');
 const processVisible = computed(() => Boolean(taskStatus.value || activeTask.value?.has_active));
+const taskInProgress = computed(() => {
+  if (activeTask.value?.has_active) {
+    return true;
+  }
+  return taskStatus.value ? !['completed', 'failed'].includes(taskStatus.value.status) : false;
+});
 const showUploadProgress = computed(() => working.value || uploadProgress.value > 0);
 const uploadedCount = computed(() => files.value.filter(item => item.status === 'uploaded').length);
 const errorCount = computed(() => files.value.filter(item => item.status === 'error').length);

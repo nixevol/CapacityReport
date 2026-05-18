@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-18：处理任务运行时隐藏上传区域
+
+- `frontend/src/components/FileWorkflow.vue` 新增 `taskInProgress` 计算状态；当存在活动任务或任务状态未完成/失败时，上传区和已选文件列表不再渲染。
+- 上传文件阶段仍保留已选文件和上传进度；后端处理任务开始后页面只显示处理进度卡片和日志，避免已完成上传列表继续占据首屏。
+- 已执行 `npm run build`，构建通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：修复主题按钮图标和折叠侧栏版本显示
 
 - `frontend/src/AppShell.vue` 的主题切换按钮现在根据 `themeName` 动态显示 `MoonOutline` 或 `SunnyOutline`，切换主题后图标和标题同步变化。
