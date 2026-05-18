@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-18：修复主题按钮图标和折叠侧栏版本显示
+
+- `frontend/src/AppShell.vue` 的主题切换按钮现在根据 `themeName` 动态显示 `MoonOutline` 或 `SunnyOutline`，切换主题后图标和标题同步变化。
+- 侧边栏底部版本信息拆分为版本标签、版本号和 Power by 文案；折叠侧边栏时只保留纯版本号 `v2.0.2`，隐藏“版本：”和 Power by。
+- 已执行 `npm run build`，构建通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：修复登录页回车提交
 
 - `frontend/src/components/LoginView.vue` 的登录按钮改为原生 submit 类型，继续复用 `n-form` 的 `@submit.prevent` 登录流程。

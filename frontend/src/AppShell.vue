@@ -22,8 +22,11 @@
         @update:value="handleMenuChange"
       />
       <div class="sider-footer">
-        <span>版本：v2.0.2</span>
-        <span>Power by：NIXEVOL</span>
+        <span class="sider-version">
+          <span class="sider-version-label">版本：</span>
+          <span class="sider-version-number">v2.0.2</span>
+        </span>
+        <span class="sider-powered">Power by：NIXEVOL</span>
       </div>
     </n-layout-sider>
 
@@ -59,8 +62,8 @@
             </n-button>
           </template>
 
-          <button class="theme-toggle" type="button" title="切换主题" @click="toggleTheme">
-            <n-icon><MoonOutline /></n-icon>
+          <button class="theme-toggle" type="button" :title="themeToggleTitle" @click="toggleTheme">
+            <n-icon><component :is="themeToggleIcon" /></n-icon>
           </button>
           <button class="restart-btn" type="button" title="重启服务" @click="restartService">
             <n-icon><PowerOutline /></n-icon>
@@ -93,14 +96,15 @@ import {
   MoonOutline,
   PowerOutline,
   ServerOutline,
-  SettingsOutline
+  SettingsOutline,
+  SunnyOutline
 } from '@vicons/ionicons5';
 
 import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
 import type { LoginResponse } from './types';
 import LoginView from './components/LoginView.vue';
 import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
-import { toggleAppTheme } from './composables/theme';
+import { themeName, toggleAppTheme } from './composables/theme';
 
 const message = useMessage();
 const route = useRoute();
@@ -127,6 +131,8 @@ const currentTitle = computed(() => {
   return String(route.meta.title || menuOptions.find(item => item.key === activeMenu.value)?.label || '');
 });
 const pageSubtitle = computed(() => resolveHeaderValue(pageHeader.subtitle || '', ''));
+const themeToggleIcon = computed<Component>(() => (themeName.value === 'dark' ? SunnyOutline : MoonOutline));
+const themeToggleTitle = computed(() => (themeName.value === 'dark' ? '切换到浅色主题' : '切换到深色主题'));
 
 onMounted(() => {
   window.addEventListener('dragover', preventWindowFileDrop, { capture: true });

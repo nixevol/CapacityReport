@@ -277,7 +277,12 @@ select {
   border-top: 1px solid var(--td-border-color-light);
 }
 
-.n-layout-sider--collapsed .sider-footer span:last-child {
+.n-layout-sider--collapsed .sider-footer {
+  padding: 10px 6px;
+}
+
+.n-layout-sider--collapsed .sider-version-label,
+.n-layout-sider--collapsed .sider-powered {
   display: none;
 }
 
