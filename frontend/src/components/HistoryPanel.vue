@@ -27,19 +27,40 @@
     <n-modal v-model:show="detailVisible" preset="card" class="history-detail-modal" title="任务详情">
       <n-empty v-if="!detail" description="暂无详情" />
       <n-space v-else vertical size="large">
-        <n-descriptions bordered size="small" :column="2">
-          <n-descriptions-item label="任务 ID">{{ detail.id }}</n-descriptions-item>
-          <n-descriptions-item label="状态">{{ statusText(detail.status) }}</n-descriptions-item>
-          <n-descriptions-item label="文件数">{{ detail.file_count }}</n-descriptions-item>
-          <n-descriptions-item label="耗时">{{ formatElapsed(detail.elapsed_time) }}</n-descriptions-item>
-          <n-descriptions-item label="创建时间">{{ formatDate(detail.timestamp) }}</n-descriptions-item>
-          <n-descriptions-item label="占用">
-            <n-button v-if="recordSize === '-'" size="tiny" text @click="loadRecordSize(detail.id)">计算占用</n-button>
-            <span v-else>{{ recordSize }}</span>
-          </n-descriptions-item>
-          <n-descriptions-item label="工作目录" :span="2">{{ detail.work_dir }}</n-descriptions-item>
-          <n-descriptions-item v-if="detail.error" label="错误" :span="2">{{ detail.error }}</n-descriptions-item>
-        </n-descriptions>
+        <div class="detail-info-list">
+          <div class="detail-info-row">
+            <span class="detail-info-label">任务 ID</span>
+            <span class="detail-info-value monospace">{{ detail.id }}</span>
+          </div>
+          <div class="detail-info-row">
+            <span class="detail-info-label">状态</span>
+            <span class="detail-info-value">{{ statusText(detail.status) }}</span>
+          </div>
+          <div class="detail-info-row">
+            <span class="detail-info-label">文件数</span>
+            <span class="detail-info-value">{{ detail.file_count }}</span>
+          </div>
+          <div class="detail-info-row">
+            <span class="detail-info-label">耗时</span>
+            <span class="detail-info-value">{{ formatElapsed(detail.elapsed_time) }}</span>
+          </div>
+          <div class="detail-info-row">
+            <span class="detail-info-label">创建时间</span>
+            <span class="detail-info-value monospace">{{ formatDate(detail.timestamp) }}</span>
+          </div>
+          <div class="detail-info-row">
+            <span class="detail-info-label">占用</span>
+            <span class="detail-info-value" :class="{ muted: recordSizeLoading }">{{ recordSize }}</span>
+          </div>
+          <div class="detail-info-row">
+            <span class="detail-info-label">工作目录</span>
+            <span class="detail-info-value path-value">{{ detail.work_dir }}</span>
+          </div>
+          <div v-if="detail.error" class="detail-info-row error-row">
+            <span class="detail-info-label">错误</span>
+            <span class="detail-info-value">{{ detail.error }}</span>
+          </div>
+        </div>
 
         <div>
           <div class="section-label">处理日志</div>
@@ -66,7 +87,9 @@ const detail = ref<HistoryDetail | null>(null);
 const detailVisible = ref(false);
 const cacheSize = ref<CacheSize | null>(null);
 const recordSize = ref('-');
+const recordSizeLoading = ref(false);
 const loading = ref(false);
+let recordSizeToken = 0;
 
 const totalSizeText = computed(() => `总占用: ${cacheSize.value?.size_formatted || '计算中...'}`);
 const hasRecords = computed(() => records.value.length > 0);
@@ -113,21 +136,31 @@ async function loadHistory() {
 async function openDetail(recordId: string) {
   try {
     detail.value = await apiPost<HistoryDetail>('/api/history/detail', { record_id: recordId });
-    recordSize.value = '-';
     detailVisible.value = true;
+    void loadRecordSize(recordId);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载任务详情失败');
   }
 }
 
 async function loadRecordSize(recordId: string) {
+  const currentToken = ++recordSizeToken;
+  recordSize.value = '计算中...';
+  recordSizeLoading.value = true;
   try {
     const result = await apiPost<{ success: boolean; size_formatted: string }>('/api/history/size', {
       record_id: recordId
     });
+    if (currentToken !== recordSizeToken) return;
     recordSize.value = result.size_formatted;
   } catch (error) {
+    if (currentToken !== recordSizeToken) return;
+    recordSize.value = '计算失败';
     message.error(error instanceof Error ? error.message : '计算目录占用失败');
+  } finally {
+    if (currentToken === recordSizeToken) {
+      recordSizeLoading.value = false;
+    }
   }
 }
 

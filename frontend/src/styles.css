@@ -967,6 +967,56 @@ select {
   width: min(900px, calc(100vw - 48px));
 }
 
+.detail-info-list {
+  overflow: hidden;
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
+}
+
+.detail-info-row {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  min-height: 44px;
+  border-bottom: 1px solid var(--td-border-color-light);
+}
+
+.detail-info-row:last-child {
+  border-bottom: 0;
+}
+
+.detail-info-label,
+.detail-info-value {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 14px;
+}
+
+.detail-info-label {
+  color: var(--td-text-color-secondary);
+  font-weight: 500;
+  background: var(--td-bg-color-secondarycontainer);
+  border-right: 1px solid var(--td-border-color-light);
+}
+
+.detail-info-value {
+  color: var(--td-text-color-primary);
+  word-break: break-word;
+}
+
+.detail-info-value.monospace,
+.detail-info-value.path-value {
+  font-family: var(--td-font-family-mono);
+}
+
+.detail-info-value.muted {
+  color: var(--td-text-color-placeholder);
+}
+
+.detail-info-row.error-row .detail-info-value {
+  color: var(--td-error-color);
+}
+
 .log-panel,
 .script-log {
   min-height: 320px;

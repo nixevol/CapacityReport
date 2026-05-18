@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-18：优化历史详情弹窗信息布局
+
+- `frontend/src/components/HistoryPanel.vue` 打开历史详情后会自动调用 `/api/history/size` 计算占用，不再需要用户点击“计算占用”按钮。
+- 历史详情基础信息从 Naive UI `n-descriptions` 表格改为自定义键值列表，统一为左侧标题、右侧值，长路径和值会自动换行。
+- 占用计算期间显示“计算中...”，失败时显示“计算失败”并保留错误 toast。
+- 已执行 `npm run build`，构建通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：数据管理页切换时刷新表列表
 
 - `frontend/src/components/DatabasePanel.vue` 在数据管理页激活时会重新执行 `loadTables()`，确保从其他页面切回时左侧表列表拉取最新状态。
