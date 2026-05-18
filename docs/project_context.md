@@ -1,5 +1,13 @@
 # 项目上下文记录
 
+## 2026-05-18：完善服务重启交互和运行时兼容
+
+- `frontend/src/AppShell.vue` 的重启按钮点击后会先弹出确认框，确认后显示全屏“正在重启服务”遮罩和旋转加载动画，避免用户重复操作。
+- 重启请求发出后前端会轮询 `/api/service/status`，服务恢复时自动刷新页面；重启过程中请求中断会被视为正常情况继续等待。
+- `app/api/routers/service.py` 和 `app/services/runtime.py` 统一重启逻辑：优先使用 supervisor 重启，失败时退回进程退出；Windows 本地依赖 `run.bat` 循环拉起，容器环境会识别 Docker/containerd/k8s 并交给 supervisor 或容器重启策略拉起。
+- `/api/service/status` 返回值新增 `container` 字段，用于前端或排障区分容器运行时。
+- 已执行 `.venv\Scripts\python.exe -m compileall app` 和 `npm run build`，均通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：修正字段映射标题换行
 
 - `frontend/src/styles.css` 调整设置页字段映射卡片头部布局，“字段映射配置”和字段数量标签不再被搜索框挤压换行。

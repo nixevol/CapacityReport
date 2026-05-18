@@ -25,6 +25,24 @@ def is_supervisor_running() -> bool:
     return _command_succeeds(["pgrep", "-f", "supervisord"], timeout=2)
 
 
+def is_container_runtime() -> bool:
+    if os.environ.get("container"):
+        return True
+    if Path("/.dockerenv").exists():
+        return True
+
+    cgroup_path = Path("/proc/1/cgroup")
+    if not cgroup_path.exists():
+        return False
+
+    try:
+        cgroup = cgroup_path.read_text(encoding="utf-8", errors="ignore").lower()
+    except Exception:
+        return False
+
+    return any(marker in cgroup for marker in ("docker", "kubepods", "containerd"))
+
+
 def restart_via_supervisor() -> tuple[bool, str]:
     try:
         result = subprocess.run(
@@ -52,10 +70,19 @@ def terminate_current_process() -> None:
     os.kill(os.getpid(), signal.SIGTERM)
 
 
+def restart_method_name(supervisor_running: bool) -> str:
+    if supervisor_running:
+        return "supervisor"
+    if platform.system() == "Windows":
+        return "windows-process"
+    if is_container_runtime():
+        return "container-process"
+    return "process"
+
+
 def _command_succeeds(command: list[str], timeout: int) -> bool:
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         return result.returncode == 0 and bool(result.stdout.strip() or command[0] == "supervisorctl")
     except Exception:
         return False
-

@@ -26,8 +26,10 @@
   --td-bg-color-component-disabled: #eeeeee;
   --td-border-color: #dcdcdc;
   --td-border-color-light: #e7e7e7;
+  --td-mask-color: rgba(0, 0, 0, 0.6);
   --td-shadow-1: 0 1px 10px rgba(0, 0, 0, 0.05), 0 4px 5px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.12);
   --td-shadow-2: 0 3px 14px 2px rgba(0, 0, 0, 0.05), 0 8px 10px 1px rgba(0, 0, 0, 0.06), 0 5px 5px -3px rgba(0, 0, 0, 0.1);
+  --td-shadow-3: 0 6px 30px 5px rgba(0, 0, 0, 0.05), 0 16px 24px 2px rgba(0, 0, 0, 0.04), 0 8px 10px -5px rgba(0, 0, 0, 0.08);
   --td-radius-small: 3px;
   --td-radius-default: 6px;
   --td-radius-large: 12px;
@@ -61,6 +63,7 @@
   --td-border-color-light: #4c4c4c;
   --td-shadow-1: 0 1px 10px rgba(0, 0, 0, 0.15), 0 4px 5px rgba(0, 0, 0, 0.22), 0 2px 4px -1px rgba(0, 0, 0, 0.32);
   --td-shadow-2: 0 3px 14px 2px rgba(0, 0, 0, 0.15), 0 8px 10px 1px rgba(0, 0, 0, 0.18), 0 5px 5px -3px rgba(0, 0, 0, 0.28);
+  --td-shadow-3: 0 6px 30px 5px rgba(0, 0, 0, 0.15), 0 16px 24px 2px rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(0, 0, 0, 0.24);
 }
 
 /* ==================== Base ==================== */
@@ -373,11 +376,68 @@ select {
   background: var(--td-error-color-light);
 }
 
+.restart-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .theme-toggle svg,
 .restart-btn svg {
   display: block;
   width: 16px;
   height: 16px;
+}
+
+.restart-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--td-mask-color);
+  backdrop-filter: blur(4px);
+}
+
+.restart-overlay-content {
+  display: flex;
+  min-width: 260px;
+  align-items: center;
+  flex-direction: column;
+  gap: 18px;
+  padding: 32px 44px;
+  color: var(--td-text-color-primary);
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-large);
+  box-shadow: var(--td-shadow-3);
+}
+
+.restart-overlay-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid var(--td-border-color-light);
+  border-top-color: var(--td-brand-color);
+  border-radius: 50%;
+  animation: spinner-rotate 1s linear infinite;
+}
+
+.restart-overlay-text {
+  color: var(--td-text-color-primary);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+  text-align: center;
+}
+
+@keyframes spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .logout-button {

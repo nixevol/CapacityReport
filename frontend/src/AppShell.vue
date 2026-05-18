@@ -63,7 +63,13 @@
           <button class="theme-toggle" type="button" :title="themeToggleTitle" @click="toggleTheme">
             <n-icon><component :is="themeToggleIcon" /></n-icon>
           </button>
-          <button class="restart-btn" type="button" title="重启服务" @click="restartService">
+          <button
+            class="restart-btn"
+            type="button"
+            title="重启服务"
+            :disabled="restarting"
+            @click="restartService"
+          >
             <n-icon><PowerOutline /></n-icon>
           </button>
           <n-button tertiary circle title="退出登录" class="logout-button" @click="logout">
@@ -79,12 +85,19 @@
       </n-layout-content>
     </n-layout>
   </n-layout>
+
+  <div v-if="restarting" class="restart-overlay" role="status" aria-live="assertive">
+    <div class="restart-overlay-content">
+      <div class="restart-overlay-spinner"></div>
+      <div class="restart-overlay-text">{{ restartOverlayText }}</div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
-import { useMessage, type MenuOption, NIcon } from 'naive-ui';
+import { useDialog, useMessage, type MenuOption, NIcon } from 'naive-ui';
 import {
   CloudUploadOutline,
   ConstructOutline,
@@ -97,20 +110,24 @@ import {
   SunnyOutline
 } from '@vicons/ionicons5';
 
-import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
-import type { LoginResponse } from './types';
+import { apiGet, apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
+import type { ApiMessage, LoginResponse, ServiceStatus } from './types';
 import LoginView from './components/LoginView.vue';
 import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
 import { themeName, toggleAppTheme } from './composables/theme';
 
 const message = useMessage();
+const dialog = useDialog();
 const route = useRoute();
 const router = useRouter();
 const token = ref(getToken());
 const loginLoading = ref(false);
+const restarting = ref(false);
+const restartOverlayText = ref('正在重启服务...');
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
 const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
+let restartPollTimer: number | undefined;
 
 const menuOptions: MenuOption[] = [
   { label: '数据上传', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
@@ -139,6 +156,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('dragover', preventWindowFileDrop, { capture: true });
   window.removeEventListener('drop', preventWindowFileDrop, { capture: true });
+  if (restartPollTimer !== undefined) {
+    window.clearTimeout(restartPollTimer);
+  }
 });
 
 watch(
@@ -180,12 +200,63 @@ function toggleTheme() {
 }
 
 async function restartService() {
+  if (restarting.value) return;
+
+  dialog.warning({
+    title: '重启服务',
+    content: '确定要重启服务吗？这将中断当前所有操作。',
+    positiveText: '重启',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      void executeRestartService();
+    }
+  });
+}
+
+async function executeRestartService() {
+  restarting.value = true;
+  restartOverlayText.value = '正在重启服务...';
+
   try {
-    await apiPost('/api/service/restart');
-    message.success('服务正在重启');
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '重启服务失败');
+    const result = await apiPost<ApiMessage>('/api/service/restart');
+    restartOverlayText.value = result.message || '正在等待服务恢复...';
+  } catch {
+    restartOverlayText.value = '正在等待服务恢复...';
   }
+
+  pollServiceStatus();
+}
+
+function pollServiceStatus() {
+  let attempts = 0;
+  const maxAttempts = 60;
+  const pollInterval = 5000;
+
+  const checkService = async () => {
+    attempts += 1;
+
+    try {
+      await apiGet<ServiceStatus>('/api/service/status');
+      restartOverlayText.value = '服务已恢复，正在刷新页面...';
+      restartPollTimer = window.setTimeout(() => {
+        window.location.reload();
+      }, 500);
+      return;
+    } catch {
+      restartOverlayText.value = `正在等待服务恢复... (${attempts}/${maxAttempts})`;
+    }
+
+    if (attempts < maxAttempts) {
+      restartPollTimer = window.setTimeout(checkService, pollInterval);
+      return;
+    }
+
+    restarting.value = false;
+    restartOverlayText.value = '正在重启服务...';
+    message.warning('服务重启超时，请手动刷新页面');
+  };
+
+  restartPollTimer = window.setTimeout(checkService, 3000);
 }
 
 function handleMenuChange(key: string | number) {

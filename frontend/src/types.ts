@@ -104,6 +104,7 @@ export interface ServiceStatus {
   version: string;
   platform: string;
   supervisor: boolean;
+  container: boolean;
   pid: number;
   python_version: string;
 }
