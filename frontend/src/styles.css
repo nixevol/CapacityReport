@@ -248,6 +248,8 @@ select {
 }
 
 .n-layout-sider--collapsed .app-menu .n-menu-item-content {
+  display: flex;
+  align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
@@ -255,11 +257,19 @@ select {
   padding: 0 !important;
 }
 
+.n-layout-sider--collapsed .app-menu .n-menu-item-content-header,
+.n-layout-sider--collapsed .app-menu .n-menu-item-content__arrow {
+  display: none;
+}
+
 .n-layout-sider--collapsed .app-menu .n-menu-item-content--selected::before {
   display: none;
 }
 
 .n-layout-sider--collapsed .app-menu .n-menu-item-content__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-right: 0 !important;
 }
 
