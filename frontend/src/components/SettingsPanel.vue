@@ -46,6 +46,70 @@
         </template>
       </n-card>
 
+      <n-card title="远程数据源" size="small" class="work-card">
+        <n-form label-placement="top">
+          <n-form-item label="启用远程自动化">
+            <n-switch v-model:value="remoteForm.enabled" />
+          </n-form-item>
+          <n-grid :cols="12" :x-gap="12">
+            <n-gi :span="4">
+              <n-form-item label="协议">
+                <n-select
+                  v-model:value="remoteForm.protocol"
+                  :options="remoteProtocolOptions"
+                  @update:value="updateRemoteProtocol"
+                />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="8">
+              <n-form-item label="服务器地址">
+                <n-input v-model:value="remoteForm.host" placeholder="192.168.1.10" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+          <n-grid :cols="12" :x-gap="12">
+            <n-gi :span="4">
+              <n-form-item label="端口">
+                <n-input-number v-model:value="remoteForm.port" class="full-width" :min="1" :max="65535" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="4">
+              <n-form-item label="超时秒数">
+                <n-input-number v-model:value="remoteForm.timeout" class="full-width" :min="1" :max="600" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="4">
+              <n-form-item label="FTP 被动模式">
+                <n-switch v-model:value="remoteForm.passive" :disabled="remoteForm.protocol !== 'ftp'" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+          <n-grid :cols="12" :x-gap="12">
+            <n-gi :span="6">
+              <n-form-item label="用户名">
+                <n-input v-model:value="remoteForm.user" placeholder="remote user" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="6">
+              <n-form-item label="密码">
+                <n-input v-model:value="remoteForm.passwd" type="password" show-password-on="click" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+          <n-form-item label="远程目录">
+            <n-input v-model:value="remoteForm.remote_dir" placeholder="/CapacityReportData" />
+          </n-form-item>
+          <p class="form-hint">自动化执行会递归下载该目录下的全部文件和文件夹到本地缓存，再按现有处理流程入库和执行脚本。</p>
+        </n-form>
+
+        <template #footer>
+          <n-space justify="end">
+            <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
+            <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
+          </n-space>
+        </template>
+      </n-card>
+
       <n-card title="Sheet 过滤规则" size="small" class="work-card">
         <n-space vertical>
           <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
@@ -193,7 +257,7 @@ import { useMessage, type SelectOption } from 'naive-ui';
 import { CloseOutline, CloudDownloadOutline, CloudUploadOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
-import type { ApiMessage, AppConfig } from '../types';
+import type { ApiMessage, AppConfig, RemoteDataConfig } from '../types';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 interface ExtractFieldConfig {
@@ -208,7 +272,9 @@ const configInput = ref<HTMLInputElement | null>(null);
 const configUpdate = ref('');
 const loading = ref(false);
 const testingDb = ref(false);
+const testingRemote = ref(false);
 const savingMysql = ref(false);
+const savingRemote = ref(false);
 const savingSheetFilter = ref(false);
 const savingExtractFields = ref(false);
 const changingPassword = ref(false);
@@ -226,6 +292,18 @@ const mysqlForm = reactive({
   dbname: ''
 });
 
+const remoteForm = reactive<RemoteDataConfig>({
+  enabled: false,
+  protocol: 'sftp',
+  host: '',
+  port: 22,
+  user: '',
+  passwd: '',
+  remote_dir: '/',
+  passive: true,
+  timeout: 30
+});
+
 const passwordForm = reactive({
   current_password: '',
   new_password: '',
@@ -237,6 +315,10 @@ const fieldTypeOptions: SelectOption[] = [
   { label: '整数', value: 'int' },
   { label: '小数', value: 'float' },
   { label: '日期时间', value: 'datetime' }
+];
+const remoteProtocolOptions: SelectOption[] = [
+  { label: 'SFTP', value: 'sftp' },
+  { label: 'FTP', value: 'ftp' }
 ];
 
 const visibleFieldMappings = computed(() => {
@@ -275,6 +357,7 @@ async function loadConfig() {
     mysqlForm.user = config.mysql.user;
     mysqlForm.passwd = config.mysql.passwd || '';
     mysqlForm.dbname = config.mysql.dbname;
+    Object.assign(remoteForm, normalizeRemoteConfig(config.remote_data));
     sheetFilters.value = [...config.sheet_filter];
     extractFields.value = normalizeExtractFields(config.extract_fields);
     resetExtractInputs();
@@ -282,6 +365,15 @@ async function loadConfig() {
     message.error(error instanceof Error ? error.message : '加载配置失败');
   } finally {
     loading.value = false;
+  }
+}
+
+function updateRemoteProtocol(value: string) {
+  if (value === 'sftp' && (!remoteForm.port || remoteForm.port === 21)) {
+    remoteForm.port = 22;
+  }
+  if (value === 'ftp' && (!remoteForm.port || remoteForm.port === 22)) {
+    remoteForm.port = 21;
   }
 }
 
@@ -303,6 +395,57 @@ async function saveMysql() {
     message.error(error instanceof Error ? error.message : '保存数据库配置失败');
   } finally {
     savingMysql.value = false;
+  }
+}
+
+function getRemotePayload(): RemoteDataConfig {
+  return {
+    ...remoteForm,
+    protocol: remoteForm.protocol,
+    host: remoteForm.host.trim(),
+    port: remoteForm.port || (remoteForm.protocol === 'sftp' ? 22 : 21),
+    user: remoteForm.user.trim(),
+    passwd: remoteForm.passwd || '',
+    remote_dir: remoteForm.remote_dir.trim() || '/',
+    passive: remoteForm.passive,
+    timeout: remoteForm.timeout || 30
+  };
+}
+
+function validateRemoteForm(): boolean {
+  if (!remoteForm.host || !remoteForm.user || !remoteForm.remote_dir) {
+    message.warning('请填写完整远程数据源配置');
+    return false;
+  }
+  return true;
+}
+
+async function saveRemote() {
+  if (!validateRemoteForm()) return;
+
+  savingRemote.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/remote', getRemotePayload());
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || '远程数据源配置已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存远程数据源配置失败');
+  } finally {
+    savingRemote.value = false;
+  }
+}
+
+async function testRemote() {
+  if (!validateRemoteForm()) return;
+
+  testingRemote.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/remote/test', getRemotePayload());
+    message[result.success ? 'success' : 'error'](result.message || '远程连接测试完成');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '远程连接测试失败');
+  } finally {
+    testingRemote.value = false;
   }
 }
 
@@ -455,6 +598,21 @@ async function uploadConfigFile(event: Event) {
   } catch (error) {
     message.error(error instanceof Error ? error.message : '上传配置失败');
   }
+}
+
+function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteDataConfig {
+  const protocol = config?.protocol === 'ftp' ? 'ftp' : 'sftp';
+  return {
+    enabled: Boolean(config?.enabled),
+    protocol,
+    host: config?.host || '',
+    port: config?.port || (protocol === 'sftp' ? 22 : 21),
+    user: config?.user || '',
+    passwd: config?.passwd || '',
+    remote_dir: config?.remote_dir || '/',
+    passive: config?.passive ?? true,
+    timeout: config?.timeout || 30
+  };
 }
 
 function normalizeExtractFields(fields: Array<Record<string, unknown>>): ExtractFieldConfig[] {

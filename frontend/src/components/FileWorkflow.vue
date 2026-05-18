@@ -40,6 +40,17 @@
       />
     </section>
 
+    <section v-if="!taskInProgress" class="remote-run-card">
+      <div class="remote-run-copy">
+        <h4>远程自动化</h4>
+        <p>从已配置的 FTP/SFTP 目录递归下载数据，然后自动开始处理。</p>
+      </div>
+      <n-button type="primary" secondary :loading="remoteStarting" :disabled="working" @click="startRemoteProcessing">
+        <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+        远程下载并处理
+      </n-button>
+    </section>
+
     <div v-if="!taskInProgress && files.length > 0" class="file-list">
       <div class="file-list-header">
         <h4>已选择文件</h4>
@@ -133,6 +144,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useMessage } from 'naive-ui';
 import {
+  CloudDownloadOutline,
   CloudUploadOutline,
   DocumentTextOutline,
   FolderOpenOutline,
@@ -160,7 +172,9 @@ interface DroppedFile {
 interface UploadResponse {
   success: boolean;
   task_id: string;
-  file_count: number;
+  file_count?: number;
+  message?: string;
+  stage?: string;
 }
 
 const validExtensions = new Set(['.zip', '.xlsx', '.xls', '.csv']);
@@ -170,6 +184,7 @@ const folderInput = ref<HTMLInputElement | null>(null);
 const files = ref<PickedFile[]>([]);
 const uploadProgress = ref(0);
 const working = ref(false);
+const remoteStarting = ref(false);
 const isDragging = ref(false);
 const taskStatus = ref<TaskStatus | null>(null);
 const activeTask = ref<ActiveTask | null>(null);
@@ -194,6 +209,7 @@ const statusClass = computed(() => {
 const processStatusText = computed(() => {
   if (taskStatus.value?.status === 'completed') return '处理完成';
   if (taskStatus.value?.status === 'failed') return '处理失败';
+  if (activeTask.value?.stage === 'downloading') return '远程下载中...';
   if (activeTask.value?.stage === 'uploading') return '上传中...';
   return '处理中...';
 });
@@ -396,7 +412,7 @@ async function uploadAndStart() {
       item.status = 'uploaded';
       item.progress = 100;
     });
-    message.success(`上传完成：${result.file_count} 个文件`);
+    message.success(`上传完成：${result.file_count ?? files.value.length} 个文件`);
     await apiPost('/api/process/start', { task_id: result.task_id });
     taskStatus.value = { task_id: result.task_id, status: 'processing', logs: ['任务已提交，等待处理日志...'] };
     startPolling(result.task_id);
@@ -409,6 +425,30 @@ async function uploadAndStart() {
     message.error(error instanceof Error ? error.message : '上传或启动任务失败');
   } finally {
     working.value = false;
+  }
+}
+
+async function startRemoteProcessing() {
+  if (working.value || remoteStarting.value) return;
+
+  remoteStarting.value = true;
+  try {
+    const result = await apiPost<UploadResponse>('/api/remote/start');
+    message.success(result.message || '远程自动化任务已启动');
+    files.value = [];
+    uploadProgress.value = 0;
+    activeTask.value = {
+      has_active: true,
+      task_id: result.task_id,
+      stage: result.stage || 'downloading',
+      started_at: new Date().toISOString()
+    };
+    taskStatus.value = { task_id: result.task_id, status: 'processing', logs: ['远程下载任务已提交，等待处理日志...'] };
+    startPolling(result.task_id);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '启动远程自动化任务失败');
+  } finally {
+    remoteStarting.value = false;
   }
 }
 

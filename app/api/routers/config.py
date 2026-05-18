@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 
 from app import state
-from app.config import CONFIG_FILE
+from app.config import CONFIG_FILE, RemoteDataConfig
 
 
 router = APIRouter(tags=["config"])
@@ -37,6 +37,13 @@ async def update_mysql_config(
     state.config.mysql.dbname = dbname
     state.config.save()
     return {"success": True, "message": "数据库配置已更新", "update": state.config.update}
+
+
+@router.post("/api/config/remote")
+async def update_remote_config(config: dict[str, Any] = Body(...)):
+    state.config.remote_data = RemoteDataConfig.from_dict(config)
+    state.config.save()
+    return {"success": True, "message": "远程数据配置已更新", "update": state.config.update}
 
 
 @router.post("/api/config/sheet-filter")
@@ -97,3 +104,6 @@ def _apply_config_data(data: dict[str, Any]) -> None:
     if "ExtractField" in data:
         state.config.extract_fields = data["ExtractField"] if isinstance(data["ExtractField"], list) else []
 
+    remote_data = data.get("RemoteData")
+    if isinstance(remote_data, dict):
+        state.config.remote_data = RemoteDataConfig.from_dict(remote_data)

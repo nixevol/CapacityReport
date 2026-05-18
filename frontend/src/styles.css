@@ -593,6 +593,36 @@ select {
   font-size: 13px !important;
 }
 
+.remote-run-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
+}
+
+.remote-run-copy {
+  min-width: 0;
+}
+
+.remote-run-copy h4 {
+  margin: 0 0 4px;
+  color: var(--td-text-color-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.remote-run-copy p {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .file-list {
   margin-top: 20px;
 }
@@ -1519,6 +1549,11 @@ select {
   .history-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .remote-run-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .card-actions,

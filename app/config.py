@@ -24,9 +24,81 @@ class MySQLConfig:
 
 
 @dataclass
+class RemoteDataConfig:
+    enabled: bool = False
+    protocol: str = "sftp"
+    host: str = ""
+    port: int = 22
+    user: str = ""
+    passwd: str = ""
+    remote_dir: str = "/"
+    passive: bool = True
+    timeout: int = 30
+
+    def normalized(self) -> "RemoteDataConfig":
+        protocol = self.protocol.lower().strip()
+        if protocol not in {"ftp", "sftp"}:
+            protocol = "sftp"
+
+        port = self.port or (22 if protocol == "sftp" else 21)
+        return RemoteDataConfig(
+            enabled=bool(self.enabled),
+            protocol=protocol,
+            host=self.host.strip(),
+            port=port,
+            user=self.user.strip(),
+            passwd=self.passwd,
+            remote_dir=(self.remote_dir or "/").strip() or "/",
+            passive=bool(self.passive),
+            timeout=max(int(self.timeout or 30), 1),
+        )
+
+    def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
+        data = {
+            "enabled": self.enabled,
+            "protocol": self.protocol,
+            "host": self.host,
+            "port": self.port,
+            "user": self.user,
+            "remote_dir": self.remote_dir,
+            "passive": self.passive,
+            "timeout": self.timeout,
+        }
+        if include_password:
+            data["passwd"] = self.passwd
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "RemoteDataConfig":
+        data = data or {}
+        protocol = str(data.get("protocol", "sftp")).lower()
+        default_port = 22 if protocol == "sftp" else 21
+        try:
+            port = int(data.get("port") or default_port)
+        except (TypeError, ValueError):
+            port = default_port
+        try:
+            timeout = int(data.get("timeout") or 30)
+        except (TypeError, ValueError):
+            timeout = 30
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            protocol=protocol,
+            host=str(data.get("host", "")),
+            port=port,
+            user=str(data.get("user", "")),
+            passwd=str(data.get("passwd", "")),
+            remote_dir=str(data.get("remote_dir", "/")),
+            passive=bool(data.get("passive", True)),
+            timeout=timeout,
+        ).normalized()
+
+
+@dataclass
 class AppConfig:
     update: str = ""
     mysql: MySQLConfig = field(default_factory=MySQLConfig)
+    remote_data: RemoteDataConfig = field(default_factory=RemoteDataConfig)
     sheet_filter: List[str] = field(default_factory=list)
     extract_fields: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -47,10 +119,12 @@ class AppConfig:
             passwd=mysql_data.get("passwd", ""),
             dbname=mysql_data.get("dbname", "CapacityReport")
         )
+        remote_config = RemoteDataConfig.from_dict(data.get("RemoteData"))
         
         return cls(
             update=data.get("Update", ""),
             mysql=mysql_config,
+            remote_data=remote_config,
             sheet_filter=data.get("SheetFilter", []),
             extract_fields=data.get("ExtractField", [])
         )
@@ -68,6 +142,7 @@ class AppConfig:
                 "passwd": self.mysql.passwd,
                 "dbname": self.mysql.dbname
             },
+            "RemoteData": self.remote_data.normalized().to_dict(include_password=True),
             "SheetFilter": self.sheet_filter,
             "ExtractField": self.extract_fields
         }
@@ -85,6 +160,7 @@ class AppConfig:
                 "user": self.mysql.user,
                 "dbname": self.mysql.dbname
             },
+            "remote_data": self.remote_data.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
         }
@@ -100,6 +176,7 @@ class AppConfig:
                 "passwd": self.mysql.passwd,
                 "dbname": self.mysql.dbname
             },
+            "remote_data": self.remote_data.normalized().to_dict(include_password=True),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
         }

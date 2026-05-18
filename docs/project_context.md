@@ -1,5 +1,14 @@
 # 项目上下文记录
 
+## 2026-05-18：新增 FTP/SFTP 远程自动化处理
+
+- `Configure.json` 新增 `RemoteData` 配置，包含启用状态、协议、主机、端口、用户名、密码、远程目录、FTP 被动模式和超时时间；`app/config.py` 会兼容旧配置并在保存时写回该配置块。
+- 新增 `app/services/remote_download.py`，FTP 使用标准库 `ftplib`，SFTP 使用 `paramiko`，会递归下载远程目录下的全部文件和文件夹到本地任务缓存目录。
+- 新增 `app/api/routers/remote.py`，`POST /api/remote/test` 用于测试远程连接，`POST /api/remote/start` 会创建历史任务、下载远程数据并复用 `DataProcessor` 完成现有处理流程。
+- `frontend/src/components/SettingsPanel.vue` 新增“远程数据源”配置卡片，支持 FTP/SFTP 切换、保存和测试连接；`frontend/src/components/FileWorkflow.vue` 新增“远程下载并处理”入口。
+- 远程任务启动后会把全局任务阶段设置为 `downloading`，前端处理进度页会显示“远程下载中...”，下载完成后再切换为既有数据处理流程。
+- 新增依赖 `paramiko`，当前 `.venv` 已执行 `uv pip install -r requirements.txt`；已执行 `.venv\Scripts\python.exe -m compileall app` 和 `npm run build`，均通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：完善服务重启交互和运行时兼容
 
 - `frontend/src/AppShell.vue` 的重启按钮点击后会先弹出确认框，确认后显示全屏“正在重启服务”遮罩和旋转加载动画，避免用户重复操作。

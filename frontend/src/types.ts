@@ -57,8 +57,21 @@ export interface AppConfig {
     passwd?: string;
     dbname: string;
   };
+  remote_data: RemoteDataConfig;
   sheet_filter: string[];
   extract_fields: Array<Record<string, unknown>>;
+}
+
+export interface RemoteDataConfig {
+  enabled: boolean;
+  protocol: 'ftp' | 'sftp';
+  host: string;
+  port: number;
+  user: string;
+  passwd?: string;
+  remote_dir: string;
+  passive: boolean;
+  timeout: number;
 }
 
 export interface TableInfo {

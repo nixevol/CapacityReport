@@ -12,6 +12,7 @@ cryptography
 pandas
 openpyxl
 chardet
+paramiko
 
 # Process manager
 supervisor

@@ -89,6 +89,7 @@ Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。
 `Configure.json` 主要包含：
 
 - `MySQL_DBInfo`：MySQL 连接信息
+- `RemoteData`：FTP/SFTP 远程数据源配置，用于递归下载目录后自动处理
 - `SheetFilter`：Excel Sheet 过滤规则
 - `ExtractField`：字段抽取映射配置
 
@@ -114,6 +115,8 @@ Docker 镜像构建采用多阶段流程：先在 Node 阶段执行前端构建�
 - `POST /api/login`：登录
 - `POST /api/change-password`：修改密码
 - `POST /api/upload`：上传文件
+- `POST /api/remote/test`：测试 FTP/SFTP 远程数据源
+- `POST /api/remote/start`：从远程目录下载数据并自动启动处理
 - `POST /api/process/start`：启动处理
 - `POST /api/process/status`：查询处理状态
 - `GET /api/history`：历史记录
