@@ -7,7 +7,8 @@
       :collapsed="sidebarCollapsed"
       :collapsed-width="64"
       :width="220"
-      @update:collapsed="sidebarCollapsed = $event"
+      show-trigger="bar"
+      @update:collapsed="handleSidebarCollapsed"
     >
       <div class="brand">
         <div class="brand-mark">📊</div>
@@ -32,9 +33,6 @@
 
     <n-layout>
       <n-layout-header bordered class="topbar page-header">
-        <button class="sidebar-toggle" type="button" title="展开/收起侧边栏" @click="toggleSidebar">
-          <n-icon><MenuOutline /></n-icon>
-        </button>
         <div class="page-header-content">
           <h1>{{ currentTitle }}</h1>
           <span v-if="pageSubtitle" class="page-subtitle" :title="pageSubtitle">{{ pageSubtitle }}</span>
@@ -92,7 +90,6 @@ import {
   ConstructOutline,
   FileTrayFullOutline,
   LogOutOutline,
-  MenuOutline,
   MoonOutline,
   PowerOutline,
   ServerOutline,
@@ -173,8 +170,8 @@ function logout() {
   token.value = '';
 }
 
-function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value;
+function handleSidebarCollapsed(value: boolean) {
+  sidebarCollapsed.value = value;
   localStorage.setItem('sidebarCollapsed', sidebarCollapsed.value ? 'true' : 'false');
 }
 

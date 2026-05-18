@@ -308,30 +308,6 @@ select {
   border-bottom: 1px solid var(--td-border-color-light);
 }
 
-.sidebar-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  margin-top: 2px;
-  padding: 0;
-  color: var(--td-text-color-secondary);
-  font-size: 18px;
-  line-height: 1;
-  background: none;
-  border: none;
-  border-radius: var(--td-radius-default);
-  cursor: pointer;
-  transition: all var(--td-transition);
-}
-
-.sidebar-toggle:hover {
-  color: var(--td-text-color-primary);
-  background: var(--td-bg-color-container-hover);
-}
-
 .page-header-content {
   display: flex;
   flex: 1;
@@ -397,7 +373,6 @@ select {
   background: var(--td-error-color-light);
 }
 
-.sidebar-toggle svg,
 .theme-toggle svg,
 .restart-btn svg {
   display: block;
