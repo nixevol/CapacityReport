@@ -14,9 +14,9 @@
           <n-input v-model:value="form.username" autofocus />
         </n-form-item>
         <n-form-item label="密码" path="password">
-          <n-input v-model:value="form.password" type="password" show-password-on="click" />
+          <n-input v-model:value="form.password" type="password" show-password-on="click" @keydown.enter.prevent="submit" />
         </n-form-item>
-        <n-button type="primary" block :loading="loading" @click="submit">登录</n-button>
+        <n-button type="primary" block native-type="submit" :loading="loading">登录</n-button>
       </n-form>
     </n-card>
   </div>
