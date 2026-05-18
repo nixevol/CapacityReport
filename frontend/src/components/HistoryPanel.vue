@@ -63,8 +63,20 @@
         </div>
 
         <div>
-          <div class="section-label">处理日志</div>
-          <n-log :log="detail.logs.join('\n') || '暂无日志'" language="text" trim class="log-panel" />
+          <div class="section-label log-section-header">
+            <span>处理日志</span>
+            <n-button size="small" tertiary circle title="复制日志" :disabled="!detailLogText" @click="copyDetailLogs">
+              <template #icon><n-icon><CopyOutline /></n-icon></template>
+            </n-button>
+          </div>
+          <div class="colored-log-panel" role="log" aria-label="处理日志">
+            <pre class="colored-log-content"><span
+              v-for="(line, index) in detailLogLines"
+              :key="index"
+              class="colored-log-line"
+              :class="`log-level-${line.level}`"
+            >{{ line.text }}</span></pre>
+          </div>
         </div>
       </n-space>
     </n-modal>
@@ -74,11 +86,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
-import { FileTrayOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
+import { CopyOutline, FileTrayOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
+
+type LogLevel = 'default' | 'info' | 'success' | 'warning' | 'error';
 
 const message = useMessage();
 const dialog = useDialog();
@@ -93,6 +107,14 @@ let recordSizeToken = 0;
 
 const totalSizeText = computed(() => `总占用: ${cacheSize.value?.size_formatted || '计算中...'}`);
 const hasRecords = computed(() => records.value.length > 0);
+const detailLogText = computed(() => detail.value?.logs?.join('\n') || '');
+const detailLogLines = computed(() => {
+  const lines = detailLogText.value ? detailLogText.value.split(/\r?\n/) : ['暂无日志'];
+  return lines.map(line => ({
+    text: line,
+    level: resolveLogLevel(line)
+  }));
+});
 
 onMounted(() => {
   setPageHeader({
@@ -162,6 +184,52 @@ async function loadRecordSize(recordId: string) {
       recordSizeLoading.value = false;
     }
   }
+}
+
+async function copyDetailLogs() {
+  if (!detailLogText.value) {
+    message.warning('暂无可复制日志');
+    return;
+  }
+
+  try {
+    await writeClipboardText(detailLogText.value);
+    message.success('日志已复制');
+  } catch {
+    message.error('复制日志失败');
+  }
+}
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-1000px';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('copy failed');
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+function resolveLogLevel(line: string): LogLevel {
+  if (/\b(ERROR|FAILED|FAILURE)\b|错误|失败/i.test(line)) return 'error';
+  if (/\b(WARN|WARNING)\b|警告/i.test(line)) return 'warning';
+  if (/\b(SUCCESS|SUCCEEDED|COMPLETED)\b|成功|完成/i.test(line)) return 'success';
+  if (/\bINFO\b|信息/i.test(line)) return 'info';
+  return 'default';
 }
 
 function confirmDelete(recordId: string) {

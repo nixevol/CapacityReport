@@ -1002,7 +1002,54 @@ select {
   color: var(--td-error-color);
 }
 
-.log-panel,
+.log-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.colored-log-panel {
+  height: 360px;
+  overflow: scroll;
+  padding: 12px;
+  color: #d7dde7;
+  background: #111820;
+  border-radius: var(--td-radius-default);
+}
+
+.colored-log-content {
+  display: block;
+  min-width: max-content;
+  margin: 0;
+  font-family: var(--td-font-family-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.colored-log-line {
+  display: block;
+  color: #d7dde7;
+  white-space: pre;
+}
+
+.colored-log-line.log-level-info {
+  color: #62a8ff;
+}
+
+.colored-log-line.log-level-success {
+  color: #38d996;
+}
+
+.colored-log-line.log-level-warning {
+  color: #f6c453;
+}
+
+.colored-log-line.log-level-error {
+  color: #ff6b7a;
+}
+
 .script-log {
   min-height: 320px;
   padding: 12px;
