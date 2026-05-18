@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-18：修正字段映射标题换行
+
+- `frontend/src/styles.css` 调整设置页字段映射卡片头部布局，“字段映射配置”和字段数量标签不再被搜索框挤压换行。
+- 字段搜索框改为弹性宽度，优先占用剩余空间，并保留最小宽度和最大宽度约束。
+- 已执行 `npm run build`，构建通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：优化数据管理表列表和导出入口
 
 - `frontend/src/components/DatabasePanel.vue` 的 MySQL 表列表顶部新增“表”标题和刷新图标按钮，刷新按钮复用 `loadTables()` 并在加载中显示 loading，避免重复刷新。
