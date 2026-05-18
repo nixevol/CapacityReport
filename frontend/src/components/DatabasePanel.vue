@@ -33,14 +33,19 @@
         <div class="server-info-item">
           <span class="info-label">快速导入:</span>
           <span class="info-value">
-            <span class="status-badge" :class="databaseInfo?.load_data_infile ? 'success' : 'warning'">
-              {{ databaseInfo ? (databaseInfo.load_data_infile ? '可用' : '未启用') : '检测中' }}
-            </span>
+            <button
+              type="button"
+              class="status-badge status-action"
+              :class="loadDataInfileClass"
+              :disabled="testing"
+              aria-label="刷新快速导入状态"
+              title="刷新快速导入状态"
+              @click="testConnection"
+            >
+              {{ loadDataInfileText }}
+            </button>
           </span>
         </div>
-        <n-button size="tiny" text :loading="testing" class="connection-test" @click="testConnection(true)">
-          重新检测
-        </n-button>
       </section>
     </aside>
 
@@ -146,6 +151,14 @@ const loadingData = ref(false);
 const testing = ref(false);
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
+const loadDataInfileText = computed(() => {
+  if (testing.value || !databaseInfo.value) return '检测中';
+  return databaseInfo.value.load_data_infile ? '可用' : '未启用';
+});
+const loadDataInfileClass = computed(() => {
+  if (testing.value || !databaseInfo.value) return 'unknown';
+  return databaseInfo.value.load_data_infile ? 'success' : 'warning';
+});
 const columns = computed<DataTableColumns<RowData>>(() => {
   const keys = rows.value.length
     ? Object.keys(rows.value[0])
@@ -174,7 +187,7 @@ onMounted(() => {
       }
     ]
   });
-  void testConnection(false);
+  void testConnection();
   void loadTables();
 });
 
@@ -182,15 +195,11 @@ onBeforeUnmount(() => {
   resetPageHeader();
 });
 
-async function testConnection(showSuccessToast = true) {
+async function testConnection() {
   testing.value = true;
   try {
     const result = await apiPost<ApiMessage>('/api/database/test');
-    if (result.success) {
-      if (showSuccessToast) {
-        message.success(result.message || '连接测试完成');
-      }
-    } else {
+    if (!result.success) {
       message.error(result.message || '数据库连接测试失败');
     }
     databaseInfo.value = await apiGet<DatabaseInfo>('/api/database/info');
@@ -455,7 +464,7 @@ function formatCell(value: unknown): string {
 .database-server-info {
   position: relative;
   flex-shrink: 0;
-  padding: 10px 12px 28px;
+  padding: 10px 12px;
   font-size: 12px;
   background: var(--td-bg-color-secondarycontainer);
 }
@@ -482,15 +491,38 @@ function formatCell(value: unknown): string {
 }
 
 .status-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   max-width: 112px;
   overflow: hidden;
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
+  font-family: inherit;
+  line-height: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
+  border: 0;
   border-radius: 10px;
+}
+
+.status-action {
+  cursor: pointer;
+  transition: opacity var(--td-transition), box-shadow var(--td-transition), transform var(--td-transition);
+}
+
+.status-action:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.status-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.status-action:disabled {
+  cursor: wait;
+  opacity: 0.78;
 }
 
 .status-badge.success {
@@ -506,12 +538,6 @@ function formatCell(value: unknown): string {
 .status-badge.unknown {
   color: var(--td-text-color-placeholder);
   background: var(--td-bg-color-container-hover);
-}
-
-.connection-test {
-  position: absolute;
-  right: 10px;
-  bottom: 6px;
 }
 
 .database-content-pane {
