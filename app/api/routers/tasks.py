@@ -38,7 +38,7 @@ async def get_global_task_status():
         return {
             "has_active": True,
             "task_id": task_id,
-            "stage": "processing",
+            "stage": active_tasks[task_id].get("stage", "processing"),
             "logs": active_tasks[task_id].get("logs", []),
         }
 
@@ -88,14 +88,24 @@ async def start_processing(task_id: str = Body(..., embed=True)):
         raise HTTPException(status_code=400, detail="工作目录不存在")
 
     logs: list[str] = []
+    current_stage = "processing"
 
     def log_callback(message: str) -> None:
         logs.append(message)
-        state.processing_tasks[task_id] = {"logs": logs.copy(), "status": "processing"}
+        _set_task_stage(task_id, current_stage, logs)
 
-    logger = ProcessLogger(log_file=work_dir / "log.txt", callback=log_callback)
+    def stage_callback(stage: str) -> None:
+        nonlocal current_stage
+        current_stage = stage
+        _set_task_stage(task_id, current_stage, logs)
+
+    logger = ProcessLogger(
+        log_file=work_dir / "log.txt",
+        callback=log_callback,
+        stage_callback=stage_callback,
+    )
     state.history_manager.update(task_id, status="processing")
-    state.processing_tasks[task_id] = {"logs": [], "status": "processing"}
+    state.processing_tasks[task_id] = {"logs": [], "status": "processing", "stage": current_stage}
     state.global_task_lock.update(
         {
             "locked": True,
@@ -116,7 +126,12 @@ async def get_processing_status(task_id: str = Body(..., embed=True)):
     if task_id in state.processing_tasks:
         task_info = state.processing_tasks[task_id]
         logs = task_info.get("logs") or state.history_manager.get_logs(task_id)
-        return {"task_id": task_id, "status": task_info["status"], "logs": logs}
+        return {
+            "task_id": task_id,
+            "status": task_info["status"],
+            "stage": task_info.get("stage"),
+            "logs": logs,
+        }
 
     record = state.history_manager.get(task_id)
     if not record:
@@ -125,6 +140,7 @@ async def get_processing_status(task_id: str = Body(..., embed=True)):
     return {
         "task_id": task_id,
         "status": record.status,
+        "stage": record.status,
         "logs": state.history_manager.get_logs(task_id),
         "elapsed_time": record.elapsed_time,
         "error": record.error,
@@ -138,6 +154,16 @@ def _task_finished(task_id: str) -> bool:
 
     task_info: dict[str, Any] | None = state.processing_tasks.get(task_id)
     return bool(task_info and task_info.get("status") in {"completed", "failed"})
+
+
+def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "processing") -> None:
+    state.processing_tasks[task_id] = {
+        "logs": logs.copy(),
+        "status": status,
+        "stage": stage,
+    }
+    if state.global_task_lock["task_id"] == task_id:
+        state.global_task_lock["stage"] = stage
 
 
 def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger) -> None:
@@ -155,12 +181,14 @@ def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger) -> None
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": status,
+            "stage": status,
         }
     except Exception as exc:
         state.history_manager.update(task_id, status="failed", error=str(exc))
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": "failed",
+            "stage": "failed",
         }
     finally:
         try:

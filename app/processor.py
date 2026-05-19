@@ -22,10 +22,16 @@ from app.database import DatabaseManager
 class ProcessLogger:
     """处理日志记录器"""
     
-    def __init__(self, log_file: Optional[Path] = None, callback: Optional[Callable[[str], None]] = None):
+    def __init__(
+        self,
+        log_file: Optional[Path] = None,
+        callback: Optional[Callable[[str], None]] = None,
+        stage_callback: Optional[Callable[[str], None]] = None,
+    ):
         self.logs: List[str] = []
         self.log_file = log_file
         self.callback = callback
+        self.stage_callback = stage_callback
         # 如果指定了日志文件，确保目录存在
         if self.log_file:
             self.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -62,6 +68,10 @@ class ProcessLogger:
     def success(self, message: str):
         self.log(message, "SUCCESS")
     
+    def set_stage(self, stage: str):
+        if self.stage_callback:
+            self.stage_callback(stage)
+
     def get_logs(self) -> List[str]:
         return self.logs.copy()
 
@@ -195,24 +205,30 @@ class DataProcessor:
         
         try:
             # 1. 解压 ZIP 文件
+            self.logger.set_stage("extracting")
             self._unzip_files()
             
             # 2. 处理 Excel 文件（并行）
+            self.logger.set_stage("converting")
             self._process_excel_files_parallel()
             
             # 3. 处理 CSV 文件并上传到数据库（高性能批量插入）
+            self.logger.set_stage("importing")
             self._process_csv_files()
             
             # 4. 执行 SQL 脚本
+            self.logger.set_stage("scripting")
             self._execute_sql_script()
             
             elapsed = round(time.time() - start_time, 2)
+            self.logger.set_stage("completed")
             self.logger.success(f"处理完成！总耗时: {elapsed} 秒")
             
             self.results["success"] = True
             self.results["elapsed_time"] = elapsed
             
         except Exception as e:
+            self.logger.set_stage("failed")
             self.logger.error(f"处理失败: {str(e)}")
             self.results["success"] = False
             self.results["error"] = str(e)

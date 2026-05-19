@@ -126,6 +126,7 @@
             <span class="process-status" :class="statusClass">{{ processStatusText }}</span>
           </div>
           <div class="card-header-right">
+            <n-checkbox v-model:checked="keepLatestLog" size="small">保持最新 Log</n-checkbox>
             <n-button size="small" secondary @click="checkActiveTask">
               <template #icon><n-icon><RefreshOutline /></n-icon></template>
               刷新
@@ -134,12 +135,12 @@
         </div>
         <div class="card-body">
           <n-alert v-if="activeTask?.has_active" type="info" :bordered="false" class="task-alert">
-            当前任务：{{ activeTask.task_id }} / {{ activeTask.stage || 'processing' }}
+            当前任务：{{ activeTask.task_id }} / {{ currentStageText }}
           </n-alert>
           <n-alert v-if="taskStatus?.error" type="error" :bordered="false" class="task-alert">
             {{ taskStatus.error }}
           </n-alert>
-          <div class="log-container">
+          <div ref="logContainer" class="log-container">
             <pre class="log-content">{{ logText }}</pre>
           </div>
         </div>
@@ -149,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useMessage } from 'naive-ui';
 import {
   CloudDownloadOutline,
@@ -196,7 +197,21 @@ const remoteStarting = ref(false);
 const isDragging = ref(false);
 const taskStatus = ref<TaskStatus | null>(null);
 const activeTask = ref<ActiveTask | null>(null);
+const keepLatestLog = ref(false);
+const logContainer = ref<HTMLElement | null>(null);
 let timer: number | undefined;
+
+const stageLabels: Record<string, string> = {
+  downloading: '远程下载中...',
+  uploading: '上传文件中...',
+  processing: '处理中...',
+  extracting: '解压数据中...',
+  converting: '转换 Excel 中...',
+  importing: '上传数据中...',
+  scripting: '运行脚本中...',
+  completed: '处理完成',
+  failed: '处理失败'
+};
 
 const logText = computed(() => taskStatus.value?.logs?.join('\n') || '等待任务开始');
 const processVisible = computed(() => Boolean(taskStatus.value || activeTask.value?.has_active));
@@ -214,12 +229,27 @@ const statusClass = computed(() => {
   if (taskStatus.value?.status === 'failed') return 'failed';
   return 'processing';
 });
+const currentStage = computed(() => taskStatus.value?.stage || activeTask.value?.stage || 'processing');
+const currentStageText = computed(() => stageText(currentStage.value));
 const processStatusText = computed(() => {
   if (taskStatus.value?.status === 'completed') return '处理完成';
   if (taskStatus.value?.status === 'failed') return '处理失败';
-  if (activeTask.value?.stage === 'downloading') return '远程下载中...';
-  if (activeTask.value?.stage === 'uploading') return '上传中...';
-  return '处理中...';
+  return currentStageText.value;
+});
+
+watch(
+  () => taskStatus.value?.logs?.length ?? 0,
+  () => {
+    if (keepLatestLog.value) {
+      void nextTick(scrollLogToBottom);
+    }
+  }
+);
+
+watch(keepLatestLog, checked => {
+  if (checked) {
+    void nextTick(scrollLogToBottom);
+  }
 });
 
 onMounted(() => {
@@ -422,7 +452,7 @@ async function uploadAndStart() {
     });
     message.success(`上传完成：${result.file_count ?? files.value.length} 个文件`);
     await apiPost('/api/process/start', { task_id: result.task_id });
-    taskStatus.value = { task_id: result.task_id, status: 'processing', logs: ['任务已提交，等待处理日志...'] };
+    taskStatus.value = { task_id: result.task_id, status: 'processing', stage: 'processing', logs: ['任务已提交，等待处理日志...'] };
     startPolling(result.task_id);
   } catch (error) {
     files.value.forEach(item => {
@@ -451,7 +481,12 @@ async function startRemoteProcessing() {
       stage: result.stage || 'downloading',
       started_at: new Date().toISOString()
     };
-    taskStatus.value = { task_id: result.task_id, status: 'processing', logs: ['远程下载任务已提交，等待处理日志...'] };
+    taskStatus.value = {
+      task_id: result.task_id,
+      status: 'processing',
+      stage: result.stage || 'downloading',
+      logs: ['远程下载任务已提交，等待处理日志...']
+    };
     startPolling(result.task_id);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '启动远程自动化任务失败');
@@ -495,6 +530,9 @@ function stopPolling() {
 async function poll(taskId: string) {
   try {
     taskStatus.value = await apiPost<TaskStatus>('/api/process/status', { task_id: taskId });
+    if (activeTask.value?.has_active && taskStatus.value.stage) {
+      activeTask.value = { ...activeTask.value, stage: taskStatus.value.stage };
+    }
     if (['completed', 'failed'].includes(taskStatus.value.status)) {
       stopPolling();
       await checkActiveTask();
@@ -502,6 +540,18 @@ async function poll(taskId: string) {
   } catch (error) {
     stopPolling();
     message.error(error instanceof Error ? error.message : '刷新任务状态失败');
+  }
+}
+
+function stageText(stage?: string | null): string {
+  if (!stage) return '处理中...';
+  return stageLabels[stage] || '处理中...';
+}
+
+function scrollLogToBottom() {
+  const container = logContainer.value;
+  if (container) {
+    container.scrollTop = container.scrollHeight;
   }
 }
 

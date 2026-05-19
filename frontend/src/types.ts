@@ -12,6 +12,7 @@ export interface ApiError {
 export interface TaskStatus {
   task_id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed' | string;
+  stage?: string | null;
   logs: string[];
   elapsed_time?: number;
   error?: string;

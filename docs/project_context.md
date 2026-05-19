@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：优化处理进度阶段显示和日志跟随
+
+- `ProcessLogger` 新增轻量阶段回调，`DataProcessor.process()` 会在远程下载后依次上报 `extracting`、`converting`、`importing`、`scripting`、`completed/failed` 阶段。
+- `/api/process/status` 和 `/api/task/status` 返回当前 `stage`，本地上传处理和远程下载处理都通过 `state.processing_tasks` 与全局任务锁同步阶段，前端轮询即可实时显示“远程下载中 / 解压数据中 / 上传数据中 / 运行脚本中”等状态。
+- `frontend/src/components/FileWorkflow.vue` 的处理进度卡片新增“保持最新 Log”勾选框，勾选后新日志到达会自动滚动到日志底部；当前任务提示不再显示原始阶段码，改为中文阶段文本。
+- 已执行 `.venv\Scripts\python.exe -m compileall app`、`uvx --offline ruff check .` 和 `npm run build`，均通过。
+
 ## 2026-05-19：清理后端冗余代码和未用依赖
 
 - `app/database.py` 移除未使用的 SQLAlchemy 连接池、`engine` 属性、`dispose()` 空释放路径和未引用的 `delete_rows()`；数据库访问统一保留现有 PyMySQL 上下文连接。

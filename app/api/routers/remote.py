@@ -38,15 +38,25 @@ async def start_remote_processing():
     work_dir.mkdir(parents=True, exist_ok=True)
 
     logs: list[str] = []
+    current_stage = "downloading"
 
     def log_callback(message: str) -> None:
         logs.append(message)
-        state.processing_tasks[task_id] = {"logs": logs.copy(), "status": "processing"}
+        _set_task_stage(task_id, current_stage, logs)
 
-    logger = ProcessLogger(log_file=work_dir / "log.txt", callback=log_callback)
+    def stage_callback(stage: str) -> None:
+        nonlocal current_stage
+        current_stage = stage
+        _set_task_stage(task_id, current_stage, logs)
+
+    logger = ProcessLogger(
+        log_file=work_dir / "log.txt",
+        callback=log_callback,
+        stage_callback=stage_callback,
+    )
     state.history_manager.create(work_dir, 0, record_id=task_id)
     state.history_manager.update(task_id, status="processing")
-    state.processing_tasks[task_id] = {"logs": [], "status": "processing"}
+    state.processing_tasks[task_id] = {"logs": [], "status": "processing", "stage": current_stage}
     state.global_task_lock.update(
         {
             "locked": True,
@@ -71,6 +81,16 @@ async def start_remote_processing():
     }
 
 
+def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "processing") -> None:
+    state.processing_tasks[task_id] = {
+        "logs": logs.copy(),
+        "status": status,
+        "stage": stage,
+    }
+    if state.global_task_lock["task_id"] == task_id:
+        state.global_task_lock["stage"] = stage
+
+
 def _run_remote_processing(
     task_id: str,
     work_dir: Path,
@@ -93,7 +113,7 @@ def _run_remote_processing(
             raise RuntimeError("远程目录中未下载到任何文件")
 
         state.history_manager.update(task_id, file_count=download_result.file_count)
-        state.global_task_lock["stage"] = "processing"
+        logger.set_stage("extracting")
 
         processor = DataProcessor(state.config, work_dir, logger)
         result = processor.process()
@@ -115,6 +135,7 @@ def _run_remote_processing(
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": status,
+            "stage": status,
         }
     except Exception as exc:
         logger.error(f"远程自动化任务失败: {exc}")
@@ -122,6 +143,7 @@ def _run_remote_processing(
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": "failed",
+            "stage": "failed",
         }
     finally:
         try:
