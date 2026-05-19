@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-19：修复数据管理导出下拉选择不触发弹窗
+
+- `frontend/src/AppShell.vue` 将页头下拉动作从模板事件表达式 `@select` 改为 `:on-select` 回调属性，确保 Naive UI 下拉菜单选择 CSV/XLSX 后会真正执行页面动作。
+- 修复数据管理页点击“导出”下拉项后 CSV/XLSX 表选择弹窗不显示的问题。
+- 已执行 `npm run build`，构建通过；构建只保留 Vite 原有大 chunk 提示。
+
 ## 2026-05-19：优化数据管理导出入口和弹窗宽度
 
 - `frontend/src/composables/pageHeader.ts` 和 `frontend/src/AppShell.vue` 为页面顶部动作支持 Naive UI 下拉菜单，按钮内显示下拉箭头。

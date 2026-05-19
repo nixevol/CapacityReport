@@ -47,7 +47,7 @@
               trigger="click"
               :options="actionDropdownOptions(action)"
               :disabled="actionDisabled(action)"
-              @select="runHeaderActionSelect(action)"
+              :on-select="runHeaderActionSelect(action)"
             >
               <n-button
                 size="small"
