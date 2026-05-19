@@ -113,7 +113,7 @@ export async function download(url: string, body: unknown, filename: string): Pr
     throw new Error(await readError(response));
   }
 
-  await saveBlobResponse(response, filename);
+  await saveBlobResponse(response, parseFilename(response.headers.get('content-disposition')) || filename);
 }
 
 export async function downloadGet(url: string, fallbackFilename: string): Promise<void> {

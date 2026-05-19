@@ -1,5 +1,13 @@
 # 项目上下文记录
 
+## 2026-05-19：调整数据管理导出交互并支持多表 XLSX
+
+- `frontend/src/components/DatabasePanel.vue` 将导出入口移到页面顶部，并放在“删除全部表”按钮左侧；内容区工具栏只保留刷新、清空、删除当前表。
+- 点击“导出 CSV”会弹出全部表单选弹窗，用户选择一张表后下载 CSV；点击“导出 XLSX”会弹出全部表多选弹窗，用户可选择多张表并下载同一个 XLSX。
+- `app/api/routers/database.py` 的 `/api/download` 支持 `table_names`，XLSX 会按表名分 sheet 写入同一工作簿，sheet 名会兼容 Excel 的非法字符和 31 字符限制；CSV 仍限制单表导出。
+- `frontend/src/api/client.ts` 的 POST 下载会优先使用后端 `Content-Disposition` 文件名，便于多表导出使用服务端生成的文件名。
+- 已执行 `.venv\Scripts\python.exe -m compileall app` 和 `npm run build`，均通过；构建只保留 Vite 原有大 chunk 提示。
+
 ## 2026-05-19：优化数据表导出临时文件清理
 
 - `app/api/routers/database.py` 的 `/api/download` 导出接口增加格式校验，只允许 `csv` 和 `xlsx`。

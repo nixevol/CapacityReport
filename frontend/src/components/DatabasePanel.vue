@@ -74,22 +74,6 @@
         </div>
         <n-space size="small" class="toolbar-actions">
           <n-button size="small" tertiary :loading="loadingData" @click="reloadTable">刷新</n-button>
-          <n-dropdown
-            trigger="click"
-            :options="downloadOptions"
-            :disabled="downloading"
-            @select="downloadTable"
-          >
-            <n-button size="small" tertiary :loading="downloading" :disabled="downloading">
-              <template #icon>
-                <n-icon><CloudDownloadOutline /></n-icon>
-              </template>
-              <span class="download-button-content">
-                <span>{{ downloadButtonText }}</span>
-                <n-icon class="download-caret"><ChevronDownOutline /></n-icon>
-              </span>
-            </n-button>
-          </n-dropdown>
           <n-button size="small" tertiary type="warning" @click="confirmTruncate">清空</n-button>
           <n-button size="small" tertiary type="error" @click="confirmDrop">删除</n-button>
         </n-space>
@@ -161,15 +145,72 @@
       </div>
     </section>
   </div>
+
+  <n-modal v-model:show="csvDialogVisible" preset="card" class="table-export-modal" title="导出 CSV">
+    <div class="export-dialog-body">
+      <p class="export-dialog-hint">选择要导出的数据表。</p>
+      <n-scrollbar class="export-table-options">
+        <n-radio-group v-model:value="selectedCsvTable" name="csv-export-table">
+          <n-space vertical size="small">
+            <n-radio v-for="table in tables" :key="table" :value="table">
+              {{ table }}
+            </n-radio>
+          </n-space>
+        </n-radio-group>
+      </n-scrollbar>
+    </div>
+    <template #footer>
+      <div class="export-dialog-footer">
+        <n-button size="small" @click="csvDialogVisible = false">取消</n-button>
+        <n-button
+          size="small"
+          type="primary"
+          :loading="downloadingFormat === 'csv'"
+          :disabled="!selectedCsvTable || downloading"
+          @click="downloadSelectedCsv"
+        >
+          导出 CSV
+        </n-button>
+      </div>
+    </template>
+  </n-modal>
+
+  <n-modal v-model:show="xlsxDialogVisible" preset="card" class="table-export-modal" title="导出 XLSX">
+    <div class="export-dialog-body">
+      <p class="export-dialog-hint">选择一个或多个数据表，导出后会合并到同一个 XLSX 文件中。</p>
+      <n-scrollbar class="export-table-options">
+        <n-checkbox-group v-model:value="selectedXlsxTables">
+          <n-space vertical size="small">
+            <n-checkbox v-for="table in tables" :key="table" :value="table">
+              {{ table }}
+            </n-checkbox>
+          </n-space>
+        </n-checkbox-group>
+      </n-scrollbar>
+    </div>
+    <template #footer>
+      <div class="export-dialog-footer">
+        <n-button size="small" @click="xlsxDialogVisible = false">取消</n-button>
+        <n-button
+          size="small"
+          type="primary"
+          :loading="downloadingFormat === 'xlsx'"
+          :disabled="selectedXlsxTables.length === 0 || downloading"
+          @click="downloadSelectedXlsx"
+        >
+          导出 XLSX
+        </n-button>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
-import type { DataTableColumns, DropdownOption } from 'naive-ui';
+import type { DataTableColumns } from 'naive-ui';
 import {
-  ChevronDownOutline,
   ChevronForwardOutline,
   CloudDownloadOutline,
   RefreshOutline,
@@ -198,18 +239,18 @@ const loadingTables = ref(false);
 const loadingData = ref(false);
 const testing = ref(false);
 const downloadingFormat = ref<DownloadFormat | null>(null);
+const csvDialogVisible = ref(false);
+const xlsxDialogVisible = ref(false);
+const selectedCsvTable = ref('');
+const selectedXlsxTables = ref<string[]>([]);
 const columnSchemaExpanded = ref(false);
 let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 const downloading = computed(() => Boolean(downloadingFormat.value));
-const downloadButtonText = computed(() => (
-  downloadingFormat.value ? `导出 ${downloadingFormat.value.toUpperCase()}...` : '导出'
-));
-const downloadOptions: DropdownOption[] = [
-  { label: 'CSV', key: 'csv' },
-  { label: 'XLSX', key: 'xlsx' }
-];
+const csvExportButtonText = computed(() => (downloadingFormat.value === 'csv' ? '导出 CSV...' : '导出 CSV'));
+const xlsxExportButtonText = computed(() => (downloadingFormat.value === 'xlsx' ? '导出 XLSX...' : '导出 XLSX'));
+const exportDisabled = computed(() => loadingTables.value || tables.value.length === 0 || downloading.value);
 const loadDataInfileText = computed(() => {
   if (testing.value || !databaseInfo.value) return '检测中';
   return databaseInfo.value.load_data_infile ? '可用' : '未启用';
@@ -239,6 +280,26 @@ const columns = computed<DataTableColumns<RowData>>(() => {
 onMounted(() => {
   setPageHeader({
     actions: [
+      {
+        key: 'export-csv',
+        label: csvExportButtonText,
+        icon: CloudDownloadOutline,
+        type: 'primary',
+        variant: 'solid',
+        loading: computed(() => downloadingFormat.value === 'csv'),
+        disabled: exportDisabled,
+        onClick: showCsvExportDialog
+      },
+      {
+        key: 'export-xlsx',
+        label: xlsxExportButtonText,
+        icon: CloudDownloadOutline,
+        type: 'primary',
+        variant: 'outline',
+        loading: computed(() => downloadingFormat.value === 'xlsx'),
+        disabled: exportDisabled,
+        onClick: showXlsxExportDialog
+      },
       {
         key: 'drop-all-tables',
         label: '删除全部表',
@@ -373,13 +434,63 @@ function changePageSize(value: number) {
   void loadTableData();
 }
 
-async function downloadTable(format: DownloadFormat) {
-  if (!selectedTable.value) return;
+async function showCsvExportDialog() {
+  await loadTables();
+  if (tables.value.length === 0) {
+    message.warning('暂无可导出的数据表');
+    return;
+  }
+
+  selectedCsvTable.value = selectedTable.value && tables.value.includes(selectedTable.value)
+    ? selectedTable.value
+    : tables.value[0];
+  csvDialogVisible.value = true;
+}
+
+async function showXlsxExportDialog() {
+  await loadTables();
+  if (tables.value.length === 0) {
+    message.warning('暂无可导出的数据表');
+    return;
+  }
+
+  selectedXlsxTables.value = selectedTable.value && tables.value.includes(selectedTable.value)
+    ? [selectedTable.value]
+    : [];
+  xlsxDialogVisible.value = true;
+}
+
+async function downloadSelectedCsv() {
+  if (!selectedCsvTable.value) return;
   if (downloadingFormat.value) return;
 
-  downloadingFormat.value = format;
+  downloadingFormat.value = 'csv';
   try {
-    await download('/api/download', { table_name: selectedTable.value, format }, `${selectedTable.value}.${format}`);
+    await download(
+      '/api/download',
+      { table_name: selectedCsvTable.value, format: 'csv' },
+      `${selectedCsvTable.value}.csv`
+    );
+    csvDialogVisible.value = false;
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '导出失败');
+  } finally {
+    downloadingFormat.value = null;
+  }
+}
+
+async function downloadSelectedXlsx() {
+  if (selectedXlsxTables.value.length === 0) return;
+  if (downloadingFormat.value) return;
+
+  downloadingFormat.value = 'xlsx';
+  try {
+    await download(
+      '/api/download',
+      { table_names: selectedXlsxTables.value, format: 'xlsx' },
+      selectedXlsxTables.value.length === 1 ? `${selectedXlsxTables.value[0]}.xlsx` : 'tables.xlsx'
+    );
+    xlsxDialogVisible.value = false;
   } catch (error) {
     message.error(error instanceof Error ? error.message : '导出失败');
   } finally {
@@ -709,16 +820,6 @@ function formatCell(value: unknown): string {
   flex: 0 0 auto;
 }
 
-.download-button-content {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.download-caret {
-  font-size: 13px;
-}
-
 .database-data-body {
   display: flex;
   flex: 1;
@@ -831,6 +932,33 @@ function formatCell(value: unknown): string {
   flex: 0 0 auto;
   color: var(--td-text-color-secondary);
   font-size: 13px;
+}
+
+.table-export-modal {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.export-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-dialog-hint {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+}
+
+.export-table-options {
+  max-height: min(420px, 52vh);
+  padding: 6px 2px;
+}
+
+.export-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 @media (max-width: 1180px) {
