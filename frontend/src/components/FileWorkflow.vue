@@ -37,7 +37,7 @@
               </n-button>
             </span>
           </template>
-          从已配置的 FTP/SFTP 目录递归下载数据，然后自动开始处理。
+          从已配置的 FTP/SFTP 目录下载数据自动处理。
         </n-tooltip>
       </div>
       <input
