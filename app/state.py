@@ -23,3 +23,9 @@ def reset_task_lock() -> None:
     global_task_lock["stage"] = None
     global_task_lock["started_at"] = None
 
+
+def apply_history_retention() -> int:
+    retention = config.history_retention.normalized()
+    if not retention.enabled:
+        return 0
+    return history_manager.prune_finished(retention.keep_count)

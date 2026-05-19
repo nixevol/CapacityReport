@@ -163,5 +163,8 @@ def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger) -> None
             "status": "failed",
         }
     finally:
+        try:
+            state.apply_history_retention()
+        except Exception as exc:
+            print(f"自动清理处理历史失败: {exc}")
         state.reset_task_lock()
-

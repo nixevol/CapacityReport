@@ -124,6 +124,10 @@ def _run_remote_processing(
             "status": "failed",
         }
     finally:
+        try:
+            state.apply_history_retention()
+        except Exception as exc:
+            print(f"自动清理处理历史失败: {exc}")
         state.reset_task_lock()
 
 

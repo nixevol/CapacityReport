@@ -1,12 +1,13 @@
 import json
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from app import state
-from app.config import CONFIG_FILE, RemoteDataConfig
+from app.config import HistoryRetentionConfig, RemoteDataConfig
 
 
 router = APIRouter(tags=["config"])
@@ -46,6 +47,13 @@ async def update_remote_config(config: dict[str, Any] = Body(...)):
     return {"success": True, "message": "远程数据配置已更新", "update": state.config.update}
 
 
+@router.post("/api/config/history-retention")
+async def update_history_retention(config: dict[str, Any] = Body(...)):
+    state.config.history_retention = HistoryRetentionConfig.from_dict(config)
+    state.config.save()
+    return {"success": True, "message": "处理历史保留配置已更新", "update": state.config.update}
+
+
 @router.post("/api/config/sheet-filter")
 async def update_sheet_filter(filters: list[str] = Body(...)):
     state.config.sheet_filter = filters
@@ -62,12 +70,14 @@ async def update_extract_fields(fields: list[dict[str, Any]] = Body(...)):
 
 @router.get("/api/config/download")
 async def download_config():
-    if not CONFIG_FILE.exists():
-        raise HTTPException(status_code=404, detail="配置文件不存在")
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"Configure_{timestamp}.json"
-    return FileResponse(path=str(CONFIG_FILE), filename=filename, media_type="application/json")
+    content = json.dumps(state.config.to_file_dict(), ensure_ascii=False, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @router.post("/api/config/upload")
@@ -107,3 +117,7 @@ def _apply_config_data(data: dict[str, Any]) -> None:
     remote_data = data.get("RemoteData")
     if isinstance(remote_data, dict):
         state.config.remote_data = RemoteDataConfig.from_dict(remote_data)
+
+    history_retention = data.get("HistoryRetention")
+    if isinstance(history_retention, dict):
+        state.config.history_retention = HistoryRetentionConfig.from_dict(history_retention)

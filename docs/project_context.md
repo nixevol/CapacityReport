@@ -1,5 +1,14 @@
 # 项目上下文记录
 
+## 2026-05-19：新增处理历史保留配置并完善配置导入导出
+
+- `app/config.py` 新增 `HistoryRetention` 配置块，包含 `enabled` 和 `keep_count`；`keep_count=0` 表示不保留已结束处理历史，关闭开关时不自动删除历史。
+- `app/history.py` 新增按保留数量清理已结束历史的能力，只清理 `completed/failed` 记录及其 `cache/<task_id>` 工作目录，不删除 `pending/processing` 记录。
+- `app/api/routers/tasks.py` 和 `app/api/routers/remote.py` 在本地上传处理、远程下载并处理任务结束后自动应用历史保留规则。
+- `app/api/routers/config.py` 新增 `/api/config/history-retention` 保存接口；配置下载改为从当前内存配置生成完整 JSON，确保导出的配置始终包含 `RemoteData` 和 `HistoryRetention`；配置上传也会恢复这两个配置块。
+- `frontend/src/components/SettingsPanel.vue` 在连接配置页新增“处理历史保留”卡片，可设置自动清理开关和保留最近次数。
+- 已执行 `.venv\Scripts\python.exe -m compileall app`、临时目录历史清理验证、配置导入导出验证和 `npm run build`；已用本机 Chrome DevTools 验证设置页新增卡片可见。
+
 ## 2026-05-19：调整上传页远程下载入口
 
 - `frontend/src/components/FileWorkflow.vue` 将“远程下载并处理”按钮移动到拖拽上传框内部，删除独立的“远程自动化”卡片，上传页首屏只保留一个主要操作区域。

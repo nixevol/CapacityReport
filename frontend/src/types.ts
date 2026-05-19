@@ -58,6 +58,7 @@ export interface AppConfig {
     dbname: string;
   };
   remote_data: RemoteDataConfig;
+  history_retention: HistoryRetentionConfig;
   sheet_filter: string[];
   extract_fields: Array<Record<string, unknown>>;
 }
@@ -73,6 +74,11 @@ export interface RemoteDataConfig {
   passive: boolean;
   timeout: number;
   auto_delete_source: boolean;
+}
+
+export interface HistoryRetentionConfig {
+  enabled: boolean;
+  keep_count: number;
 }
 
 export interface TableInfo {

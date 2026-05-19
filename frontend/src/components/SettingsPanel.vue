@@ -124,6 +124,38 @@
                 </n-space>
               </template>
             </n-card>
+
+            <n-card title="处理历史保留" size="small" class="work-card">
+              <n-form label-placement="top">
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="6">
+                    <n-form-item label="自动清理处理历史">
+                      <n-switch v-model:value="historyRetentionForm.enabled" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="6">
+                    <n-form-item label="保留最近次数">
+                      <n-input-number
+                        v-model:value="historyRetentionForm.keep_count"
+                        class="full-width"
+                        :min="0"
+                        :precision="0"
+                        :disabled="!historyRetentionForm.enabled"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <p class="form-hint">关闭后不自动删除处理历史；启用后会在任务结束时自动清理，设置为 0 表示不保留历史，否则只保留最近指定次数的处理历史。</p>
+              </n-form>
+
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="savingHistoryRetention" @click="saveHistoryRetention">
+                    保存配置
+                  </n-button>
+                </n-space>
+              </template>
+            </n-card>
           </div>
         </n-tab-pane>
 
@@ -282,7 +314,7 @@ import { useMessage, type SelectOption } from 'naive-ui';
 import { CloseOutline, CloudDownloadOutline, CloudUploadOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
-import type { ApiMessage, AppConfig, RemoteDataConfig } from '../types';
+import type { ApiMessage, AppConfig, HistoryRetentionConfig, RemoteDataConfig } from '../types';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 interface ExtractFieldConfig {
@@ -300,6 +332,7 @@ const testingDb = ref(false);
 const testingRemote = ref(false);
 const savingMysql = ref(false);
 const savingRemote = ref(false);
+const savingHistoryRetention = ref(false);
 const savingSheetFilter = ref(false);
 const savingExtractFields = ref(false);
 const changingPassword = ref(false);
@@ -328,6 +361,11 @@ const remoteForm = reactive<RemoteDataConfig>({
   passive: true,
   timeout: 30,
   auto_delete_source: false
+});
+
+const historyRetentionForm = reactive<HistoryRetentionConfig>({
+  enabled: false,
+  keep_count: 20
 });
 
 const passwordForm = reactive({
@@ -384,6 +422,7 @@ async function loadConfig() {
     mysqlForm.passwd = config.mysql.passwd || '';
     mysqlForm.dbname = config.mysql.dbname;
     Object.assign(remoteForm, normalizeRemoteConfig(config.remote_data));
+    Object.assign(historyRetentionForm, normalizeHistoryRetentionConfig(config.history_retention));
     sheetFilters.value = [...config.sheet_filter];
     extractFields.value = normalizeExtractFields(config.extract_fields);
     resetExtractInputs();
@@ -485,6 +524,22 @@ async function testDatabase() {
     message.error(error instanceof Error ? error.message : '数据库连接测试失败');
   } finally {
     testingDb.value = false;
+  }
+}
+
+async function saveHistoryRetention() {
+  savingHistoryRetention.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/history-retention', {
+      enabled: historyRetentionForm.enabled,
+      keep_count: Math.max(Number(historyRetentionForm.keep_count) || 0, 0)
+    });
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || '处理历史保留配置已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存处理历史保留配置失败');
+  } finally {
+    savingHistoryRetention.value = false;
   }
 }
 
@@ -640,6 +695,13 @@ function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteData
     passive: config?.passive ?? true,
     timeout: config?.timeout || 30,
     auto_delete_source: Boolean(config?.auto_delete_source)
+  };
+}
+
+function normalizeHistoryRetentionConfig(config: HistoryRetentionConfig | undefined): HistoryRetentionConfig {
+  return {
+    enabled: Boolean(config?.enabled),
+    keep_count: Math.max(Number(config?.keep_count ?? 20) || 0, 0)
   };
 }
 

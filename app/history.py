@@ -55,6 +55,23 @@ class HistoryManager:
     def _save(self, records: List[Dict[str, Any]]):
         """保存历史记录"""
         HISTORY_FILE.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    def _delete_work_dir(self, work_dir: str | None) -> None:
+        if not work_dir:
+            return
+
+        try:
+            work_path = Path(work_dir).resolve()
+            cache_path = CACHE_DIR.resolve()
+
+            if work_path.exists() and work_path.is_dir():
+                try:
+                    work_path.relative_to(cache_path)
+                    shutil.rmtree(work_path)
+                except ValueError:
+                    print(f"警告: 尝试删除cache目录外的文件: {work_dir}")
+        except Exception as e:
+            print(f"删除文件目录失败: {work_dir}, 错误: {e}")
     
     def create(self, work_dir: Path, file_count: int, record_id: Optional[str] = None) -> HistoryRecord:
         """创建新的历史记录"""
@@ -162,28 +179,39 @@ class HistoryManager:
         if len(new_records) < len(records):
             self._save(new_records)
             
-            # 删除对应的文件目录（安全检查：确保路径在cache目录内）
-            if work_dir:
-                try:
-                    work_path = Path(work_dir).resolve()
-                    cache_path = CACHE_DIR.resolve()
-                    
-                    # 安全检查：确保要删除的目录在cache目录内
-                    if work_path.exists() and work_path.is_dir():
-                        # 检查路径是否在cache目录内
-                        try:
-                            work_path.relative_to(cache_path)
-                            # 路径安全，可以删除
-                            shutil.rmtree(work_path)
-                        except ValueError:
-                            # 路径不在cache目录内，跳过删除（安全保护）
-                            print(f"警告: 尝试删除cache目录外的文件: {work_dir}")
-                except Exception as e:
-                    # 记录错误但不影响删除历史记录的操作
-                    print(f"删除文件目录失败: {work_dir}, 错误: {e}")
+            self._delete_work_dir(work_dir)
             
             return True
         return False
+
+    def prune_finished(self, keep_count: int) -> int:
+        """按保留数量清理已结束的处理历史，处理中和等待中的记录不会被删除"""
+        keep_count = max(int(keep_count), 0)
+        records = self._load()
+        kept_finished = 0
+        pruned: List[Dict[str, Any]] = []
+        remaining: List[Dict[str, Any]] = []
+
+        for rec in records:
+            status = rec.get("status")
+            if status not in {"completed", "failed"}:
+                remaining.append(rec)
+                continue
+
+            if kept_finished < keep_count:
+                remaining.append(rec)
+                kept_finished += 1
+            else:
+                pruned.append(rec)
+
+        if not pruned:
+            return 0
+
+        self._save(remaining)
+        for rec in pruned:
+            self._delete_work_dir(rec.get("work_dir"))
+
+        return len(pruned)
     
     def clear(self) -> int:
         """清空所有历史记录，同时清空cache目录（保留history.json）"""
