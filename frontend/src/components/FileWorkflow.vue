@@ -118,7 +118,7 @@
       </div>
     </div>
 
-    <div v-if="processVisible" class="process-section">
+    <div v-if="processVisible" class="process-section" :class="{ finished: taskFinished }">
       <div class="upload-process-card">
         <div class="card-header">
           <div class="card-header-left">
@@ -220,6 +220,9 @@ const taskInProgress = computed(() => {
     return true;
   }
   return taskStatus.value ? !['completed', 'failed'].includes(taskStatus.value.status) : false;
+});
+const taskFinished = computed(() => {
+  return taskStatus.value ? ['completed', 'failed'].includes(taskStatus.value.status) : false;
 });
 const showUploadProgress = computed(() => working.value || uploadProgress.value > 0);
 const uploadedCount = computed(() => files.value.filter(item => item.status === 'uploaded').length);

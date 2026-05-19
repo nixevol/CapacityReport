@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：调整数值异常值归零和完成后日志高度
+
+- `DataProcessor` 数值字段清洗策略从异常值写入 `NULL` 改为写入 `0`：空串、`-`、`--`、长短横线、`NA/N/A/NULL/NONE/NAN/\N` 以及其它无法转数值的文本都会归零，正常 `0` 不受影响。
+- 数值格式继续清理千分位逗号、全角逗号、半角/全角百分号和空白；例如 `12,345.123` 会导入为 `12345.123`，`95%`/`95％` 会导入为 `0.95`。
+- `frontend/src/components/FileWorkflow.vue` 在任务完成或失败后给处理进度区增加 `finished` 状态，`frontend/src/styles.css` 让完成后的日志框使用自适应最大高度，避免上传区恢复显示后日志仍按运行中高度撑开页面。
+- 已执行数值转换样例验证、`.venv\Scripts\python.exe -m compileall app`、`uvx --offline ruff check .` 和 `npm run build`，均通过。
+
 ## 2026-05-19：修复 CSV 导入阶段数值截断错误
 
 - `DataProcessor` 仍会根据 `ReportScript.sql` 的 `MODIFY COLUMN` 提前把业务数值字段建成 `INT/FLOAT`，但数值清洗改为返回真正的 Python `None/int/float`，避免 pandas `<NA>` 或异常文本被 PyMySQL 当作字符串写入数值列。

@@ -906,6 +906,12 @@ select {
   border-radius: var(--td-radius-default);
 }
 
+.process-section.finished .log-container {
+  height: auto;
+  min-height: 180px;
+  max-height: clamp(220px, calc(100vh - 620px), 460px);
+}
+
 .log-content {
   margin: 0;
   color: var(--td-text-color-secondary);

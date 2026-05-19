@@ -105,7 +105,7 @@ class DataProcessor:
         "numeric": "float",
     }
     MYSQL_NUMERIC_PATTERN = r"^-?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))([eE][+-]?[0-9]+)?$"
-    NUMERIC_NULL_TEXTS = {"", "-", "--", "—", "–", "NA", "N/A", "NULL", "NONE", "NAN", "\\N"}
+    NUMERIC_ZERO_TEXTS = {"", "-", "--", "—", "–", "NA", "N/A", "NULL", "NONE", "NAN", "\\N"}
     
     def __init__(self, config: AppConfig, work_dir: Path, logger: ProcessLogger):
         self.config = config
@@ -651,7 +651,7 @@ class DataProcessor:
             numeric = self._numeric_series(series)
             rounded = numeric.round()
             return pd.Series(
-                [None if pd.isna(value) else int(value) for value in rounded],
+                [int(value) for value in rounded],
                 index=series.index,
                 dtype=object,
             )
@@ -663,7 +663,7 @@ class DataProcessor:
         try:
             numeric = self._numeric_series(series)
             return pd.Series(
-                [None if pd.isna(value) else float(value) for value in numeric],
+                [float(value) for value in numeric],
                 index=series.index,
                 dtype=object,
             )
@@ -674,8 +674,8 @@ class DataProcessor:
         text = series.astype("string")
         has_percent = text.str.contains(r"[%％]", regex=True, na=False)
         cleaned = self._clean_numeric_text(text)
-        empty_mask = cleaned.isna() | cleaned.str.upper().isin(self.NUMERIC_NULL_TEXTS)
-        numeric = pd.to_numeric(cleaned.mask(empty_mask, pd.NA), errors="coerce")
+        zero_mask = cleaned.isna() | cleaned.str.upper().isin(self.NUMERIC_ZERO_TEXTS)
+        numeric = pd.to_numeric(cleaned.mask(zero_mask, "0"), errors="coerce").fillna(0)
         numeric[has_percent & numeric.notna()] = numeric[has_percent & numeric.notna()] / 100
         return numeric
 
