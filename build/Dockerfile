@@ -35,7 +35,7 @@ COPY --from=frontend-build /frontend/dist /app/frontend/dist
 
 RUN chmod +x /app/start.sh 2>/dev/null || true
 
-EXPOSE 9081 9082
+EXPOSE 9081
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:9081/health || exit 1

@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：移除旧版 HTML 前端和双端口托管
+
+- 删除 `frontend_old/` 旧版 HTML/CSS/JS 前端及其本地 Monaco 资源，项目只保留 Vue 3 新前端。
+- `app/main.py` 移除旧版前端托管、`/old` 路由、`9082` 端口和双 socket 分流逻辑，运行时只监听 `9081` 并托管 `frontend/dist`。
+- `run.bat`、`build/Dockerfile`、`build/docker-compose.yml`、`build/build.py`、`build/README.md` 和 `README.md` 同步移除旧版端口说明及 `19082 -> 9082` 映射。
+- 已执行 `.venv\Scripts\python.exe -m compileall app build`，旧版引用扫描未发现剩余可执行入口。
+
 ## 2026-05-19：修复数据管理导出下拉选择不触发弹窗
 
 - `frontend/src/AppShell.vue` 将页头下拉动作从模板事件表达式 `@select` 改为 `:on-select` 回调属性，确保 Naive UI 下拉菜单选择 CSV/XLSX 后会真正执行页面动作。
