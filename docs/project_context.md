@@ -3,6 +3,7 @@
 ## 2026-05-19：压缩系统设置页布局高度
 
 - `frontend/src/styles.css` 调整系统设置页为固定高度布局，外层 `settings-workspace` 减小 padding 并隐藏溢出，避免主内容区出现整页滚动条。
+- 连接配置页 `.settings-section-grid` 作为 tab 内部滚动容器，浏览器高度变小时只滚动连接配置内容，不裁切远程数据源表单。
 - 字段映射配置卡片在规则映射页中占满可用高度，卡片内容区使用 flex 固定 header/footer，字段列表通过内部纵向滚动条浏览，避免主页面滚动或内容溢出。
 - Naive UI 当前卡片内容区 DOM class 为 `.n-card-content`，样式同时兼容 `.n-card__content`；字段映射项必须 `flex: 0 0 auto`，否则列表项会被 flex 压缩而无法形成真实滚动高度。
 
