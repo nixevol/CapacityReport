@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-19：修复规则映射窄宽度滚动
+
+- `frontend/src/styles.css` 将系统设置的规则映射区域改为 tab 内部滚动容器，避免宽度或高度不足时被 `overflow: hidden` 裁切导致 `Sheet 过滤规则` 卡片不可达。
+- 浏览器宽度不足触发单列布局时，规则映射区按 `Sheet 过滤规则` 在上、`字段映射配置` 在下排列，字段映射卡片限制高度并继续使用内部字段列表滚动。
+- 已执行 `npm run build`；已通过本机 Chrome DevTools 以约 1074px 视口验证 `/settings` 规则映射页：Sheet 卡片可见、容器可纵向滚动、文档没有横向溢出。
+
 ## 2026-05-19：移除数据管理表格重复横向滚动条
 
 - `frontend/src/components/DatabasePanel.vue` 移除了上一版额外添加的 `.database-horizontal-scrollbar` 外置滚动条和同步滚动逻辑，避免与 Naive UI DataTable 自带横向滚动条同时显示。

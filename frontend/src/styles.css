@@ -1267,7 +1267,29 @@ select {
   align-items: stretch;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  padding-right: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--td-scrollbar-color) transparent;
+  scrollbar-width: thin;
+}
+
+.settings-rules-grid::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.settings-rules-grid::-webkit-scrollbar-thumb {
+  background: var(--td-scrollbar-color);
+  border-radius: 8px;
+}
+
+.settings-rules-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-rules-grid > .work-card {
+  min-width: 0;
 }
 
 .settings-security-panel {
@@ -1625,12 +1647,19 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .settings-rules-grid {
+    grid-template-rows: auto minmax(520px, 1fr);
+    align-items: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
   .settings-tabs .n-tab-pane {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .field-mapping-card {
-    height: 100%;
+    height: min(760px, calc(100vh - 260px));
     min-height: 520px;
   }
 }
