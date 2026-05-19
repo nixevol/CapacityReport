@@ -2,13 +2,8 @@
 数据库连接与操作模块 - 性能优化版
 """
 import pymysql
-from urllib.parse import quote
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
-
-import sqlalchemy
-from sqlalchemy import create_engine
-from sqlalchemy.pool import QueuePool
 
 from app.config import AppConfig
 
@@ -18,33 +13,6 @@ class DatabaseManager:
     
     def __init__(self, config: AppConfig):
         self.config = config
-        self._engine: Optional[sqlalchemy.Engine] = None
-    
-    @property
-    def engine(self) -> sqlalchemy.Engine:
-        """获取 SQLAlchemy 引擎（带连接池）- 优化配置"""
-        if self._engine is None:
-            mysql = self.config.mysql
-            self._engine = create_engine(
-                f'mysql+pymysql://'
-                f'{quote(mysql.user)}:'
-                f'{quote(mysql.passwd)}@'
-                f'{quote(mysql.host)}:'
-                f'{mysql.port}/'
-                f'{quote(mysql.dbname)}?charset=utf8mb4',
-                poolclass=QueuePool,
-                pool_size=10,           # 增大连接池
-                max_overflow=20,        # 增大溢出连接
-                pool_pre_ping=True,
-                pool_recycle=3600,
-                echo=False,
-                # 性能优化参数
-                connect_args={
-                    'local_infile': True,   # 允许 LOAD DATA LOCAL
-                    'autocommit': False,
-                }
-            )
-        return self._engine
     
     @contextmanager
     def get_connection(self):
@@ -230,15 +198,6 @@ class DatabaseManager:
                     "total_pages": (total + page_size - 1) // page_size
                 }
     
-    def delete_rows(self, table_name: str, condition: str, params: List[Any]) -> int:
-        """删除符合条件的行"""
-        with self.get_connection() as conn:
-            with conn.cursor() as cursor:
-                sql = f"DELETE FROM `{table_name}` WHERE {condition}"
-                cursor.execute(sql, params)
-                conn.commit()
-                return cursor.rowcount
-    
     def truncate_table(self, table_name: str) -> bool:
         """清空表"""
         with self.get_connection() as conn:
@@ -272,7 +231,7 @@ class DatabaseManager:
                     try:
                         cursor.execute(f"DROP TABLE IF EXISTS `{table}`")
                         dropped_tables.append(table)
-                    except Exception as e:
+                    except Exception:
                         # 记录错误但继续删除其他表
                         pass
                 
@@ -434,9 +393,3 @@ class DatabaseManager:
             with conn.cursor() as cursor:
                 cursor.execute(sql)
                 conn.commit()
-    
-    def dispose(self):
-        """释放连接池"""
-        if self._engine:
-            self._engine.dispose()
-            self._engine = None

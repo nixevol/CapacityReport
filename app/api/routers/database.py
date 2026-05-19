@@ -56,11 +56,8 @@ def _dataframe_from_table(db: DatabaseManager, table_name: str) -> pd.DataFrame:
 @router.post("/api/database/test")
 async def test_database():
     db = DatabaseManager(state.config)
-    try:
-        success, message = db.test_connection()
-        return {"success": success, "message": message}
-    finally:
-        db.dispose()
+    success, message = db.test_connection()
+    return {"success": success, "message": message}
 
 
 @router.get("/api/database/info")
@@ -70,8 +67,6 @@ async def get_database_info():
         return {"success": True, **db.get_server_info()}
     except Exception as exc:
         return {"success": False, "error": str(exc)}
-    finally:
-        db.dispose()
 
 
 @router.get("/api/database/tables")
@@ -82,8 +77,6 @@ async def get_tables():
         return {"tables": db.get_tables()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/table/info")
@@ -93,8 +86,6 @@ async def get_table_info(table_name: str = Body(..., embed=True)):
         return db.get_table_info(table_name)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/table/data")
@@ -110,8 +101,6 @@ async def query_table_data(
         return db.query_table(table_name, page, page_size, order_by=order_by, order_dir=order_dir)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/table/query")
@@ -135,8 +124,6 @@ async def query_table_with_filter(
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/table/truncate")
@@ -147,8 +134,6 @@ async def truncate_table(table_name: str = Body(..., embed=True)):
         return {"success": True, "message": f"表 {table_name} 已清空"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/table/drop")
@@ -159,8 +144,6 @@ async def drop_table(table_name: str = Body(..., embed=True)):
         return {"success": True, "message": f"表 {table_name} 已删除"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/table/drop-all")
@@ -176,8 +159,6 @@ async def drop_all_tables():
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/database/execute")
@@ -192,8 +173,6 @@ async def execute_sql(sql: str = Body(..., embed=True)):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
 
 @router.post("/api/download")
@@ -226,8 +205,6 @@ async def download_table(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        db.dispose()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename_prefix = requested_tables[0] if len(requested_tables) == 1 else "tables"

@@ -6,7 +6,7 @@ CapacityReport 用于每周导入 Excel/CSV 数据，按 `Configure.json` 与 `R
 
 - 后端：FastAPI + Uvicorn + Supervisor
 - 前端：Vue 3 + TypeScript + Vite + Naive UI
-- 数据库：MySQL 8.0+，通过 PyMySQL + SQLAlchemy 访问
+- 数据库：MySQL 8.0+，通过 PyMySQL 访问
 - 数据处理：Pandas + OpenPyXL
 - 部署：Docker + Docker Compose
 

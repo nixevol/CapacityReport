@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import json
 import time
-from pathlib import Path
 from typing import Optional
 
 from app.config import BASE_DIR
@@ -81,4 +80,3 @@ def _sign(header: str, payload: str) -> str:
         hashlib.sha256,
     ).digest()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-

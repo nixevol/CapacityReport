@@ -19,15 +19,12 @@ async def health_check():
 
     try:
         db_manager = DatabaseManager(state.config)
-        try:
-            server_info = db_manager.get_server_info()
-            checks["database"] = {
-                "status": "ok",
-                "version": server_info.get("version", "unknown"),
-                "load_data_infile": server_info.get("load_data_infile", False),
-            }
-        finally:
-            db_manager.dispose()
+        server_info = db_manager.get_server_info()
+        checks["database"] = {
+            "status": "ok",
+            "version": server_info.get("version", "unknown"),
+            "load_data_infile": server_info.get("load_data_infile", False),
+        }
     except Exception as exc:
         checks["database"] = {"status": "error", "message": str(exc)}
 
@@ -39,4 +36,3 @@ async def health_check():
         "uptime_pid": os.getpid(),
         "checks": checks,
     }
-

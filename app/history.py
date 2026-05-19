@@ -49,7 +49,7 @@ class HistoryManager:
         """加载历史记录"""
         try:
             return json.loads(HISTORY_FILE.read_text(encoding='utf-8'))
-        except:
+        except (OSError, json.JSONDecodeError):
             return []
     
     def _save(self, records: List[Dict[str, Any]]):

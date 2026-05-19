@@ -8,10 +8,12 @@ CapacityReport 统一构建脚本
 import os
 import sys
 import json
+import platform
 import shutil
 import subprocess
 import re
 import tarfile
+import traceback
 from pathlib import Path
 
 # ============================================================================
@@ -37,9 +39,7 @@ MYSQL_PORT = 3306
 
 # 应用端口映射
 APP_PORT_HOST = 19081
-APP_PORT_CONTAINER = 9081
 MYSQL_PORT_HOST = 13306
-MYSQL_PORT_CONTAINER = 3306
 
 # ============================================================================
 # 脚本目录配置
@@ -51,14 +51,12 @@ DIST_DIR = PROJECT_ROOT / "dist"
 BUILD_DIR = PROJECT_ROOT / "build"
 TEMP_BUILD_DIR = BUILD_DIR / "temp"
 
-# 颜色输出（Windows 支持）
-import platform
 if platform.system() == 'Windows':
     try:
         import ctypes
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-    except:
+    except OSError:
         pass
 
 class Colors:
@@ -95,7 +93,7 @@ def run_cmd(cmd, check=True, capture_output=False):
             text=True
         )
         return result
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         if check:
             print_error(f"命令执行失败: {' '.join(cmd)}")
             sys.exit(1)
@@ -198,7 +196,7 @@ def image_exists(image_name):
             check=True
         )
         return image_name in result.stdout
-    except:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
 def format_size(size_bytes):
@@ -668,14 +666,10 @@ def build_full_package():
         sys.exit(1)
     
     # 检查 Docker Compose
-    docker_compose_cmd = None
     try:
         subprocess.run(["docker", "compose", "version"], capture_output=True, check=True)
-        docker_compose_cmd = "docker compose"
-    except:
-        if check_command("docker-compose"):
-            docker_compose_cmd = "docker-compose"
-        else:
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        if not check_command("docker-compose"):
             print_error("未检测到 Docker Compose")
             sys.exit(1)
     
@@ -689,14 +683,14 @@ def build_full_package():
     if not image_exists(python_image):
         print_info(f"Python 镜像不存在，正在拉取: {python_image}")
         run_cmd(["docker", "pull", python_image])
-        print_info(f"Python 镜像拉取完成")
+        print_info("Python 镜像拉取完成")
     else:
         print_info(f"Python 镜像已存在: {python_image}")
     
     if not image_exists(mysql_image):
         print_info(f"MySQL 镜像不存在，正在拉取: {mysql_image}")
         run_cmd(["docker", "pull", mysql_image])
-        print_info(f"MySQL 镜像拉取完成")
+        print_info("MySQL 镜像拉取完成")
     else:
         print_info(f"MySQL 镜像已存在: {mysql_image}")
     
@@ -728,7 +722,7 @@ def build_full_package():
             if dockerignore_build.read_text() == dockerignore_root.read_text():
                 dockerignore_root.unlink()
                 print_info("已清理临时 .dockerignore")
-        except:
+        except OSError:
             pass
     
     # 标记 MySQL 镜像（提取版本号）
@@ -844,7 +838,7 @@ def build_update_package():
     if not image_exists(python_image):
         print_info(f"Python 镜像不存在，正在拉取: {python_image}")
         run_cmd(["docker", "pull", python_image])
-        print_info(f"Python 镜像拉取完成")
+        print_info("Python 镜像拉取完成")
     else:
         print_info(f"Python 镜像已存在: {python_image}")
     
@@ -876,7 +870,7 @@ def build_update_package():
             if dockerignore_build.read_text() == dockerignore_root.read_text():
                 dockerignore_root.unlink()
                 print_info("已清理临时 .dockerignore")
-        except:
+        except OSError:
             pass
     
     # 导出镜像
@@ -992,6 +986,5 @@ if __name__ == "__main__":
         sys.exit(1)
     except Exception as e:
         print_error(f"构建失败: {e}")
-        import traceback
         traceback.print_exc()
         sys.exit(1)

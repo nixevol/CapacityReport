@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：清理后端冗余代码和未用依赖
+
+- `app/database.py` 移除未使用的 SQLAlchemy 连接池、`engine` 属性、`dispose()` 空释放路径和未引用的 `delete_rows()`；数据库访问统一保留现有 PyMySQL 上下文连接。
+- `app/api/routers/database.py`、`app/api/routers/health.py` 和 `app/processor.py` 同步去除无效 `dispose()` 调用，避免保留没有实际资源释放意义的样板代码。
+- `requirements.txt`、`run.bat` 和 `README.md` 移除 SQLAlchemy 依赖和说明；`build/build.py` 清理无用端口常量、内联导入和宽泛异常捕获。
+- 已清理本地 `.ruff_cache/` 与重复的 `ReportScript.sql.bak`；已执行 `.venv\Scripts\python.exe -m compileall app build`、`uvx ruff check .`、`uvx vulture app build --min-confidence 80` 和 `npm run build`，均通过。
+
 ## 2026-05-19：移除旧版 HTML 前端和双端口托管
 
 - 删除 `frontend_old/` 旧版 HTML/CSS/JS 前端及其本地 Monaco 资源，项目只保留 Vue 3 新前端。
@@ -324,7 +331,7 @@
 
 ### 依赖与清理
 
-- Python 依赖保留当前代码实际使用项：`fastapi`、`uvicorn[standard]`、`python-multipart`、`pymysql`、`sqlalchemy`、`cryptography`、`pandas`、`openpyxl`、`chardet`、`supervisor`。
+- Python 依赖保留当前代码实际使用项：`fastapi`、`uvicorn[standard]`、`python-multipart`、`pymysql`、`cryptography`、`pandas`、`openpyxl`、`chardet`、`supervisor`。
 - 已移除未使用的 `sqlparse`、`aiofiles`、`python-dateutil`。
 - 旧静态目录、根目录打包产物、日志和 Python 编译缓存属于可清理产物，不应提交。
 

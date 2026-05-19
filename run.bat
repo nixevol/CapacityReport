@@ -16,7 +16,7 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-"%PYTHON_EXE%" -c "import fastapi, uvicorn, pandas, openpyxl, pymysql, sqlalchemy, chardet" >nul 2>&1
+"%PYTHON_EXE%" -c "import fastapi, uvicorn, pandas, openpyxl, pymysql, chardet" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installing or repairing Python dependencies...
     uv pip install -r requirements.txt

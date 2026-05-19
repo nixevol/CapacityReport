@@ -220,8 +220,6 @@ class DataProcessor:
         finally:
             # 清理临时目录
             self._cleanup_temp_dir()
-            # 释放数据库连接
-            self.db.dispose()
         
         return self.results
     
