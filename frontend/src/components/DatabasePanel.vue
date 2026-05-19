@@ -98,7 +98,7 @@
       <div class="database-data-body" :class="{ empty: !selectedTable }">
         <n-empty v-if="!selectedTable" description="请选择左侧的数据表" />
         <template v-else>
-          <div ref="dataTableWrapperRef" class="database-data-table-wrap">
+          <div class="database-data-table-wrap">
             <n-data-table
               size="small"
               class="database-data-table"
@@ -110,15 +110,6 @@
               :scroll-x="dataTableScrollX"
               flex-height
             />
-          </div>
-          <div
-            v-if="hasDataColumns"
-            ref="horizontalScrollRef"
-            class="database-horizontal-scrollbar"
-            aria-label="数据表横向滚动条"
-            @scroll="syncTableScrollFromBar"
-          >
-            <div class="database-horizontal-scrollbar-inner" :style="{ width: `${dataTableScrollX}px` }"></div>
           </div>
 
           <section v-if="tableInfo" class="columns-collapse">
@@ -173,7 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns, DropdownOption } from 'naive-ui';
@@ -207,12 +198,8 @@ const loadingTables = ref(false);
 const loadingData = ref(false);
 const testing = ref(false);
 const downloadingFormat = ref<DownloadFormat | null>(null);
-const dataTableWrapperRef = ref<HTMLElement | null>(null);
-const horizontalScrollRef = ref<HTMLElement | null>(null);
 const columnSchemaExpanded = ref(false);
 let tableLoadToken = 0;
-let removeTableScrollListener: (() => void) | null = null;
-let syncingHorizontalScroll = false;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 const downloading = computed(() => Boolean(downloadingFormat.value));
@@ -236,7 +223,6 @@ const columnKeys = computed(() => (
     ? Object.keys(rows.value[0])
     : tableInfo.value?.columns.map(column => String(column.Field || '')).filter(Boolean) || []
 ));
-const hasDataColumns = computed(() => columnKeys.value.length > 0);
 const dataTableScrollX = computed(() => Math.max(columnKeys.value.length * COLUMN_MIN_WIDTH, COLUMN_MIN_WIDTH));
 const columns = computed<DataTableColumns<RowData>>(() => {
   const keys = columnKeys.value;
@@ -249,10 +235,6 @@ const columns = computed<DataTableColumns<RowData>>(() => {
     render: row => formatCell(row[key])
   }));
 });
-
-watch([dataTableScrollX, rows, tableInfo], () => {
-  void refreshHorizontalScrollBinding();
-}, { flush: 'post' });
 
 onMounted(() => {
   setPageHeader({
@@ -281,7 +263,6 @@ onBeforeRouteLeave(() => {
 });
 
 onBeforeUnmount(() => {
-  removeHorizontalScrollListener();
   resetPageHeader();
 });
 
@@ -315,7 +296,6 @@ async function loadTables() {
       rows.value = [];
       total.value = 0;
       columnSchemaExpanded.value = false;
-      removeHorizontalScrollListener();
     }
   } catch (error) {
     if (currentToken !== tableLoadToken) return;
@@ -338,7 +318,6 @@ function resetTableState() {
   columnSchemaExpanded.value = false;
   loadingTables.value = false;
   loadingData.value = false;
-  removeHorizontalScrollListener();
 }
 
 async function loadTable(table: string) {
@@ -376,66 +355,11 @@ async function loadTableData() {
     message.error(error instanceof Error ? error.message : '加载表数据失败');
   } finally {
     loadingData.value = false;
-    void refreshHorizontalScrollBinding();
   }
 }
 
 function toggleColumnSchema() {
   columnSchemaExpanded.value = !columnSchemaExpanded.value;
-  void refreshHorizontalScrollBinding();
-}
-
-function findTableScrollContainer(): HTMLElement | null {
-  const wrapper = dataTableWrapperRef.value;
-  if (!wrapper) return null;
-
-  const candidates = Array.from(
-    wrapper.querySelectorAll<HTMLElement>('.n-scrollbar-container, .n-data-table-base-table-body, .n-data-table-base-table-header')
-  );
-  return candidates.find(element => element.scrollWidth > element.clientWidth + 1) || null;
-}
-
-function removeHorizontalScrollListener() {
-  removeTableScrollListener?.();
-  removeTableScrollListener = null;
-}
-
-async function refreshHorizontalScrollBinding() {
-  await nextTick();
-  removeHorizontalScrollListener();
-
-  const tableScroller = findTableScrollContainer();
-  const horizontalScroller = horizontalScrollRef.value;
-  if (!tableScroller || !horizontalScroller) return;
-
-  horizontalScroller.scrollLeft = tableScroller.scrollLeft;
-  const handleTableScroll = () => {
-    if (syncingHorizontalScroll) return;
-    syncingHorizontalScroll = true;
-    horizontalScroller.scrollLeft = tableScroller.scrollLeft;
-    requestAnimationFrame(() => {
-      syncingHorizontalScroll = false;
-    });
-  };
-
-  tableScroller.addEventListener('scroll', handleTableScroll, { passive: true });
-  removeTableScrollListener = () => {
-    tableScroller.removeEventListener('scroll', handleTableScroll);
-  };
-}
-
-function syncTableScrollFromBar() {
-  if (syncingHorizontalScroll) return;
-
-  const tableScroller = findTableScrollContainer();
-  const horizontalScroller = horizontalScrollRef.value;
-  if (!tableScroller || !horizontalScroller) return;
-
-  syncingHorizontalScroll = true;
-  tableScroller.scrollLeft = horizontalScroller.scrollLeft;
-  requestAnimationFrame(() => {
-    syncingHorizontalScroll = false;
-  });
 }
 
 function changePage(value: number) {
@@ -506,7 +430,6 @@ async function dropTable() {
     rows.value = [];
     total.value = 0;
     columnSchemaExpanded.value = false;
-    removeHorizontalScrollListener();
     await loadTables();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除失败');
@@ -533,7 +456,6 @@ async function dropAllTables() {
     rows.value = [];
     total.value = 0;
     columnSchemaExpanded.value = false;
-    removeHorizontalScrollListener();
     await loadTables();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除全部数据表失败');
@@ -821,38 +743,6 @@ function formatCell(value: unknown): string {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-}
-
-.database-horizontal-scrollbar {
-  height: 14px;
-  flex: 0 0 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  background: var(--td-bg-color-container);
-  border-top: 1px solid var(--td-border-color-light);
-  scrollbar-color: var(--td-scrollbar-color) transparent;
-  scrollbar-width: thin;
-}
-
-.database-horizontal-scrollbar::-webkit-scrollbar {
-  height: 10px;
-}
-
-.database-horizontal-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.database-horizontal-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--td-scrollbar-color);
-  border-radius: 8px;
-}
-
-.database-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--td-text-color-placeholder);
-}
-
-.database-horizontal-scrollbar-inner {
-  height: 1px;
 }
 
 .columns-collapse {

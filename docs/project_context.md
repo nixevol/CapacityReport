@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-19：移除数据管理表格重复横向滚动条
+
+- `frontend/src/components/DatabasePanel.vue` 移除了上一版额外添加的 `.database-horizontal-scrollbar` 外置滚动条和同步滚动逻辑，避免与 Naive UI DataTable 自带横向滚动条同时显示。
+- 数据表仍保留 `scroll-x` 和列最小宽度计算，由 Naive UI 原生表格滚动条负责横向浏览，字段结构折叠头继续保留“字段结构 / 收起字段结构”状态文案。
+- 已执行 `npm run build`；已通过本机 Chrome DevTools 验证 `/database` 中外置滚动条 DOM 数量为 0，表格自身仍存在横向溢出滚动。
+
 ## 2026-05-19：修复数据管理表格滚动和字段结构收起
 
 - `frontend/src/components/DatabasePanel.vue` 为数据表增加明确的 `scroll-x` 宽度和底部外置横向滚动条，滚动条会与 Naive UI 表格内部横向滚动位置双向同步，避免字段结构区域或分页区域遮挡表格底部横向滚动入口。
