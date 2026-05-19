@@ -1,4 +1,10 @@
 # 项目上下文记录
+## 2026-05-19：清理生成 CSV 并支持历史原始数据下载
+- `DataProcessor` 现在会追踪 ZIP 解压出的 CSV 和 Excel 转换生成的 CSV，只有这些处理过程中生成的临时 CSV 会在对应 CSV 成功导入后自动删除；原始 ZIP、Excel 和用户本来上传/远程下载得到的原始 CSV 不会被误删。
+- ZIP 解压从 `extractall()` 改为逐条安全解压，会跳过越界路径条目，并在解压 CSV 时登记为后续可清理的临时文件。
+- `POST /api/history/download` 会校验历史任务目录必须位于 `cache/` 下，任务完成后才能下载；接口将整个历史工作目录压缩为 ZIP 返回，并通过 `BackgroundTask` 在响应结束后删除临时压缩包。
+- `frontend/src/components/HistoryPanel.vue` 在历史列表的“详情”左侧增加“下载”按钮，下载时显示 loading，未完成任务禁用下载，避免重复点击和下载不完整的历史数据。
+- 已执行 `.venv\Scripts\python.exe -m compileall app`、`uvx --offline ruff check .` 和 `npm run build`，均通过；本次未启动浏览器或 headless Chrome。
 
 ## 2026-05-19：调整数值异常值归零和完成后日志高度
 

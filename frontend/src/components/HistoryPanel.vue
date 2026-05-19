@@ -18,6 +18,16 @@
         </div>
         <span class="record-size">{{ statusText(record.status) }}</span>
         <div class="history-actions">
+          <n-button
+            size="small"
+            tertiary
+            :loading="downloadingRecordId === record.id"
+            :disabled="record.status === 'pending' || record.status === 'processing'"
+            @click="downloadHistory(record)"
+          >
+            <template #icon><n-icon><DownloadOutline /></n-icon></template>
+            下载
+          </n-button>
           <n-button size="small" tertiary @click="openDetail(record.id)">详情</n-button>
           <n-button size="small" tertiary type="error" @click="confirmDelete(record.id)">删除</n-button>
         </div>
@@ -86,9 +96,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
-import { CopyOutline, FileTrayOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
+import { CopyOutline, DownloadOutline, FileTrayOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
 
-import { apiGet, apiPost } from '../api/client';
+import { apiGet, apiPost, download as downloadFile } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
@@ -103,6 +113,7 @@ const cacheSize = ref<CacheSize | null>(null);
 const recordSize = ref('-');
 const recordSizeLoading = ref(false);
 const loading = ref(false);
+const downloadingRecordId = ref<string | null>(null);
 let recordSizeToken = 0;
 
 const totalSizeText = computed(() => `总占用: ${cacheSize.value?.size_formatted || '计算中...'}`);
@@ -162,6 +173,23 @@ async function openDetail(recordId: string) {
     void loadRecordSize(recordId);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载任务详情失败');
+  }
+}
+
+async function downloadHistory(record: HistoryRecord) {
+  if (record.status === 'pending' || record.status === 'processing') {
+    message.warning('任务尚未完成，暂不能下载历史数据');
+    return;
+  }
+
+  downloadingRecordId.value = record.id;
+  try {
+    await downloadFile('/api/history/download', { record_id: record.id }, `${record.id}.zip`);
+    message.success('历史数据下载已开始');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '下载历史数据失败');
+  } finally {
+    downloadingRecordId.value = null;
   }
 }
 

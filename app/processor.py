@@ -11,6 +11,7 @@ import zipfile
 import multiprocessing
 import pandas as pd
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -114,6 +115,8 @@ class DataProcessor:
         self.db = DatabaseManager(config)
         self.results: Dict[str, Any] = {}
         self._explicit_type_fields: set[str] = set()
+        self._generated_csv_files: set[Path] = set()
+        self._generated_csv_lock = Lock()
         
         # 预编译字段映射，避免重复查找
         self._field_map, self._type_map = self._build_field_map()
@@ -266,24 +269,70 @@ class DataProcessor:
         # 优先尝试 UTF-8（现代 ZIP 文件标准）
         try:
             with zipfile.ZipFile(zip_file, 'r', metadata_encoding='utf-8') as zf:
-                zf.extractall(zip_file.parent)
+                self._extract_zip_members(zf, zip_file.parent)
                 return
         except (UnicodeDecodeError, zipfile.BadZipFile):
             # UTF-8 失败，尝试 GBK（Windows 中文系统常用）
             try:
                 with zipfile.ZipFile(zip_file, 'r', metadata_encoding='gbk') as zf:
-                    zf.extractall(zip_file.parent)
+                    self._extract_zip_members(zf, zip_file.parent)
                     return
             except (UnicodeDecodeError, zipfile.BadZipFile):
                 # GBK 也失败，尝试 CP437（DOS 编码）
                 try:
                     with zipfile.ZipFile(zip_file, 'r', metadata_encoding='cp437') as zf:
-                        zf.extractall(zip_file.parent)
+                        self._extract_zip_members(zf, zip_file.parent)
                         return
                 except Exception as e:
                     # 所有编码都失败
                     raise Exception(f"无法解压 ZIP 文件，编码检测失败: {e}")
     
+    def _extract_zip_members(self, zf: zipfile.ZipFile, target_dir: Path) -> None:
+        root = target_dir.resolve()
+        for member in zf.infolist():
+            member_name = member.filename.replace("\\", "/")
+            target_path = (root / member_name).resolve()
+
+            try:
+                target_path.relative_to(root)
+            except ValueError:
+                self.logger.warning(f"跳过不安全的 ZIP 条目: {member.filename}")
+                continue
+
+            if member.is_dir():
+                target_path.mkdir(parents=True, exist_ok=True)
+                continue
+
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member) as source, target_path.open("wb") as target:
+                shutil.copyfileobj(source, target)
+
+            if target_path.suffix.lower() == ".csv":
+                self._remember_generated_csv(target_path)
+
+    def _remember_generated_csv(self, csv_file: Path) -> None:
+        with self._generated_csv_lock:
+            self._generated_csv_files.add(csv_file.resolve())
+
+    def _delete_generated_csv(self, csv_file: Path) -> None:
+        csv_path = csv_file.resolve()
+        with self._generated_csv_lock:
+            if csv_path not in self._generated_csv_files:
+                return
+            self._generated_csv_files.remove(csv_path)
+
+        try:
+            csv_path.relative_to(self.work_dir.resolve())
+        except ValueError:
+            return
+
+        try:
+            if csv_path.exists() and csv_path.is_file():
+                csv_path.unlink()
+                self.logger.info(f"已清理临时 CSV: {csv_path.relative_to(self.work_dir)}")
+        except OSError as exc:
+            self.logger.warning(f"清理临时 CSV 失败 {csv_path}: {exc}")
+
     def _scan_files(self, directory: Path, extensions: List[str]) -> Generator[Path, None, None]:
         """扫描指定扩展名的文件"""
         for ext in extensions:
@@ -305,6 +354,7 @@ class DataProcessor:
                     # 直接读取并写入，不做额外处理
                     df = xl.parse(sheet_name)
                     df.to_csv(output_file, index=False, encoding='utf-8')
+                    self._remember_generated_csv(output_file)
                     processed += 1
             
             xl.close()
@@ -759,6 +809,7 @@ class DataProcessor:
                             csv_file, table_name, conn, table_created
                         )
                         total_rows += rows
+                        self._delete_generated_csv(csv_file)
                         
                         # 每处理 10 个文件报告一次进度
                         if i % 10 == 0:
