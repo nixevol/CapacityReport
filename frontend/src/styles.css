@@ -589,39 +589,24 @@ select {
 }
 
 .upload-hint {
-  margin-top: 12px !important;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0 !important;
   color: var(--td-brand-color) !important;
   font-size: 13px !important;
 }
 
-.remote-run-card {
+.upload-zone-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 16px 20px;
-  background: var(--td-bg-color-container);
-  border: 1px solid var(--td-border-color-light);
-  border-radius: var(--td-radius-default);
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
 }
 
-.remote-run-copy {
-  min-width: 0;
-}
-
-.remote-run-copy h4 {
-  margin: 0 0 4px;
-  color: var(--td-text-color-primary);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.remote-run-copy p {
-  margin: 0;
-  color: var(--td-text-color-secondary);
-  font-size: 13px;
-  line-height: 20px;
+.remote-run-trigger {
+  display: inline-flex;
 }
 
 .file-list {
@@ -1698,11 +1683,6 @@ select {
   .history-actions {
     width: 100%;
     justify-content: flex-end;
-  }
-
-  .remote-run-card {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .card-actions,

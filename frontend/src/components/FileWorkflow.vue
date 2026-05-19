@@ -20,7 +20,26 @@
       </div>
       <h3>拖拽文件夹或文件到这里</h3>
       <p>支持 .zip, .xlsx, .xls, .csv 格式</p>
-      <p class="upload-hint">或者点击选择文件</p>
+      <div class="upload-zone-actions">
+        <span class="upload-hint">或者点击选择文件</span><br>
+        <n-tooltip trigger="hover" placement="bottom">
+          <template #trigger>
+            <span class="remote-run-trigger" @click.stop @keydown.stop>
+              <n-button
+                type="primary"
+                secondary
+                :loading="remoteStarting"
+                :disabled="working || remoteStarting"
+                @click.stop="startRemoteProcessing"
+              >
+                <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+                远程下载并处理
+              </n-button>
+            </span>
+          </template>
+          从已配置的 FTP/SFTP 目录递归下载数据，然后自动开始处理。
+        </n-tooltip>
+      </div>
       <input
         ref="fileInput"
         class="hidden-input"
@@ -38,17 +57,6 @@
         directory
         @change="pickFiles"
       />
-    </section>
-
-    <section v-if="!taskInProgress" class="remote-run-card">
-      <div class="remote-run-copy">
-        <h4>远程自动化</h4>
-        <p>从已配置的 FTP/SFTP 目录递归下载数据，然后自动开始处理。</p>
-      </div>
-      <n-button type="primary" secondary :loading="remoteStarting" :disabled="working" @click="startRemoteProcessing">
-        <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
-        远程下载并处理
-      </n-button>
     </section>
 
     <div v-if="!taskInProgress && files.length > 0" class="file-list">

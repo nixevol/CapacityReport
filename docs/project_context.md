@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：调整上传页远程下载入口
+
+- `frontend/src/components/FileWorkflow.vue` 将“远程下载并处理”按钮移动到拖拽上传框内部，删除独立的“远程自动化”卡片，上传页首屏只保留一个主要操作区域。
+- 远程入口说明“从已配置的 FTP/SFTP 目录递归下载数据，然后自动开始处理。”改为按钮 hover tooltip 展示；按钮点击使用事件阻止冒泡，避免触发拖拽框的本地文件选择逻辑。
+- `frontend/src/styles.css` 清理远程自动化卡片样式，新增拖拽框内操作区样式。
+- 已执行 `npm run build`；已通过本机 Chrome DevTools 验证 `/upload`：远程按钮位于拖拽框内，外部远程卡片 DOM 数量为 0，tooltip 文案正常显示。
+
 ## 2026-05-19：修复规则映射窄宽度滚动
 
 - `frontend/src/styles.css` 将系统设置的规则映射区域改为 tab 内部滚动容器，避免宽度或高度不足时被 `overflow: hidden` 裁切导致 `Sheet 过滤规则` 卡片不可达。
