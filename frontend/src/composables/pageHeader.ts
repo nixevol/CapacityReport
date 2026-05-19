@@ -1,4 +1,5 @@
 import { shallowReactive, unref, type Component, type Ref } from 'vue';
+import type { DropdownOption } from 'naive-ui';
 
 type HeaderValue<T> = T | Ref<T> | (() => T);
 
@@ -12,7 +13,9 @@ export interface PageHeaderAction {
   variant?: 'solid' | 'outline' | 'text';
   loading?: HeaderValue<boolean>;
   disabled?: HeaderValue<boolean>;
+  dropdownOptions?: HeaderValue<DropdownOption[]>;
   onClick?: () => void | Promise<void>;
+  onSelect?: (key: string | number, option: DropdownOption) => void | Promise<void>;
 }
 
 export const pageHeader = shallowReactive<{

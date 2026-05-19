@@ -42,6 +42,31 @@
             <span v-if="action.kind === 'text'" class="header-info-text">
               {{ actionLabel(action) }}
             </span>
+            <n-dropdown
+              v-else-if="actionDropdownOptions(action).length"
+              trigger="click"
+              :options="actionDropdownOptions(action)"
+              :disabled="actionDisabled(action)"
+              @select="runHeaderActionSelect(action)"
+            >
+              <n-button
+                size="small"
+                :type="action.type === 'default' ? undefined : action.type"
+                :tertiary="action.variant !== 'solid'"
+                :text="action.variant === 'text'"
+                :loading="actionLoading(action)"
+                :disabled="actionDisabled(action)"
+                :title="actionTitle(action)"
+              >
+                <template v-if="actionIcon(action)" #icon>
+                  <n-icon><component :is="actionIcon(action)" /></n-icon>
+                </template>
+                <span class="header-dropdown-label">
+                  <span>{{ actionLabel(action) }}</span>
+                  <n-icon class="header-dropdown-caret"><ChevronDownOutline /></n-icon>
+                </span>
+              </n-button>
+            </n-dropdown>
             <n-button
               v-else
               size="small"
@@ -97,8 +122,9 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
-import { useDialog, useMessage, type MenuOption, NIcon } from 'naive-ui';
+import { useDialog, useMessage, type DropdownOption, type MenuOption, NIcon } from 'naive-ui';
 import {
+  ChevronDownOutline,
   CloudUploadOutline,
   ConstructOutline,
   FileTrayFullOutline,
@@ -294,8 +320,18 @@ function actionDisabled(action: PageHeaderAction) {
   return resolveHeaderValue(action.disabled, false);
 }
 
+function actionDropdownOptions(action: PageHeaderAction) {
+  return resolveHeaderValue(action.dropdownOptions, []);
+}
+
 function runHeaderAction(action: PageHeaderAction) {
   void action.onClick?.();
+}
+
+function runHeaderActionSelect(action: PageHeaderAction) {
+  return (key: string | number, option: DropdownOption) => {
+    void action.onSelect?.(key, option);
+  };
 }
 
 function preventWindowFileDrop(event: DragEvent) {

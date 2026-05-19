@@ -146,7 +146,13 @@
     </section>
   </div>
 
-  <n-modal v-model:show="csvDialogVisible" preset="card" class="table-export-modal" title="导出 CSV">
+  <n-modal
+    v-model:show="csvDialogVisible"
+    preset="card"
+    class="table-export-modal"
+    title="导出 CSV"
+    style="width: min(420px, calc(100vw - 32px))"
+  >
     <div class="export-dialog-body">
       <p class="export-dialog-hint">选择要导出的数据表。</p>
       <n-scrollbar class="export-table-options">
@@ -175,7 +181,13 @@
     </template>
   </n-modal>
 
-  <n-modal v-model:show="xlsxDialogVisible" preset="card" class="table-export-modal" title="导出 XLSX">
+  <n-modal
+    v-model:show="xlsxDialogVisible"
+    preset="card"
+    class="table-export-modal"
+    title="导出 XLSX"
+    style="width: min(420px, calc(100vw - 32px))"
+  >
     <div class="export-dialog-body">
       <p class="export-dialog-hint">选择一个或多个数据表，导出后会合并到同一个 XLSX 文件中。</p>
       <n-scrollbar class="export-table-options">
@@ -209,7 +221,7 @@
 import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
-import type { DataTableColumns } from 'naive-ui';
+import type { DataTableColumns, DropdownOption } from 'naive-ui';
 import {
   ChevronForwardOutline,
   CloudDownloadOutline,
@@ -248,9 +260,14 @@ let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 const downloading = computed(() => Boolean(downloadingFormat.value));
-const csvExportButtonText = computed(() => (downloadingFormat.value === 'csv' ? '导出 CSV...' : '导出 CSV'));
-const xlsxExportButtonText = computed(() => (downloadingFormat.value === 'xlsx' ? '导出 XLSX...' : '导出 XLSX'));
+const exportButtonText = computed(() => (
+  downloadingFormat.value ? `导出 ${downloadingFormat.value.toUpperCase()}...` : '导出'
+));
 const exportDisabled = computed(() => loadingTables.value || tables.value.length === 0 || downloading.value);
+const exportOptions: DropdownOption[] = [
+  { label: 'CSV', key: 'csv' },
+  { label: 'XLSX', key: 'xlsx' }
+];
 const loadDataInfileText = computed(() => {
   if (testing.value || !databaseInfo.value) return '检测中';
   return databaseInfo.value.load_data_infile ? '可用' : '未启用';
@@ -281,24 +298,15 @@ onMounted(() => {
   setPageHeader({
     actions: [
       {
-        key: 'export-csv',
-        label: csvExportButtonText,
+        key: 'export',
+        label: exportButtonText,
         icon: CloudDownloadOutline,
         type: 'primary',
         variant: 'solid',
-        loading: computed(() => downloadingFormat.value === 'csv'),
+        loading: downloading,
         disabled: exportDisabled,
-        onClick: showCsvExportDialog
-      },
-      {
-        key: 'export-xlsx',
-        label: xlsxExportButtonText,
-        icon: CloudDownloadOutline,
-        type: 'primary',
-        variant: 'outline',
-        loading: computed(() => downloadingFormat.value === 'xlsx'),
-        disabled: exportDisabled,
-        onClick: showXlsxExportDialog
+        dropdownOptions: exportOptions,
+        onSelect: selectExportFormat
       },
       {
         key: 'drop-all-tables',
@@ -432,6 +440,17 @@ function changePageSize(value: number) {
   pageSize.value = value;
   page.value = 1;
   void loadTableData();
+}
+
+function selectExportFormat(key: string | number) {
+  if (key === 'csv') {
+    void showCsvExportDialog();
+    return;
+  }
+
+  if (key === 'xlsx') {
+    void showXlsxExportDialog();
+  }
 }
 
 async function showCsvExportDialog() {
@@ -935,7 +954,7 @@ function formatCell(value: unknown): string {
 }
 
 .table-export-modal {
-  width: min(520px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
 }
 
 .export-dialog-body {
@@ -952,7 +971,10 @@ function formatCell(value: unknown): string {
 
 .export-table-options {
   max-height: min(420px, 52vh);
-  padding: 6px 2px;
+  padding: 8px 10px;
+  background: var(--td-bg-color-component);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
 }
 
 .export-dialog-footer {

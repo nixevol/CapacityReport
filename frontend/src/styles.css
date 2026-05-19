@@ -342,6 +342,16 @@ select {
   white-space: nowrap;
 }
 
+.header-dropdown-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-dropdown-caret {
+  font-size: 13px;
+}
+
 .theme-toggle,
 .restart-btn {
   display: inline-flex;

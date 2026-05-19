@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：优化数据管理导出入口和弹窗宽度
+
+- `frontend/src/composables/pageHeader.ts` 和 `frontend/src/AppShell.vue` 为页面顶部动作支持 Naive UI 下拉菜单，按钮内显示下拉箭头。
+- `frontend/src/components/DatabasePanel.vue` 将顶部“导出 CSV / 导出 XLSX”两个按钮合并为一个“导出”下拉按钮，点击后选择 CSV 或 XLSX 再进入对应表选择弹窗。
+- CSV 和 XLSX 导出弹窗改为固定 420px 内的响应式宽度，避免在宽屏下铺满整页；表选择列表增加边框和背景，视觉上更集中。
+- 已执行 `npm run build`，构建通过；构建只保留 Vite 原有大 chunk 提示。
+
 ## 2026-05-19：调整数据管理导出交互并支持多表 XLSX
 
 - `frontend/src/components/DatabasePanel.vue` 将导出入口移到页面顶部，并放在“删除全部表”按钮左侧；内容区工具栏只保留刷新、清空、删除当前表。
