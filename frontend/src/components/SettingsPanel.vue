@@ -13,44 +13,78 @@
       <n-tabs type="line" animated class="settings-tabs">
         <n-tab-pane name="connection" tab="连接配置">
           <div class="settings-section-grid">
-            <n-card title="数据库配置" size="small" class="work-card">
-              <n-form label-placement="top">
-                <n-grid :cols="12" :x-gap="12">
-                  <n-gi :span="8">
-                    <n-form-item label="主机地址">
-                      <n-input v-model:value="mysqlForm.host" placeholder="localhost" />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="4">
-                    <n-form-item label="端口">
-                      <n-input-number v-model:value="mysqlForm.port" class="full-width" :min="1" :max="65535" />
-                    </n-form-item>
-                  </n-gi>
-                </n-grid>
-                <n-form-item label="数据库名">
-                  <n-input v-model:value="mysqlForm.dbname" placeholder="CapacityReport" />
-                </n-form-item>
-                <n-grid :cols="12" :x-gap="12">
-                  <n-gi :span="6">
-                    <n-form-item label="用户名">
-                      <n-input v-model:value="mysqlForm.user" placeholder="root" />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="6">
-                    <n-form-item label="密码">
-                      <n-input v-model:value="mysqlForm.passwd" type="password" show-password-on="click" />
-                    </n-form-item>
-                  </n-gi>
-                </n-grid>
-              </n-form>
+            <div class="settings-connection-stack">
+              <n-card title="数据库配置" size="small" class="work-card">
+                <n-form label-placement="top">
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="8">
+                      <n-form-item label="主机地址">
+                        <n-input v-model:value="mysqlForm.host" placeholder="localhost" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="4">
+                      <n-form-item label="端口">
+                        <n-input-number v-model:value="mysqlForm.port" class="full-width" :min="1" :max="65535" />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <n-form-item label="数据库名">
+                    <n-input v-model:value="mysqlForm.dbname" placeholder="CapacityReport" />
+                  </n-form-item>
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="6">
+                      <n-form-item label="用户名">
+                        <n-input v-model:value="mysqlForm.user" placeholder="root" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="6">
+                      <n-form-item label="密码">
+                        <n-input v-model:value="mysqlForm.passwd" type="password" show-password-on="click" />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                </n-form>
 
-              <template #footer>
-                <n-space justify="end">
-                  <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
-                  <n-button :loading="testingDb" @click="testDatabase">测试连接</n-button>
-                </n-space>
-              </template>
-            </n-card>
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
+                    <n-button :loading="testingDb" @click="testDatabase">测试连接</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+
+              <n-card title="处理历史保留" size="small" class="work-card">
+                <n-form label-placement="top">
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="6">
+                      <n-form-item label="自动清理处理历史">
+                        <n-switch v-model:value="historyRetentionForm.enabled" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="6">
+                      <n-form-item label="保留最近次数">
+                        <n-input-number
+                          v-model:value="historyRetentionForm.keep_count"
+                          class="full-width"
+                          :min="0"
+                          :precision="0"
+                          :disabled="!historyRetentionForm.enabled"
+                        />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <p class="form-hint">关闭后不自动删除处理历史；启用后会在任务结束时自动清理，设置为 0 表示不保留历史，否则只保留最近指定次数的处理历史。</p>
+                </n-form>
+
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingHistoryRetention" @click="saveHistoryRetention">
+                      保存配置
+                    </n-button>
+                  </n-space>
+                </template>
+              </n-card>
+            </div>
 
             <n-card title="远程数据源" size="small" class="work-card">
               <n-form label-placement="top">
@@ -121,38 +155,6 @@
                 <n-space justify="end">
                   <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
                   <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
-                </n-space>
-              </template>
-            </n-card>
-
-            <n-card title="处理历史保留" size="small" class="work-card">
-              <n-form label-placement="top">
-                <n-grid :cols="12" :x-gap="12">
-                  <n-gi :span="6">
-                    <n-form-item label="自动清理处理历史">
-                      <n-switch v-model:value="historyRetentionForm.enabled" />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="6">
-                    <n-form-item label="保留最近次数">
-                      <n-input-number
-                        v-model:value="historyRetentionForm.keep_count"
-                        class="full-width"
-                        :min="0"
-                        :precision="0"
-                        :disabled="!historyRetentionForm.enabled"
-                      />
-                    </n-form-item>
-                  </n-gi>
-                </n-grid>
-                <p class="form-hint">关闭后不自动删除处理历史；启用后会在任务结束时自动清理，设置为 0 表示不保留历史，否则只保留最近指定次数的处理历史。</p>
-              </n-form>
-
-              <template #footer>
-                <n-space justify="end">
-                  <n-button type="primary" :loading="savingHistoryRetention" @click="saveHistoryRetention">
-                    保存配置
-                  </n-button>
                 </n-space>
               </template>
             </n-card>

@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-19：调整连接配置页卡片布局
+
+- `frontend/src/components/SettingsPanel.vue` 将连接配置页改成左列堆叠“数据库配置”和“处理历史保留”，右列显示“远程数据源”，避免右侧远程数据源卡片高度把处理历史保留卡片挤到很下面。
+- `frontend/src/styles.css` 新增 `.settings-connection-stack`，左列卡片之间使用固定 18px 间距。
+- 已执行 `npm run build`；已通过本机 Chrome DevTools 验证设置页中数据库配置与处理历史保留同列显示，间距为 18px，远程数据源位于右列。
+
 ## 2026-05-19：新增处理历史保留配置并完善配置导入导出
 
 - `app/config.py` 新增 `HistoryRetention` 配置块，包含 `enabled` 和 `keep_count`；`keep_count=0` 表示不保留已结束处理历史，关闭开关时不自动删除历史。

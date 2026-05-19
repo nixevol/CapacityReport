@@ -1232,6 +1232,13 @@ select {
   scrollbar-width: thin;
 }
 
+.settings-connection-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .settings-section-grid::-webkit-scrollbar {
   width: 8px;
   height: 8px;
