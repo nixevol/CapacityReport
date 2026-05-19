@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：修复 CSV 导入阶段数值截断错误
+
+- `DataProcessor` 仍会根据 `ReportScript.sql` 的 `MODIFY COLUMN` 提前把业务数值字段建成 `INT/FLOAT`，但数值清洗改为返回真正的 Python `None/int/float`，避免 pandas `<NA>` 或异常文本被 PyMySQL 当作字符串写入数值列。
+- 数值字段导入前会把空串、`-`、`--`、长短横线、`NA/N/A/NULL/NONE/NAN/\N` 等源 CSV 占位符转为数据库 `NULL`，正常 `0` 保留为 `0`；逗号/全角逗号、半角/全角百分号和空白仍按数值格式清理。
+- 该问题本质是新版提前按 SQL 类型建表后，MySQL 严格模式会在 CSV 导入阶段拒绝脏数值；旧版多为字符串先落库，所以不会在导入阶段出现 `Data truncated for column`。
+- 已执行数值转换样例验证、`.venv\Scripts\python.exe -m compileall app` 和 `uvx --offline ruff check .`，均通过。
+
 ## 2026-05-19：优化处理进度阶段显示和日志跟随
 
 - `ProcessLogger` 新增轻量阶段回调，`DataProcessor.process()` 会在远程下载后依次上报 `extracting`、`converting`、`importing`、`scripting`、`completed/failed` 阶段。

@@ -105,6 +105,7 @@ class DataProcessor:
         "numeric": "float",
     }
     MYSQL_NUMERIC_PATTERN = r"^-?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))([eE][+-]?[0-9]+)?$"
+    NUMERIC_NULL_TEXTS = {"", "-", "--", "—", "–", "NA", "N/A", "NULL", "NONE", "NAN", "\\N"}
     
     def __init__(self, config: AppConfig, work_dir: Path, logger: ProcessLogger):
         self.config = config
@@ -647,43 +648,36 @@ class DataProcessor:
     def _convert_int_column(self, series: pd.Series) -> pd.Series:
         """转换整数列"""
         try:
-            # 检测是否包含百分号
-            text = series.astype("string")
-            has_percent = text.str.contains('%', regex=False, na=False)
-            
-            # 去除格式字符，保留正常数值含义
-            cleaned = self._clean_numeric_text(text)
-            # 转换为数值
-            numeric = pd.to_numeric(cleaned, errors='coerce')
-            
-            # 如果有百分号，除以100转换为小数
-            numeric[has_percent] = numeric[has_percent] / 100
-            
-            # 四舍五入并转为整数字符串，空值保留为 NULL，正常 0 不再误判为空值
+            numeric = self._numeric_series(series)
             rounded = numeric.round()
-            return rounded.astype("Int64").astype("string").where(rounded.notna(), None)
+            return pd.Series(
+                [None if pd.isna(value) else int(value) for value in rounded],
+                index=series.index,
+                dtype=object,
+            )
         except Exception:
             return series
     
     def _convert_float_column(self, series: pd.Series) -> pd.Series:
         """转换浮点数列"""
         try:
-            # 检测是否包含百分号
-            text = series.astype("string")
-            has_percent = text.str.contains('%', regex=False, na=False)
-            
-            # 去除格式字符，保留正常数值含义
-            cleaned = self._clean_numeric_text(text)
-            # 转换为数值
-            numeric = pd.to_numeric(cleaned, errors='coerce')
-            
-            # 如果有百分号，除以100转换为小数（例如：95% → 0.95）
-            numeric[has_percent] = numeric[has_percent] / 100
-            
-            # 保留小数，空值保留为 NULL，正常 0 不再误判为空值
-            return numeric.astype("string").where(numeric.notna(), None)
+            numeric = self._numeric_series(series)
+            return pd.Series(
+                [None if pd.isna(value) else float(value) for value in numeric],
+                index=series.index,
+                dtype=object,
+            )
         except Exception:
             return series
+
+    def _numeric_series(self, series: pd.Series) -> pd.Series:
+        text = series.astype("string")
+        has_percent = text.str.contains(r"[%％]", regex=True, na=False)
+        cleaned = self._clean_numeric_text(text)
+        empty_mask = cleaned.isna() | cleaned.str.upper().isin(self.NUMERIC_NULL_TEXTS)
+        numeric = pd.to_numeric(cleaned.mask(empty_mask, pd.NA), errors="coerce")
+        numeric[has_percent & numeric.notna()] = numeric[has_percent & numeric.notna()] / 100
+        return numeric
 
     @staticmethod
     def _clean_numeric_text(series: pd.Series) -> pd.Series:
@@ -693,6 +687,7 @@ class DataProcessor:
             .str.replace(',', '', regex=False)
             .str.replace('，', '', regex=False)
             .str.replace('%', '', regex=False)
+            .str.replace('％', '', regex=False)
             .str.replace('\t', '', regex=False)
             .str.replace(' ', '', regex=False)
         )
