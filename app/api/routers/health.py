@@ -18,7 +18,7 @@ async def health_check():
     }
 
     try:
-        db_manager = DatabaseManager(state.config)
+        db_manager = DatabaseManager(state.current_config())
         server_info = db_manager.get_server_info()
         checks["database"] = {
             "status": "ok",

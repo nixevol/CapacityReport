@@ -7,7 +7,7 @@ from threading import Thread
 from fastapi import APIRouter, Body, HTTPException
 
 from app import state
-from app.config import CACHE_DIR, SQL_SCRIPT
+from app.config import AppConfig, CACHE_DIR, SQL_SCRIPT
 from app.processor import DataProcessor, ProcessLogger
 
 
@@ -59,8 +59,9 @@ async def execute_script():
 
     logger = ProcessLogger(log_file=None, callback=log_callback)
     state.processing_tasks[task_id] = {"logs": [], "status": "processing"}
+    app_config = state.current_config()
 
-    thread = Thread(target=_run_script, args=(task_id, logger, logs), daemon=True)
+    thread = Thread(target=_run_script, args=(task_id, logger, logs, app_config), daemon=True)
     thread.start()
     return {"success": True, "message": "脚本执行任务已启动", "task_id": task_id}
 
@@ -78,14 +79,14 @@ async def save_script_content(content: str = Body(..., embed=True)):
         return {"success": False, "error": str(exc)}
 
 
-def _run_script(task_id: str, logger: ProcessLogger, logs: list[str]) -> None:
+def _run_script(task_id: str, logger: ProcessLogger, logs: list[str], app_config: AppConfig) -> None:
     temp_work_dir: Path | None = None
     try:
         logger.info("开始执行 SQL 脚本...")
         temp_work_dir = CACHE_DIR / task_id
         temp_work_dir.mkdir(parents=True, exist_ok=True)
 
-        processor = DataProcessor(state.config, temp_work_dir, logger)
+        processor = DataProcessor(app_config, temp_work_dir, logger)
         processor._execute_sql_script()
         logger.success("SQL 脚本执行完成")
         state.processing_tasks[task_id] = {"logs": logs.copy(), "status": "completed"}
@@ -96,4 +97,3 @@ def _run_script(task_id: str, logger: ProcessLogger, logs: list[str]) -> None:
         if temp_work_dir and temp_work_dir.exists():
             shutil.rmtree(temp_work_dir, ignore_errors=True)
         state.reset_task_lock()
-

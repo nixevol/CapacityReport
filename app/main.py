@@ -119,6 +119,6 @@ app = create_app()
 
 if __name__ == "__main__":
     print(f"CapacityReport v{APP_VERSION}")
-    print(f"配置更新时间: {state.config.update}")
+    print(f"配置更新时间: {state.current_config().update}")
     print(f"前端地址: http://localhost:{APP_PORT}")
     uvicorn.run(app, host=APP_HOST, port=APP_PORT, reload=False)

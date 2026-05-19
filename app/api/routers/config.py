@@ -15,12 +15,12 @@ router = APIRouter(tags=["config"])
 
 @router.get("/api/config")
 async def get_config():
-    return state.config.to_dict()
+    return state.current_config().to_dict()
 
 
 @router.get("/api/config/full")
 async def get_config_full():
-    return state.config.to_dict_full()
+    return state.current_config().to_dict_full()
 
 
 @router.post("/api/config/mysql")
@@ -31,6 +31,7 @@ async def update_mysql_config(
     passwd: str = Body(...),
     dbname: str = Body(...),
 ):
+    state.reload_config()
     state.config.mysql.host = host
     state.config.mysql.port = port
     state.config.mysql.user = user
@@ -42,6 +43,7 @@ async def update_mysql_config(
 
 @router.post("/api/config/remote")
 async def update_remote_config(config: dict[str, Any] = Body(...)):
+    state.reload_config()
     state.config.remote_data = RemoteDataConfig.from_dict(config)
     state.config.save()
     return {"success": True, "message": "远程数据配置已更新", "update": state.config.update}
@@ -49,6 +51,7 @@ async def update_remote_config(config: dict[str, Any] = Body(...)):
 
 @router.post("/api/config/history-retention")
 async def update_history_retention(config: dict[str, Any] = Body(...)):
+    state.reload_config()
     state.config.history_retention = HistoryRetentionConfig.from_dict(config)
     state.config.save()
     return {"success": True, "message": "处理历史保留配置已更新", "update": state.config.update}
@@ -56,6 +59,7 @@ async def update_history_retention(config: dict[str, Any] = Body(...)):
 
 @router.post("/api/config/sheet-filter")
 async def update_sheet_filter(filters: list[str] = Body(...)):
+    state.reload_config()
     state.config.sheet_filter = filters
     state.config.save()
     return {"success": True, "message": "Sheet 过滤规则已更新", "update": state.config.update}
@@ -63,6 +67,7 @@ async def update_sheet_filter(filters: list[str] = Body(...)):
 
 @router.post("/api/config/extract-fields")
 async def update_extract_fields(fields: list[dict[str, Any]] = Body(...)):
+    state.reload_config()
     state.config.extract_fields = fields
     state.config.save()
     return {"success": True, "message": "字段映射配置已更新", "update": state.config.update}
@@ -72,7 +77,7 @@ async def update_extract_fields(fields: list[dict[str, Any]] = Body(...)):
 async def download_config():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"Configure_{timestamp}.json"
-    content = json.dumps(state.config.to_file_dict(), ensure_ascii=False, indent=2)
+    content = json.dumps(state.current_config().to_file_dict(), ensure_ascii=False, indent=2)
     return Response(
         content=content,
         media_type="application/json",
@@ -90,6 +95,7 @@ async def upload_config(file: UploadFile = File(...)):
         if not isinstance(data, dict):
             raise ValueError("配置文件格式错误：必须是 JSON 对象")
 
+        state.reload_config()
         _apply_config_data(data)
         state.config.save()
         return {"success": True, "message": "配置文件上传成功", "update": state.config.update}

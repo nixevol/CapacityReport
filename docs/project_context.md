@@ -1,4 +1,10 @@
 # 项目上下文记录
+## 2026-05-19：配置按请求实时重载
+- `app/state.py` 新增 `reload_config()` 和 `current_config()`，后端接口不再长期依赖启动时的 `state.config` 快照；读取配置、下载配置、数据库接口、健康检查、本地处理、远程处理和脚本执行入口都会从 `Configure.json` 重新加载最新配置。
+- 配置保存类接口会先重载当前文件再修改对应配置块并保存，避免用户手工更新 `Configure.json` 后，被某个单项保存接口用旧内存配置覆盖。
+- 本地/远程处理任务启动时会读取一次最新配置并作为任务快照传入 `DataProcessor`；任务运行过程中不再反复重载，避免处理中途改配置导致同一任务前后规则不一致。
+- 已执行 `.venv\Scripts\python.exe -m compileall app`、`uvx --offline ruff check .` 和 `npm run build`，均通过；前端构建仅保留 Vite 大 chunk 提示。
+
 ## 2026-05-19：补全字段映射配置
 - 当前本地 `Configure.json` 的 `ExtractField` 已按旧版可用映射补全：`基站名称` 增加 `ENBFunction名称`，`ERAB流量` 增加 `ERAB流量(新高负荷)_1538186901014-7-0`，`上行流量_GB/下行流量_GB` 增加 `上行流量(GB)/下行流量(GB)`。
 - 4G/5G 数值字段显式补回 `Type: float/int`，避免依赖 SQL 脚本推断类型；`AppConfig.load()` 已验证能读取 32 个字段映射和正确的 `SheetFilter`。

@@ -24,8 +24,19 @@ def reset_task_lock() -> None:
     global_task_lock["started_at"] = None
 
 
+def reload_config() -> AppConfig:
+    """从 Configure.json 重新加载配置，保证接口读取到最新文件内容。"""
+    global config
+    config = AppConfig.load()
+    return config
+
+
+def current_config() -> AppConfig:
+    return reload_config()
+
+
 def apply_history_retention() -> int:
-    retention = config.history_retention.normalized()
+    retention = current_config().history_retention.normalized()
     if not retention.enabled:
         return 0
     return history_manager.prune_finished(retention.keep_count)

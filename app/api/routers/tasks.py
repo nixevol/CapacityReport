@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException
 
 from app import state
+from app.config import AppConfig
 from app.processor import DataProcessor, ProcessLogger
 
 
@@ -104,6 +105,7 @@ async def start_processing(task_id: str = Body(..., embed=True)):
         callback=log_callback,
         stage_callback=stage_callback,
     )
+    app_config = state.current_config()
     state.history_manager.update(task_id, status="processing")
     state.processing_tasks[task_id] = {"logs": [], "status": "processing", "stage": current_stage}
     state.global_task_lock.update(
@@ -115,7 +117,7 @@ async def start_processing(task_id: str = Body(..., embed=True)):
         }
     )
 
-    thread = Thread(target=_run_processing, args=(task_id, work_dir, logger), daemon=True)
+    thread = Thread(target=_run_processing, args=(task_id, work_dir, logger, app_config), daemon=True)
     thread.start()
 
     return {"success": True, "message": "处理任务已启动", "task_id": task_id}
@@ -166,9 +168,9 @@ def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "pr
         state.global_task_lock["stage"] = stage
 
 
-def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger) -> None:
+def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_config: AppConfig) -> None:
     try:
-        processor = DataProcessor(state.config, work_dir, logger)
+        processor = DataProcessor(app_config, work_dir, logger)
         result = processor.process()
         status = "completed" if result.get("success") else "failed"
         state.history_manager.update(

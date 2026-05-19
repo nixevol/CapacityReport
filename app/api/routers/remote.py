@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException
 
 from app import state
-from app.config import CACHE_DIR, RemoteDataConfig
+from app.config import AppConfig, CACHE_DIR, RemoteDataConfig
 from app.processor import DataProcessor, ProcessLogger
 from app.services.remote_download import RemoteDataDownloader
 
@@ -16,7 +16,7 @@ router = APIRouter(tags=["remote"])
 
 @router.post("/api/remote/test")
 async def test_remote_connection(config: dict[str, Any] | None = Body(None)):
-    remote_config = RemoteDataConfig.from_dict(config) if config else state.config.remote_data
+    remote_config = RemoteDataConfig.from_dict(config) if config else state.current_config().remote_data
     try:
         RemoteDataDownloader(remote_config).test_connection()
         return {"success": True, "message": "远程服务器连接成功"}
@@ -29,7 +29,8 @@ async def start_remote_processing():
     if state.global_task_lock["locked"]:
         raise HTTPException(status_code=409, detail="已有任务在运行，请等待当前任务完成")
 
-    remote_config = state.config.remote_data.normalized()
+    app_config = state.current_config()
+    remote_config = app_config.remote_data.normalized()
     if not remote_config.enabled:
         raise HTTPException(status_code=400, detail="请先启用远程数据配置")
 
@@ -68,7 +69,7 @@ async def start_remote_processing():
 
     thread = Thread(
         target=_run_remote_processing,
-        args=(task_id, work_dir, remote_config, logger),
+        args=(task_id, work_dir, app_config, remote_config, logger),
         daemon=True,
     )
     thread.start()
@@ -94,6 +95,7 @@ def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "pr
 def _run_remote_processing(
     task_id: str,
     work_dir: Path,
+    app_config: AppConfig,
     remote_config: RemoteDataConfig,
     logger: ProcessLogger,
 ) -> None:
@@ -115,7 +117,7 @@ def _run_remote_processing(
         state.history_manager.update(task_id, file_count=download_result.file_count)
         logger.set_stage("extracting")
 
-        processor = DataProcessor(state.config, work_dir, logger)
+        processor = DataProcessor(app_config, work_dir, logger)
         result = processor.process()
         status = "completed" if result.get("success") else "failed"
         if status == "completed" and remote_config.auto_delete_source:
