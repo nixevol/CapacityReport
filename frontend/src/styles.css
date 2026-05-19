@@ -471,7 +471,8 @@ select {
   color: var(--td-text-color-primary);
 }
 
-.work-card > .n-card__content {
+.work-card > .n-card__content,
+.work-card > .n-card-content {
   padding: 16px 20px;
   color: var(--td-text-color-primary);
 }
@@ -1196,14 +1197,16 @@ select {
   gap: 16px;
 }
 
-.settings-tabs-card > .n-card__content {
+.settings-tabs-card > .n-card__content,
+.settings-tabs-card > .n-card-content {
   flex: 1;
   min-height: 0;
   padding: 6px 18px 12px;
   overflow: hidden;
 }
 
-.settings-tabs-card > .n-card__content > .n-tabs {
+.settings-tabs-card > .n-card__content > .n-tabs,
+.settings-tabs-card > .n-card-content > .n-tabs {
   height: 100%;
 }
 
@@ -1293,7 +1296,8 @@ select {
   width: 100%;
 }
 
-.field-mapping-card > .n-card__content {
+.field-mapping-card > .n-card__content,
+.field-mapping-card > .n-card-content {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
@@ -1382,6 +1386,7 @@ select {
 
 .field-mapping-item {
   position: relative;
+  flex: 0 0 auto;
   padding: 32px 14px 12px;
   background: var(--td-bg-color-container);
   border: 1px solid var(--td-border-color);
