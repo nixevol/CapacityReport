@@ -1,5 +1,5 @@
 {
-  "Update": "2026/05/15 11:59:33",
+  "Update": "2026/05/19 17:08:10",
   "MySQL_DBInfo": {
     "host": "127.0.0.1",
     "port": 3306,
@@ -44,7 +44,8 @@
       "Field": "基站名称",
       "Extract": [
         "eNodeB CU名称",
-        "eNodeB名称"
+        "eNodeB名称",
+        "ENBFunction名称"
       ]
     },
     {
@@ -62,7 +63,8 @@
         "业务流量上下行（GB）",
         "YJ_业务流量上下行（GB）",
         "FDD总流量（G）"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "ERAB流量",
@@ -70,8 +72,10 @@
         "ERAB流量(新高负荷)",
         "ERAB流量",
         "ERAB流量(新高负荷)",
-        "ERAB流量(新高负荷)-FDD"
-      ]
+        "ERAB流量(新高负荷)-FDD",
+        "ERAB流量(新高负荷)_1538186901014-7-0"
+      ],
+      "Type": "float"
     },
     {
       "Field": "上行流量_GB",
@@ -79,8 +83,10 @@
         "上行流量(新高负荷GB)",
         "上行流量(新高负荷GB)",
         "高负荷-上行流量(GB)",
-        "FDD上行流量（G）"
-      ]
+        "FDD上行流量（G）",
+        "上行流量(GB)"
+      ],
+      "Type": "float"
     },
     {
       "Field": "下行流量_GB",
@@ -88,8 +94,10 @@
         "下行流量(新高负荷GB)",
         "下行流量(新高负荷GB)",
         "高负荷-下行流量(GB)",
-        "FDD下行流量（G）"
-      ]
+        "FDD下行流量（G）",
+        "下行流量(GB)"
+      ],
+      "Type": "float"
     },
     {
       "Field": "用户面平均激活UE数",
@@ -97,7 +105,8 @@
         "用户面平均激活UE数",
         "YY-用户面平均激活UE数(个)",
         "用户面平均激活UE数(unit)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "RRC连接建立最大用户数",
@@ -105,7 +114,8 @@
         "YY-RRC连接建立最大用户数(个)",
         "RRC连接建立最大用户数(unit)",
         "RRC连接建立最大用户数"
-      ]
+      ],
+      "Type": "int"
     },
     {
       "Field": "上行PUSCH利用率",
@@ -113,7 +123,8 @@
         "上行PUSCH利用率",
         "YY-上行PUSCH利用率",
         "上行PUSCH利用率-FDD"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "下行PDSCH利用率",
@@ -121,7 +132,8 @@
         "下行PDSCH利用率",
         "YY-下行PDSCH利用率",
         "下行PDSCH利用率-FDD"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "PDCCH资源利用率",
@@ -129,7 +141,8 @@
         "PDCCH资源利用率",
         "PDCCH资源利用率_1548034713403-33-2",
         "PDCCH资源使用率(%)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "用户面最大激活UE数",
@@ -138,7 +151,8 @@
         "用户面最大激活UE数",
         "YY-用户面最大激活UE数(个)",
         "用户面最大激活UE数(unit)"
-      ]
+      ],
+      "Type": "int"
     },
     {
       "Field": "CU小区配置名称",
@@ -162,82 +176,111 @@
       "Field": "5G上下行总流量_GB",
       "Extract": [
         "5G上下行总流量（上行PDCP PDU数据量+下行PDCP成功发送数据量）(GB)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "5G上行流量_GB",
       "Extract": [
         "5G上行流量（上行PDCP PDU数据量）_1603677232210(GB)",
         "5G上行流量（上行PDCP PDU数据量）(GB)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "5G下行流量_GB",
       "Extract": [
         "5G下行流量（下行PDCP成功发送数据量）_1603677232245(GB)",
         "5G下行流量（下行PDCP成功发送数据量）(GB)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "小区平均激活UE数",
       "Extract": [
         "小区平均激活UE数"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "RRC连接最大连接用户数",
       "Extract": [
         "RRC连接最大连接用户数"
-      ]
+      ],
+      "Type": "int"
     },
     {
       "Field": "RRC连接平均连接用户数",
       "Extract": [
         "RRC连接平均连接用户数"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "小区最大激活UE数",
       "Extract": [
         "小区最大激活UE数"
-      ]
+      ],
+      "Type": "int"
     },
     {
       "Field": "上行PRB平均利用率",
       "Extract": [
         "上行PRB平均利用率"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "下行PRB平均利用率",
       "Extract": [
         "下行PRB平均利用率"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "小区下行RLC_SDU字节数_MByte",
       "Extract": [
         "小区下行RLC SDU字节数(MByte)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "小区上行RLC_SDU字节数_MByte",
       "Extract": [
         "小区上行RLC SDU字节数(MByte)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "PDCCH信道动态CCE占用率",
       "Extract": [
         "PDCCH信道CCE占用率（动态）(%)"
-      ]
+      ],
+      "Type": "float"
     },
     {
       "Field": "平均单Flow流量_MB",
       "Extract": [
         "平均单Flow流量(MB)",
         "平均每flow流量（流量/flow(MB/flow)）"
-      ]
+      ],
+      "Type": "float"
     }
-  ]
+  ],
+  "RemoteData": {
+    "enabled": true,
+    "protocol": "sftp",
+    "host": "127.0.0.1",
+    "port": 2022,
+    "user": "nixevol",
+    "remote_dir": "/CapacityReportData",
+    "passive": true,
+    "timeout": 30,
+    "auto_delete_source": true,
+    "passwd": "242520"
+  },
+  "HistoryRetention": {
+    "enabled": true,
+    "keep_count": 1
+  }
 }
