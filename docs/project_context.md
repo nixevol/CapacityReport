@@ -1,4 +1,9 @@
 # 项目上下文记录
+## 2026-05-19：补全字段映射配置
+- 当前本地 `Configure.json` 的 `ExtractField` 已按旧版可用映射补全：`基站名称` 增加 `ENBFunction名称`，`ERAB流量` 增加 `ERAB流量(新高负荷)_1538186901014-7-0`，`上行流量_GB/下行流量_GB` 增加 `上行流量(GB)/下行流量(GB)`。
+- 4G/5G 数值字段显式补回 `Type: float/int`，避免依赖 SQL 脚本推断类型；`AppConfig.load()` 已验证能读取 32 个字段映射和正确的 `SheetFilter`。
+- 修改配置时需要注意 Windows PowerShell 管道的中文编码问题；如果要脚本化写入 `Configure.json`，优先从已有 UTF-8 JSON 读取并用 Unicode escape 合并，避免把中文字段写成 `????`。
+
 ## 2026-05-19：清理生成 CSV 并支持历史原始数据下载
 - `DataProcessor` 现在会追踪 ZIP 解压出的 CSV 和 Excel 转换生成的 CSV，只有这些处理过程中生成的临时 CSV 会在对应 CSV 成功导入后自动删除；原始 ZIP、Excel 和用户本来上传/远程下载得到的原始 CSV 不会被误删。
 - ZIP 解压从 `extractall()` 改为逐条安全解压，会跳过越界路径条目，并在解压 CSV 时登记为后续可清理的临时文件。
