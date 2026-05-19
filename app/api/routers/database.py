@@ -1,9 +1,12 @@
+from contextlib import suppress
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app import state
 from app.config import CACHE_DIR
@@ -11,6 +14,11 @@ from app.database import DatabaseManager
 
 
 router = APIRouter(tags=["database"])
+
+
+def _remove_file(path: Path) -> None:
+    with suppress(OSError):
+        path.unlink()
 
 
 @router.post("/api/database/test")
@@ -161,6 +169,9 @@ async def download_table(
     table_name: str = Body(..., embed=True),
     file_format: str = Body("csv", alias="format"),
 ):
+    if file_format not in {"csv", "xlsx"}:
+        raise HTTPException(status_code=400, detail="不支持的导出格式")
+
     db = DatabaseManager(state.config)
     try:
         result = db.query_table(table_name, page=1, page_size=1000000)
@@ -173,13 +184,22 @@ async def download_table(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{table_name}_{timestamp}.{file_format}"
     filepath = CACHE_DIR / filename
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    if file_format == "csv":
-        df.to_csv(filepath, index=False, encoding="utf-8-sig")
-        media_type = "text/csv"
-    else:
-        df.to_excel(filepath, index=False)
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    try:
+        if file_format == "csv":
+            df.to_csv(filepath, index=False, encoding="utf-8-sig")
+            media_type = "text/csv"
+        else:
+            df.to_excel(filepath, index=False)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    except Exception:
+        _remove_file(filepath)
+        raise
 
-    return FileResponse(path=str(filepath), filename=filename, media_type=media_type)
-
+    return FileResponse(
+        path=str(filepath),
+        filename=filename,
+        media_type=media_type,
+        background=BackgroundTask(_remove_file, filepath),
+    )

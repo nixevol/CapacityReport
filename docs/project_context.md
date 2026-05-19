@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-05-19：优化数据表导出临时文件清理
+
+- `app/api/routers/database.py` 的 `/api/download` 导出接口增加格式校验，只允许 `csv` 和 `xlsx`。
+- 导出文件仍临时写入 `cache/`，但 `FileResponse` 发送完成后会通过 `BackgroundTask` 自动删除；写入失败时也会清理半成品文件，避免导出残留占用服务器磁盘。
+- 已清理 `cache/` 中旧的导出缓存文件 2 个，仅保留处理历史目录和 `history.json`。
+- 已执行 `.venv\Scripts\python.exe -m compileall app`，编译检查通过。
+
 ## 2026-05-19：调整上传框操作按钮为换行显示
 
 - `frontend/src/components/FileWorkflow.vue` 移除上传框操作区里无效的 `<br>`，避免在 flex 布局中形成异常间距。
