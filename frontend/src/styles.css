@@ -600,9 +600,9 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 12px;
-  flex-wrap: wrap;
 }
 
 .remote-run-trigger {

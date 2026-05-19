@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-19：调整上传框操作按钮为换行显示
+
+- `frontend/src/components/FileWorkflow.vue` 移除上传框操作区里无效的 `<br>`，避免在 flex 布局中形成异常间距。
+- `frontend/src/styles.css` 将 `.upload-zone-actions` 改为纵向 flex 布局，使“或者点击选择文件”和“远程下载并处理”按钮固定分两行显示。
+- 已执行 `npm run build`，构建通过；本次按用户要求未启动浏览器或 headless Chrome。
+
 ## 2026-05-19：调整连接配置页卡片布局
 
 - `frontend/src/components/SettingsPanel.vue` 将连接配置页改成左列堆叠“数据库配置”和“处理历史保留”，右列显示“远程数据源”，避免右侧远程数据源卡片高度把处理历史保留卡片挤到很下面。

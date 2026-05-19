@@ -21,7 +21,7 @@
       <h3>拖拽文件夹或文件到这里</h3>
       <p>支持 .zip, .xlsx, .xls, .csv 格式</p>
       <div class="upload-zone-actions">
-        <span class="upload-hint">或者点击选择文件</span><br>
+        <span class="upload-hint">或者点击选择文件</span>
         <n-tooltip trigger="hover" placement="bottom">
           <template #trigger>
             <span class="remote-run-trigger" @click.stop @keydown.stop>
