@@ -180,7 +180,7 @@
                 </div>
               </template>
 
-              <n-scrollbar class="field-mapping-scroll">
+              <div class="field-mapping-scroll">
                 <n-empty v-if="visibleFieldMappings.length === 0" description="没有匹配的字段配置" />
 
                 <div
@@ -234,7 +234,7 @@
                     <div v-else class="extract-empty">暂无提取来源</div>
                   </div>
                 </div>
-              </n-scrollbar>
+              </div>
 
               <template #footer>
                 <n-space justify="end">
