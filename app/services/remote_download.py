@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from ftplib import FTP
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
 from app.config import RemoteDataConfig
 
@@ -16,6 +16,7 @@ LogFn = Callable[[str], None]
 class RemoteDownloadResult:
     file_count: int = 0
     total_bytes: int = 0
+    remote_files: list[str] = field(default_factory=list)
 
 
 class RemoteDownloadError(RuntimeError):
@@ -47,6 +48,18 @@ class RemoteDataDownloader:
         if self.config.protocol == "ftp":
             return self._download_ftp(destination)
         return self._download_sftp(destination)
+
+    def delete_source_files(self, remote_files: Iterable[str] | None = None) -> int:
+        self._validate_config()
+        source_files = list(remote_files or [])
+        if source_files:
+            if self.config.protocol == "ftp":
+                return self._delete_ftp_file_paths(source_files)
+            return self._delete_sftp_file_paths(source_files)
+
+        if self.config.protocol == "ftp":
+            return self._delete_ftp_source_files()
+        return self._delete_sftp_source_files()
 
     def _validate_config(self) -> None:
         if self.config.protocol not in {"ftp", "sftp"}:
@@ -149,6 +162,38 @@ class RemoteDataDownloader:
             ftp.retrbinary(f"RETR {remote_path}", file.write)
         result.file_count += 1
         result.total_bytes += expected_size or local_path.stat().st_size
+        result.remote_files.append(remote_path)
+
+    def _delete_ftp_source_files(self) -> int:
+        with self._ftp_client() as ftp:
+            self._log(f"开始清理 FTP 源文件: {self.config.remote_dir}")
+            return self._delete_ftp_files(ftp, self.config.remote_dir)
+
+    def _delete_ftp_files(self, ftp: FTP, remote_dir: str) -> int:
+        deleted_count = 0
+        for name, entry_type, _ in self._list_ftp_entries(ftp, remote_dir):
+            if name in {".", ".."}:
+                continue
+
+            remote_path = self._join_remote_path(remote_dir, name)
+            if entry_type == "dir" or (entry_type == "unknown" and self._ftp_is_dir(ftp, remote_path)):
+                deleted_count += self._delete_ftp_files(ftp, remote_path)
+                continue
+
+            self._log(f"删除远程文件: {remote_path}")
+            ftp.delete(remote_path)
+            deleted_count += 1
+        return deleted_count
+
+    def _delete_ftp_file_paths(self, remote_files: list[str]) -> int:
+        deleted_count = 0
+        with self._ftp_client() as ftp:
+            self._log(f"开始清理 FTP 源文件，共 {len(remote_files)} 个")
+            for remote_path in remote_files:
+                self._log(f"删除远程文件: {remote_path}")
+                ftp.delete(remote_path)
+                deleted_count += 1
+        return deleted_count
 
     def _sftp_ssh_client(self):
         try:
@@ -206,6 +251,47 @@ class RemoteDataDownloader:
         sftp.get(remote_path, str(local_path))
         result.file_count += 1
         result.total_bytes += int(getattr(attrs, "st_size", 0) or local_path.stat().st_size)
+        result.remote_files.append(remote_path)
+
+    def _delete_sftp_source_files(self) -> int:
+        ssh = self._sftp_ssh_client()
+        try:
+            with ssh.open_sftp() as sftp:
+                self._log(f"开始清理 SFTP 源文件: {self.config.remote_dir}")
+                return self._delete_sftp_files(sftp, self.config.remote_dir)
+        finally:
+            ssh.close()
+
+    def _delete_sftp_files(self, sftp, remote_path: str) -> int:
+        attrs = sftp.stat(remote_path)
+        if stat.S_ISDIR(attrs.st_mode):
+            deleted_count = 0
+            for item in sftp.listdir_attr(remote_path):
+                if item.filename in {".", ".."}:
+                    continue
+                deleted_count += self._delete_sftp_files(
+                    sftp,
+                    self._join_remote_path(remote_path, item.filename),
+                )
+            return deleted_count
+
+        self._log(f"删除远程文件: {remote_path}")
+        sftp.remove(remote_path)
+        return 1
+
+    def _delete_sftp_file_paths(self, remote_files: list[str]) -> int:
+        deleted_count = 0
+        ssh = self._sftp_ssh_client()
+        try:
+            with ssh.open_sftp() as sftp:
+                self._log(f"开始清理 SFTP 源文件，共 {len(remote_files)} 个")
+                for remote_path in remote_files:
+                    self._log(f"删除远程文件: {remote_path}")
+                    sftp.remove(remote_path)
+                    deleted_count += 1
+        finally:
+            ssh.close()
+        return deleted_count
 
     @staticmethod
     def _join_remote_path(parent: str, child: str) -> str:

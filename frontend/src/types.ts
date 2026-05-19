@@ -72,6 +72,7 @@ export interface RemoteDataConfig {
   remote_dir: string;
   passive: boolean;
   timeout: number;
+  auto_delete_source: boolean;
 }
 
 export interface TableInfo {

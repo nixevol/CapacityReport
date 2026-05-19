@@ -1175,19 +1175,47 @@ select {
 
 /* ==================== Settings ==================== */
 .settings-workspace {
-  display: grid;
-  grid-template-columns: 1fr 1.5fr;
-  align-items: start;
-  gap: 20px;
   min-height: 100%;
   padding: 24px 32px 40px;
 }
 
-.settings-column {
-  display: flex;
+.settings-tabs-card {
   min-width: 0;
-  flex-direction: column;
+}
+
+.settings-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 16px;
+}
+
+.settings-tabs-card > .n-card__content {
+  padding-top: 8px;
+}
+
+.settings-tabs .n-tab-pane {
+  padding-top: 16px;
+}
+
+.settings-section-grid,
+.settings-rules-grid {
+  display: grid;
+  align-items: start;
   gap: 20px;
+}
+
+.settings-section-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-rules-grid {
+  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.4fr);
+}
+
+.settings-security-panel {
+  max-width: 560px;
 }
 
 .card-actions {
@@ -1505,7 +1533,8 @@ select {
 
 /* ==================== Responsive ==================== */
 @media (max-width: 1200px) {
-  .settings-workspace {
+  .settings-section-grid,
+  .settings-rules-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1557,6 +1586,7 @@ select {
   }
 
   .card-actions,
+  .settings-card-header,
   .field-card-title-row,
   .extract-list-header {
     align-items: stretch;

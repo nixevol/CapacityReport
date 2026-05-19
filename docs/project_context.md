@@ -1,8 +1,16 @@
 # 项目上下文记录
 
+## 2026-05-19：拆分系统设置页并支持远程源文件自动清理
+
+- `frontend/src/components/SettingsPanel.vue` 的系统设置改为 Naive UI Tabs：连接配置页放数据库配置和远程数据源，规则映射页放 Sheet 过滤规则和字段映射配置，修改密码独立一页，避免设置内容堆在一个长页面。
+- `RemoteData` 配置新增 `auto_delete_source` 开关；前端在远程数据源配置中显示“处理成功后删除源文件”，默认关闭。
+- `app/services/remote_download.py` 新增远程源文件清理能力，下载阶段会记录本次实际下载的远程文件路径；自动清理只删除这些文件，不删除目录，也不会删除处理期间新进入远程目录的文件。
+- `app/api/routers/remote.py` 在远程下载并处理成功后才会执行源文件清理；清理失败只写入警告日志，不改变已完成的数据处理结果。
+- 已执行 `.venv\Scripts\python.exe -m compileall app` 和 `npm run build`，均通过；未启动浏览器或 headless Chrome。
+
 ## 2026-05-18：新增 FTP/SFTP 远程自动化处理
 
-- `Configure.json` 新增 `RemoteData` 配置，包含启用状态、协议、主机、端口、用户名、密码、远程目录、FTP 被动模式和超时时间；`app/config.py` 会兼容旧配置并在保存时写回该配置块。
+- `Configure.json` 新增 `RemoteData` 配置，包含启用状态、协议、主机、端口、用户名、密码、远程目录、FTP 被动模式、超时时间和源文件自动清理开关；`app/config.py` 会兼容旧配置并在保存时写回该配置块。
 - 新增 `app/services/remote_download.py`，FTP 使用标准库 `ftplib`，SFTP 使用 `paramiko`，会递归下载远程目录下的全部文件和文件夹到本地任务缓存目录。
 - 新增 `app/api/routers/remote.py`，`POST /api/remote/test` 用于测试远程连接，`POST /api/remote/start` 会创建历史任务、下载远程数据并复用 `DataProcessor` 完成现有处理流程。
 - `frontend/src/components/SettingsPanel.vue` 新增“远程数据源”配置卡片，支持 FTP/SFTP 切换、保存和测试连接；`frontend/src/components/FileWorkflow.vue` 新增“远程下载并处理”入口。

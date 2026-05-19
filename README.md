@@ -89,7 +89,7 @@ Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。
 `Configure.json` 主要包含：
 
 - `MySQL_DBInfo`：MySQL 连接信息
-- `RemoteData`：FTP/SFTP 远程数据源配置，用于递归下载目录后自动处理
+- `RemoteData`：FTP/SFTP 远程数据源配置，用于递归下载目录后自动处理，可选择处理成功后删除远程源文件
 - `SheetFilter`：Excel Sheet 过滤规则
 - `ExtractField`：字段抽取映射配置
 

@@ -34,6 +34,7 @@ class RemoteDataConfig:
     remote_dir: str = "/"
     passive: bool = True
     timeout: int = 30
+    auto_delete_source: bool = False
 
     def normalized(self) -> "RemoteDataConfig":
         protocol = self.protocol.lower().strip()
@@ -51,6 +52,7 @@ class RemoteDataConfig:
             remote_dir=(self.remote_dir or "/").strip() or "/",
             passive=bool(self.passive),
             timeout=max(int(self.timeout or 30), 1),
+            auto_delete_source=bool(self.auto_delete_source),
         )
 
     def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
@@ -63,6 +65,7 @@ class RemoteDataConfig:
             "remote_dir": self.remote_dir,
             "passive": self.passive,
             "timeout": self.timeout,
+            "auto_delete_source": self.auto_delete_source,
         }
         if include_password:
             data["passwd"] = self.passwd
@@ -91,6 +94,7 @@ class RemoteDataConfig:
             remote_dir=str(data.get("remote_dir", "/")),
             passive=bool(data.get("passive", True)),
             timeout=timeout,
+            auto_delete_source=bool(data.get("auto_delete_source", False)),
         ).normalized()
 
 

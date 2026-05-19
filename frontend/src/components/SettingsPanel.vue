@@ -2,251 +2,276 @@
   <div class="settings-workspace">
     <input ref="configInput" class="hidden-input" type="file" accept=".json" @change="uploadConfigFile" />
 
-    <div class="settings-column">
-      <n-card title="数据库配置" size="small" class="work-card">
-        <template #header-extra>
-          <span class="muted-line">更新时间：{{ configUpdate || '-' }}</span>
-        </template>
-
-        <n-form label-placement="top">
-          <n-grid :cols="12" :x-gap="12">
-            <n-gi :span="8">
-              <n-form-item label="主机地址">
-                <n-input v-model:value="mysqlForm.host" placeholder="localhost" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="4">
-              <n-form-item label="端口">
-                <n-input-number v-model:value="mysqlForm.port" class="full-width" :min="1" :max="65535" />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-          <n-form-item label="数据库名">
-            <n-input v-model:value="mysqlForm.dbname" placeholder="CapacityReport" />
-          </n-form-item>
-          <n-grid :cols="12" :x-gap="12">
-            <n-gi :span="6">
-              <n-form-item label="用户名">
-                <n-input v-model:value="mysqlForm.user" placeholder="root" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="6">
-              <n-form-item label="密码">
-                <n-input v-model:value="mysqlForm.passwd" type="password" show-password-on="click" />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-        </n-form>
-
-        <template #footer>
-          <n-space justify="end">
-            <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
-            <n-button :loading="testingDb" @click="testDatabase">测试连接</n-button>
-          </n-space>
-        </template>
-      </n-card>
-
-      <n-card title="远程数据源" size="small" class="work-card">
-        <n-form label-placement="top">
-          <n-form-item label="启用远程自动化">
-            <n-switch v-model:value="remoteForm.enabled" />
-          </n-form-item>
-          <n-grid :cols="12" :x-gap="12">
-            <n-gi :span="4">
-              <n-form-item label="协议">
-                <n-select
-                  v-model:value="remoteForm.protocol"
-                  :options="remoteProtocolOptions"
-                  @update:value="updateRemoteProtocol"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="8">
-              <n-form-item label="服务器地址">
-                <n-input v-model:value="remoteForm.host" placeholder="192.168.1.10" />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-          <n-grid :cols="12" :x-gap="12">
-            <n-gi :span="4">
-              <n-form-item label="端口">
-                <n-input-number v-model:value="remoteForm.port" class="full-width" :min="1" :max="65535" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="4">
-              <n-form-item label="超时秒数">
-                <n-input-number v-model:value="remoteForm.timeout" class="full-width" :min="1" :max="600" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="4">
-              <n-form-item label="FTP 被动模式">
-                <n-switch v-model:value="remoteForm.passive" :disabled="remoteForm.protocol !== 'ftp'" />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-          <n-grid :cols="12" :x-gap="12">
-            <n-gi :span="6">
-              <n-form-item label="用户名">
-                <n-input v-model:value="remoteForm.user" placeholder="remote user" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="6">
-              <n-form-item label="密码">
-                <n-input v-model:value="remoteForm.passwd" type="password" show-password-on="click" />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
-          <n-form-item label="远程目录">
-            <n-input v-model:value="remoteForm.remote_dir" placeholder="/CapacityReportData" />
-          </n-form-item>
-          <p class="form-hint">自动化执行会递归下载该目录下的全部文件和文件夹到本地缓存，再按现有处理流程入库和执行脚本。</p>
-        </n-form>
-
-        <template #footer>
-          <n-space justify="end">
-            <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
-            <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
-          </n-space>
-        </template>
-      </n-card>
-
-      <n-card title="Sheet 过滤规则" size="small" class="work-card">
-        <n-space vertical>
-          <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
-          <div class="filter-tags">
-            <n-tag
-              v-for="(filter, index) in sheetFilters"
-              :key="`${filter}-${index}`"
-              closable
-              @close="removeSheetFilter(index)"
-            >
-              {{ filter }}
-            </n-tag>
-            <n-empty v-if="sheetFilters.length === 0" size="small" description="暂无过滤规则" />
-          </div>
-          <n-input-group>
-            <n-input
-              v-model:value="newSheetFilter"
-              placeholder="输入需要跳过的 Sheet 关键词"
-              @keydown.enter.prevent="addSheetFilter"
-            />
-            <n-button @click="addSheetFilter">添加</n-button>
-          </n-input-group>
-        </n-space>
-
-        <template #footer>
-          <n-space justify="end">
-            <n-button type="primary" :loading="savingSheetFilter" @click="saveSheetFilter">保存规则</n-button>
-          </n-space>
-        </template>
-      </n-card>
-
-      <n-card title="修改登录密码" size="small" class="work-card">
-        <n-form label-placement="top">
-          <n-form-item label="当前密码">
-            <n-input v-model:value="passwordForm.current_password" type="password" show-password-on="click" />
-          </n-form-item>
-          <n-form-item label="新密码">
-            <n-input v-model:value="passwordForm.new_password" type="password" show-password-on="click" />
-          </n-form-item>
-          <n-form-item label="确认新密码">
-            <n-input v-model:value="passwordForm.confirm_password" type="password" show-password-on="click" />
-          </n-form-item>
-        </n-form>
-
-        <template #footer>
-          <n-space justify="end">
-            <n-button type="primary" :loading="changingPassword" @click="changePassword">修改密码</n-button>
-          </n-space>
-        </template>
-      </n-card>
-
-    </div>
-
-    <n-card size="small" class="work-card field-mapping-card">
+    <n-card size="small" class="work-card settings-tabs-card">
       <template #header>
-        <div class="field-card-header">
-          <div class="field-card-title-row">
-            <div class="field-card-title">
-              <span>字段映射配置</span>
-              <n-tag size="small" round>{{ extractFields.length }} 个字段</n-tag>
-            </div>
-            <n-input
-              v-model:value="fieldSearch"
-              size="small"
-              clearable
-              class="field-search"
-              placeholder="搜索字段..."
-            />
-          </div>
-          <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
+        <div class="settings-card-header">
+          <span>系统设置</span>
+          <span class="muted-line">更新时间：{{ configUpdate || '-' }}</span>
         </div>
       </template>
 
-      <n-scrollbar class="field-mapping-scroll">
-        <n-empty v-if="visibleFieldMappings.length === 0" description="没有匹配的字段配置" />
+      <n-tabs type="line" animated class="settings-tabs">
+        <n-tab-pane name="connection" tab="连接配置">
+          <div class="settings-section-grid">
+            <n-card title="数据库配置" size="small" class="work-card">
+              <n-form label-placement="top">
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="8">
+                    <n-form-item label="主机地址">
+                      <n-input v-model:value="mysqlForm.host" placeholder="localhost" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="端口">
+                      <n-input-number v-model:value="mysqlForm.port" class="full-width" :min="1" :max="65535" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-form-item label="数据库名">
+                  <n-input v-model:value="mysqlForm.dbname" placeholder="CapacityReport" />
+                </n-form-item>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="6">
+                    <n-form-item label="用户名">
+                      <n-input v-model:value="mysqlForm.user" placeholder="root" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="6">
+                    <n-form-item label="密码">
+                      <n-input v-model:value="mysqlForm.passwd" type="password" show-password-on="click" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+              </n-form>
 
-        <div
-          v-for="{ field, index } in visibleFieldMappings"
-          :key="index"
-          class="field-mapping-item"
-        >
-          <div class="field-mapping-number">{{ index + 1 }}</div>
-          <n-button
-            quaternary
-            circle
-            size="small"
-            type="error"
-            class="field-remove-button"
-            @click="removeFieldMapping(index)"
-          >
-            <template #icon>
-              <n-icon><CloseOutline /></n-icon>
-            </template>
-          </n-button>
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
+                  <n-button :loading="testingDb" @click="testDatabase">测试连接</n-button>
+                </n-space>
+              </template>
+            </n-card>
 
-          <div class="field-mapping-header">
-            <n-form-item label="数据库字段名" class="field-name-control">
-              <n-input v-model:value="field.Field" placeholder="输入字段名" />
-            </n-form-item>
-            <n-form-item label="字段类型" class="field-type-control">
-              <n-select v-model:value="field.Type" :options="fieldTypeOptions" />
-            </n-form-item>
+            <n-card title="远程数据源" size="small" class="work-card">
+              <n-form label-placement="top">
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="6">
+                    <n-form-item label="启用远程自动化">
+                      <n-switch v-model:value="remoteForm.enabled" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="6">
+                    <n-form-item label="处理成功后删除源文件">
+                      <n-switch v-model:value="remoteForm.auto_delete_source" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="4">
+                    <n-form-item label="协议">
+                      <n-select
+                        v-model:value="remoteForm.protocol"
+                        :options="remoteProtocolOptions"
+                        @update:value="updateRemoteProtocol"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="8">
+                    <n-form-item label="服务器地址">
+                      <n-input v-model:value="remoteForm.host" placeholder="192.168.1.10" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="4">
+                    <n-form-item label="端口">
+                      <n-input-number v-model:value="remoteForm.port" class="full-width" :min="1" :max="65535" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="超时秒数">
+                      <n-input-number v-model:value="remoteForm.timeout" class="full-width" :min="1" :max="600" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="FTP 被动模式">
+                      <n-switch v-model:value="remoteForm.passive" :disabled="remoteForm.protocol !== 'ftp'" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="6">
+                    <n-form-item label="用户名">
+                      <n-input v-model:value="remoteForm.user" placeholder="remote user" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="6">
+                    <n-form-item label="密码">
+                      <n-input v-model:value="remoteForm.passwd" type="password" show-password-on="click" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-form-item label="远程目录">
+                  <n-input v-model:value="remoteForm.remote_dir" placeholder="/CapacityReportData" />
+                </n-form-item>
+                <p class="form-hint">自动化执行会递归下载该目录下的全部文件和文件夹到本地缓存，再按现有处理流程入库和执行脚本；自动删除源文件只会在处理成功后删除远程文件，保留目录结构。</p>
+              </n-form>
+
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
+                  <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
+                </n-space>
+              </template>
+            </n-card>
           </div>
+        </n-tab-pane>
 
-          <div class="extract-list">
-            <div class="extract-list-header">
-              <span>提取来源（{{ field.Extract.length }} 个）</span>
-              <n-input-group class="extract-add-group">
-                <n-input
-                  v-model:value="newExtractValues[index]"
-                  size="small"
-                  placeholder="输入 Excel 列名"
-                  @keydown.enter.prevent="addExtract(index)"
-                />
-                <n-button size="small" @click="addExtract(index)">添加</n-button>
-              </n-input-group>
-            </div>
+        <n-tab-pane name="rules" tab="规则映射">
+          <div class="settings-rules-grid">
+            <n-card title="Sheet 过滤规则" size="small" class="work-card">
+              <n-space vertical>
+                <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
+                <div class="filter-tags">
+                  <n-tag
+                    v-for="(filter, index) in sheetFilters"
+                    :key="`${filter}-${index}`"
+                    closable
+                    @close="removeSheetFilter(index)"
+                  >
+                    {{ filter }}
+                  </n-tag>
+                  <n-empty v-if="sheetFilters.length === 0" size="small" description="暂无过滤规则" />
+                </div>
+                <n-input-group>
+                  <n-input
+                    v-model:value="newSheetFilter"
+                    placeholder="输入需要跳过的 Sheet 关键词"
+                    @keydown.enter.prevent="addSheetFilter"
+                  />
+                  <n-button @click="addSheetFilter">添加</n-button>
+                </n-input-group>
+              </n-space>
 
-            <div v-if="field.Extract.length > 0" class="extract-tree">
-              <div v-for="(source, sourceIndex) in field.Extract" :key="`${source}-${sourceIndex}`" class="extract-tree-item">
-                <span class="tree-text">{{ source }}</span>
-                <n-button text size="tiny" type="warning" @click="removeExtract(index, sourceIndex)">删除</n-button>
-              </div>
-            </div>
-            <div v-else class="extract-empty">暂无提取来源</div>
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="savingSheetFilter" @click="saveSheetFilter">保存规则</n-button>
+                </n-space>
+              </template>
+            </n-card>
+
+            <n-card size="small" class="work-card field-mapping-card">
+              <template #header>
+                <div class="field-card-header">
+                  <div class="field-card-title-row">
+                    <div class="field-card-title">
+                      <span>字段映射配置</span>
+                      <n-tag size="small" round>{{ extractFields.length }} 个字段</n-tag>
+                    </div>
+                    <n-input
+                      v-model:value="fieldSearch"
+                      size="small"
+                      clearable
+                      class="field-search"
+                      placeholder="搜索字段..."
+                    />
+                  </div>
+                  <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
+                </div>
+              </template>
+
+              <n-scrollbar class="field-mapping-scroll">
+                <n-empty v-if="visibleFieldMappings.length === 0" description="没有匹配的字段配置" />
+
+                <div
+                  v-for="{ field, index } in visibleFieldMappings"
+                  :key="index"
+                  class="field-mapping-item"
+                >
+                  <div class="field-mapping-number">{{ index + 1 }}</div>
+                  <n-button
+                    quaternary
+                    circle
+                    size="small"
+                    type="error"
+                    class="field-remove-button"
+                    @click="removeFieldMapping(index)"
+                  >
+                    <template #icon>
+                      <n-icon><CloseOutline /></n-icon>
+                    </template>
+                  </n-button>
+
+                  <div class="field-mapping-header">
+                    <n-form-item label="数据库字段名" class="field-name-control">
+                      <n-input v-model:value="field.Field" placeholder="输入字段名" />
+                    </n-form-item>
+                    <n-form-item label="字段类型" class="field-type-control">
+                      <n-select v-model:value="field.Type" :options="fieldTypeOptions" />
+                    </n-form-item>
+                  </div>
+
+                  <div class="extract-list">
+                    <div class="extract-list-header">
+                      <span>提取来源（{{ field.Extract.length }} 个）</span>
+                      <n-input-group class="extract-add-group">
+                        <n-input
+                          v-model:value="newExtractValues[index]"
+                          size="small"
+                          placeholder="输入 Excel 列名"
+                          @keydown.enter.prevent="addExtract(index)"
+                        />
+                        <n-button size="small" @click="addExtract(index)">添加</n-button>
+                      </n-input-group>
+                    </div>
+
+                    <div v-if="field.Extract.length > 0" class="extract-tree">
+                      <div v-for="(source, sourceIndex) in field.Extract" :key="`${source}-${sourceIndex}`" class="extract-tree-item">
+                        <span class="tree-text">{{ source }}</span>
+                        <n-button text size="tiny" type="warning" @click="removeExtract(index, sourceIndex)">删除</n-button>
+                      </div>
+                    </div>
+                    <div v-else class="extract-empty">暂无提取来源</div>
+                  </div>
+                </div>
+              </n-scrollbar>
+
+              <template #footer>
+                <n-space justify="end">
+                  <n-button @click="addFieldMapping">添加字段</n-button>
+                  <n-button type="primary" :loading="savingExtractFields" @click="saveExtractFields">
+                    保存映射
+                  </n-button>
+                </n-space>
+              </template>
+            </n-card>
           </div>
-        </div>
-      </n-scrollbar>
+        </n-tab-pane>
 
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="addFieldMapping">添加字段</n-button>
-          <n-button type="primary" :loading="savingExtractFields" @click="saveExtractFields">
-            保存映射
-          </n-button>
-        </n-space>
-      </template>
+        <n-tab-pane name="security" tab="修改密码">
+          <div class="settings-security-panel">
+            <n-card title="修改登录密码" size="small" class="work-card">
+              <n-form label-placement="top">
+                <n-form-item label="当前密码">
+                  <n-input v-model:value="passwordForm.current_password" type="password" show-password-on="click" />
+                </n-form-item>
+                <n-form-item label="新密码">
+                  <n-input v-model:value="passwordForm.new_password" type="password" show-password-on="click" />
+                </n-form-item>
+                <n-form-item label="确认新密码">
+                  <n-input v-model:value="passwordForm.confirm_password" type="password" show-password-on="click" />
+                </n-form-item>
+              </n-form>
+
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="changingPassword" @click="changePassword">修改密码</n-button>
+                </n-space>
+              </template>
+            </n-card>
+          </div>
+        </n-tab-pane>
+      </n-tabs>
     </n-card>
   </div>
 </template>
@@ -301,7 +326,8 @@ const remoteForm = reactive<RemoteDataConfig>({
   passwd: '',
   remote_dir: '/',
   passive: true,
-  timeout: 30
+  timeout: 30,
+  auto_delete_source: false
 });
 
 const passwordForm = reactive({
@@ -408,7 +434,8 @@ function getRemotePayload(): RemoteDataConfig {
     passwd: remoteForm.passwd || '',
     remote_dir: remoteForm.remote_dir.trim() || '/',
     passive: remoteForm.passive,
-    timeout: remoteForm.timeout || 30
+    timeout: remoteForm.timeout || 30,
+    auto_delete_source: remoteForm.auto_delete_source
   };
 }
 
@@ -611,7 +638,8 @@ function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteData
     passwd: config?.passwd || '',
     remote_dir: config?.remote_dir || '/',
     passive: config?.passive ?? true,
-    timeout: config?.timeout || 30
+    timeout: config?.timeout || 30,
+    auto_delete_source: Boolean(config?.auto_delete_source)
   };
 }
 

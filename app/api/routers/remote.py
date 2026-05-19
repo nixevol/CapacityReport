@@ -98,6 +98,13 @@ def _run_remote_processing(
         processor = DataProcessor(state.config, work_dir, logger)
         result = processor.process()
         status = "completed" if result.get("success") else "failed"
+        if status == "completed" and remote_config.auto_delete_source:
+            try:
+                deleted_count = downloader.delete_source_files(download_result.remote_files)
+                logger.success(f"远程源文件清理完成，共删除 {deleted_count} 个文件，目录已保留")
+            except Exception as exc:
+                logger.warning(f"远程源文件清理失败，数据处理结果已保留: {exc}")
+
         state.history_manager.update(
             task_id,
             status=status,
