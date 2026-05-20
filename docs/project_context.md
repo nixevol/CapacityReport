@@ -1,4 +1,12 @@
 # 项目上下文记录
+## 2026-05-20：修复桌面版残留 sidecar 和卸载用户数据选择
+
+- `src-tauri/src/main.rs` 启动 sidecar 前会先清理占用 `19082` 的旧 `capareport-server` 监听进程，避免卸载/重装或异常退出后连到旧服务；启动后不只检查端口可连接，还会请求 `/health` 返回 HTTP 200 才继续。
+- `frontend/src/api/client.ts` 在 Tauri 运行环境下即使构建时未注入 `VITE_API_BASE`，也会兜底使用 `http://127.0.0.1:19082`，并保留短暂 fetch 重试，避免桌面版出现配置页默认空值和脚本页 `Failed to fetch`。
+- Windows 桌面包收敛为 NSIS `setup.exe`，不再同时产出 MSI；新增 `src-tauri/windows/nsis-hooks.nsh`，卸载前会尝试关闭桌面进程和 sidecar，卸载后会询问是否删除 `%APPDATA%\com.nixevol.capacityreport` 中的配置、脚本、授权、缓存和日志。
+- 已执行 `scripts\build.bat desktop`，产物为 `dist\desktop\CapacityReport_2.0.2_x64-setup.exe`；脚本已自动清理 `dist/.tmp`、`frontend/dist`、`src-tauri/target` 和 `src-tauri/binaries`。
+- 已用新 NSIS 包静默覆盖安装并启动桌面版验证：`/health` 正常，`/api/config/full` 读取到 32 个字段映射，`/api/script/content` 成功读取 AppData 下的 `ReportScript.sql`；验证结束后已停止测试启动的桌面和 sidecar 进程。
+
 ## 2026-05-20：修复桌面版启动期配置和脚本加载竞态
 
 - 桌面版运行配置和脚本仍从安装包资源 `Configure.json`、`ReportScript.sql` 首次复制到系统 AppData 后读取；安装目录中的 `_up_` 是 Tauri 对 `../` 资源的打包目录，不是后端实际运行目录。

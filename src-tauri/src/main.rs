@@ -2,6 +2,7 @@
 
 use std::error::Error;
 use std::fs;
+use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -69,6 +70,7 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(data_dir.join("logs"))?;
     copy_resource(app, "Configure.json", &data_dir)?;
     copy_resource(app, "ReportScript.sql", &data_dir)?;
+    stop_existing_server_on_port(19082);
 
     let (mut rx, child) = app
         .shell()
@@ -80,7 +82,7 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
         .args(["--host", "127.0.0.1", "--port", "19082"])
         .spawn()?;
 
-    if let Err(error) = wait_for_server("127.0.0.1:19082", Duration::from_secs(20)) {
+    if let Err(error) = wait_for_server("127.0.0.1:19082", Duration::from_secs(60)) {
         let _ = child.kill();
         return Err(error);
     }
@@ -97,13 +99,55 @@ fn wait_for_server(addr: &str, timeout: Duration) -> Result<(), Box<dyn Error>> 
     let socket_addr: SocketAddr = addr.parse()?;
     let started_at = Instant::now();
     while started_at.elapsed() < timeout {
-        if TcpStream::connect_timeout(&socket_addr, Duration::from_millis(250)).is_ok() {
+        if health_check(&socket_addr).unwrap_or(false) {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(250));
     }
     Err(format!("Server did not start within {} seconds", timeout.as_secs()).into())
 }
+
+fn health_check(socket_addr: &SocketAddr) -> Result<bool, Box<dyn Error>> {
+    let mut stream = TcpStream::connect_timeout(socket_addr, Duration::from_millis(500))?;
+    stream.set_read_timeout(Some(Duration::from_millis(500)))?;
+    stream.write_all(b"GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")?;
+
+    let mut response = String::new();
+    stream.read_to_string(&mut response)?;
+    Ok(response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200"))
+}
+
+#[cfg(target_os = "windows")]
+fn stop_existing_server_on_port(port: u16) {
+    let Ok(output) = std::process::Command::new("netstat")
+        .args(["-ano", "-p", "tcp"])
+        .output()
+    else {
+        return;
+    };
+
+    let marker = format!(":{port}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        if !line.contains(&marker) || !line.to_ascii_uppercase().contains("LISTENING") {
+            continue;
+        }
+
+        let Some(pid) = line.split_whitespace().last() else {
+            continue;
+        };
+        if pid.parse::<u32>().is_err() {
+            continue;
+        }
+
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/T", "/PID", pid])
+            .status();
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn stop_existing_server_on_port(_port: u16) {}
 
 fn stop_server<R: Runtime>(app: &tauri::AppHandle<R>) {
     let state = app.state::<ServerState>();

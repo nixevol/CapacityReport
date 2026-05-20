@@ -1,7 +1,8 @@
 import type { ApiError, ApiErrorDetail } from '../types';
 
 const TOKEN_KEY = 'capacity_report_token';
-const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
+const DESKTOP_API_BASE = 'http://127.0.0.1:19082';
+const API_BASE = resolveApiBase();
 const API_FETCH_RETRIES = 8;
 const API_FETCH_RETRY_DELAY_MS = 500;
 let onUnauthorized: (() => void) | null = null;
@@ -253,6 +254,22 @@ function apiUrl(url: string): string {
     return url;
   }
   return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+function resolveApiBase(): string {
+  const configured = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
+  if (configured) {
+    return configured;
+  }
+  return isTauriRuntime() ? DESKTOP_API_BASE : '';
+}
+
+function isTauriRuntime(): boolean {
+  const win = window as Window & {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
+  };
+  return Boolean(win.__TAURI__ || win.__TAURI_INTERNALS__ || navigator.userAgent.includes('Tauri'));
 }
 
 function isLoginRequest(url: string): boolean {
