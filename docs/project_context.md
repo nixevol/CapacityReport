@@ -393,3 +393,10 @@
 - Cleanup verification completed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, PowerShell AST parse for `scripts/build.ps1`, Docker-hosted `sh -n scripts/build.sh`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Linux/macOS native server and desktop packages still need native OS verification.
 - `src-tauri/gen/schemas/` is intentionally tracked because `src-tauri/capabilities/default.json` references `../gen/schemas/desktop-schema.json`; do not ignore or delete these schema files during cleanup, otherwise VS Code JSON validation reports a missing schema.
 - `README.md` has been rewritten to document local startup, Server Portable, Tauri desktop, Docker, Linux/macOS build commands, configuration blocks, common APIs, and cleanup rules. Keep future build instructions in sync with `scripts/build.*`.
+
+## 2026-05-20: Tauri desktop console and installer language
+
+- `src-tauri/src/main.rs` uses `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` so Windows release builds use the GUI subsystem and do not open an extra console window when launched from Explorer or the installer shortcut.
+- `build/capareport-server.spec` keeps Server Portable in console mode, but desktop one-file sidecar builds (`CAPAREPORT_ONEFILE=1`) use PyInstaller `console=False`; PyInstaller should select `runw.exe` for the sidecar so it also stays hidden behind the Tauri window.
+- `src-tauri/tauri.conf.json` sets Windows installer localization through `bundle.windows.wix.language = "zh-CN"` and `bundle.windows.nsis.languages = ["SimpChinese"]`. NSIS language keys must use NSIS names such as `SimpChinese`, while WiX/MSI uses locale names such as `zh-CN`.
+- Verification on Windows: `cargo check --manifest-path src-tauri\Cargo.toml` passed, `scripts\build.bat desktop` generated the MSI and NSIS bundles, PE subsystem checks reported `Windows GUI` for both `capacity-report-desktop.exe` and `capareport-server.exe`, and the generated NSIS script included `MUI_LANGUAGE "SimpChinese"`.

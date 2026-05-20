@@ -1,7 +1,9 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::error::Error;
 
 use tauri::{Manager, Runtime};
 use tauri_plugin_shell::process::CommandChild;
@@ -38,7 +40,9 @@ fn resource_candidates<R: Runtime>(
     app: &tauri::App<R>,
     name: &str,
 ) -> Result<Vec<PathBuf>, Box<dyn Error>> {
-    let resource_path = app.path().resolve(name, tauri::path::BaseDirectory::Resource)?;
+    let resource_path = app
+        .path()
+        .resolve(name, tauri::path::BaseDirectory::Resource)?;
     let escaped_parent_path = app
         .path()
         .resolve(format!("_up_/{name}"), tauri::path::BaseDirectory::Resource)?;
@@ -66,13 +70,14 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
     let (mut rx, child) = app
         .shell()
         .sidecar("capareport-server")?
-        .env("CAPAREPORT_BASE_DIR", data_dir.to_string_lossy().to_string())
+        .env(
+            "CAPAREPORT_BASE_DIR",
+            data_dir.to_string_lossy().to_string(),
+        )
         .args(["--host", "127.0.0.1", "--port", "19082"])
         .spawn()?;
 
-    tauri::async_runtime::spawn(async move {
-        while rx.recv().await.is_some() {}
-    });
+    tauri::async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
 
     let pid = child.pid();
     let state = app.state::<ServerState>();
@@ -82,11 +87,7 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
 
 fn stop_server<R: Runtime>(app: &tauri::AppHandle<R>) {
     let state = app.state::<ServerState>();
-    let child = state
-        .0
-        .lock()
-        .expect("server state lock poisoned")
-        .take();
+    let child = state.0.lock().expect("server state lock poisoned").take();
     if let Some(process) = child {
         #[cfg(target_os = "windows")]
         {

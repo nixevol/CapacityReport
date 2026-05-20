@@ -37,6 +37,16 @@
     "resources": [
       "../Configure.json",
       "../ReportScript.sql"
-    ]
+    ],
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      },
+      "nsis": {
+        "languages": [
+          "SimpChinese"
+        ]
+      }
+    }
   }
 }
