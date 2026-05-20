@@ -1,4 +1,11 @@
 # 项目上下文记录
+## 2026-05-20：修复登录失败误提示会话过期
+
+- `frontend/src/api/client.ts` 不再把 `/api/login` 的 401 响应当作全局会话过期处理，登录失败会按后端真实错误显示“账号或密码错误”。
+- 已登录业务接口遇到 401 时仍会清理本地 token 并切回登录页，但 `AppShell` 不再额外弹出全局“登录已过期”提示，避免组件自身错误提示和全局提示同时出现。
+- 默认登录密码仍由 `app/auth.py` 定义为 `Capacity`，大小写敏感；如本地 `auth.ini` 未修改，输入小写 `capacity` 会按正常登录失败处理。
+- 已执行 `npm run build`，构建通过；前端构建仅保留 Vite 大 chunk 提示，生成产物随后清理。
+
 ## 2026-05-20：增加按 ZIP 数据日期校验的使用期限限制
 
 - 新增 `app/services/license.py` 和 `/api/license/status`、`/api/license/activate`：本地 `license.dat` 用 XOR+HMAC 方式加密保存到期日期，缺失时自动初始化为 `2026-06-20`，文件已加入 `.gitignore`。

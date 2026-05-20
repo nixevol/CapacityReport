@@ -50,16 +50,24 @@ export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
 
 export async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  const token = getToken();
+  const token = isLoginRequest(url) ? '' : getToken();
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(apiUrl(url), { ...init, headers });
   if (response.status === 401) {
+    if (isLoginRequest(url)) {
+      const error = await readError(response);
+      throw new ApiRequestError(error.message, response.status, error.detail);
+    }
+
     clearToken();
     onUnauthorized?.();
-    throw new Error('登录已过期，请重新登录');
+    throw new ApiRequestError('登录已过期，请重新登录', response.status, {
+      code: 'UNAUTHORIZED',
+      message: '登录已过期，请重新登录'
+    });
   }
 
   if (!response.ok) {
@@ -94,7 +102,12 @@ export function upload<T>(
       if (xhr.status === 401) {
         clearToken();
         onUnauthorized?.();
-        reject(new Error('登录已过期，请重新登录'));
+        reject(
+          new ApiRequestError('登录已过期，请重新登录', xhr.status, {
+            code: 'UNAUTHORIZED',
+            message: '登录已过期，请重新登录'
+          })
+        );
         return;
       }
 
@@ -143,7 +156,10 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
   if (response.status === 401) {
     clearToken();
     onUnauthorized?.();
-    throw new Error('登录已过期，请重新登录');
+    throw new ApiRequestError('登录已过期，请重新登录', response.status, {
+      code: 'UNAUTHORIZED',
+      message: '登录已过期，请重新登录'
+    });
   }
 
   if (!response.ok) {
@@ -214,4 +230,13 @@ function apiUrl(url: string): string {
     return url;
   }
   return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+function isLoginRequest(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.pathname === '/api/login';
+  } catch {
+    return url.replace(/^https?:\/\/[^/]+/i, '').split('?')[0] === '/api/login';
+  }
 }

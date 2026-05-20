@@ -194,7 +194,6 @@ watch(
 
 setUnauthorizedHandler(() => {
   token.value = '';
-  message.warning('登录已过期');
 });
 
 async function handleLogin(payload: { username: string; password: string }) {
