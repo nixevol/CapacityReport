@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, HTTPException
 from app import state
 from app.config import AppConfig
 from app.processor import DataProcessor, ProcessLogger
+from app.services.license import LicenseError, LicenseInfo, check_processing_allowed
 
 
 router = APIRouter(tags=["tasks"])
@@ -133,6 +134,8 @@ async def get_processing_status(task_id: str = Body(..., embed=True)):
             "status": task_info["status"],
             "stage": task_info.get("stage"),
             "logs": logs,
+            "error": task_info.get("error"),
+            "error_detail": task_info.get("error_detail"),
         }
 
     record = state.history_manager.get(task_id)
@@ -170,27 +173,36 @@ def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "pr
 
 def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_config: AppConfig) -> None:
     try:
+        logger.set_stage("license")
+        _log_license_check(logger, check_processing_allowed(work_dir))
+
         processor = DataProcessor(app_config, work_dir, logger)
         result = processor.process()
         status = "completed" if result.get("success") else "failed"
+        error = result.get("error")
         state.history_manager.update(
             task_id,
             status=status,
             elapsed_time=result.get("elapsed_time", 0),
-            error=result.get("error"),
+            error=error,
             result_tables=["4G_结果表", "5G_结果表"],
         )
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": status,
             "stage": status,
+            "error": error,
         }
     except Exception as exc:
+        error_detail = exc.to_detail() if isinstance(exc, LicenseError) else None
+        logger.error(str(exc))
         state.history_manager.update(task_id, status="failed", error=str(exc))
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": "failed",
             "stage": "failed",
+            "error": str(exc),
+            "error_detail": error_detail,
         }
     finally:
         try:
@@ -198,3 +210,15 @@ def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_con
         except Exception as exc:
             print(f"自动清理处理历史失败: {exc}")
         state.reset_task_lock()
+
+
+def _log_license_check(logger: ProcessLogger, info: LicenseInfo) -> None:
+    if info.current_date:
+        logger.info(
+            f"授权校验通过，数据日期: {info.current_date.isoformat()}，"
+            f"到期日期: {info.expires_on.isoformat()}"
+        )
+    elif info.zip_count:
+        logger.warning("未从 ZIP 文件名识别到日期，已跳过授权日期比对")
+    else:
+        logger.warning("未找到 ZIP 文件，已跳过授权日期比对")

@@ -9,6 +9,7 @@ CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的�
 - MySQL 数据表查看、清空、删除、CSV/XLSX 导出。
 - SQL 脚本在线查看、保存和执行。
 - 处理历史、日志查看、历史原始数据打包下载。
+- 按 ZIP 文件名数据日期校验本地授权期限，过期后可输入激活码顺延。
 - 系统设置：数据库、远程数据源、Sheet 过滤、字段映射、历史保留、密码修改。
 - 发行形态：Server Portable、Tauri 桌面版、Docker 服务端版。
 
@@ -216,6 +217,8 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 
 登录密码保存在本地 `auth.ini`，该文件不应提交到版本库。
 
+授权到期日期保存在本地加密文件 `license.dat`，默认到期日为 `2026-06-20`。处理任务不会读取系统日期，而是从任务目录 ZIP 文件名中的 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳取最大日期进行比对。
+
 ## 常用接口
 
 - `POST /api/login`：登录
@@ -225,6 +228,8 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 - `POST /api/remote/start`：远程下载并处理
 - `POST /api/process/start`：启动本地处理
 - `POST /api/process/status`：查询处理状态
+- `GET /api/license/status`：查询授权状态
+- `POST /api/license/activate`：提交激活码并顺延授权期限
 - `GET /api/history`：处理历史
 - `POST /api/history/download`：下载历史原始数据
 - `POST /api/service/restart`：重启服务
@@ -232,6 +237,6 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 
 ## 维护注意事项
 
-- 不要提交 `auth.ini`、`cache/`、`logs/`、`dist/`、`frontend/dist/`、`src-tauri/target/`、`src-tauri/binaries/`。
+- 不要提交 `auth.ini`、`license.dat`、`cache/`、`logs/`、`dist/`、`frontend/dist/`、`src-tauri/target/`、`src-tauri/binaries/`。
 - `src-tauri/gen/schemas/` 需要保留并提交，`src-tauri/capabilities/default.json` 的 JSON schema 会引用它。
 - `ReportScript.sql` 是业务处理链路的一部分，修改前需要确认 SQL 语义和字段映射兼容。

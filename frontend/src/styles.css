@@ -619,6 +619,35 @@ select {
   display: inline-flex;
 }
 
+.license-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.license-dialog-text {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.license-key-label {
+  padding: 8px 10px;
+  color: var(--td-brand-color);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  background: var(--td-brand-color-light);
+  border: 1px solid var(--td-brand-color-focus);
+  border-radius: var(--td-radius-default);
+}
+
+.license-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .file-list {
   margin-top: 20px;
 }

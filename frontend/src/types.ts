@@ -4,9 +4,27 @@ export interface LoginResponse {
 }
 
 export interface ApiError {
-  detail?: string;
+  detail?: string | ApiErrorDetail;
   error?: string;
   message?: string;
+  code?: string;
+}
+
+export interface ApiErrorDetail {
+  code?: string;
+  message?: string;
+  expires_on?: string;
+  current_date?: string;
+  key_label?: string;
+  [key: string]: unknown;
+}
+
+export interface LicenseStatus {
+  success: boolean;
+  expires_on: string;
+  key_label: string;
+  current_date?: string | null;
+  zip_count?: number;
 }
 
 export interface TaskStatus {
@@ -16,6 +34,7 @@ export interface TaskStatus {
   logs: string[];
   elapsed_time?: number;
   error?: string;
+  error_detail?: ApiErrorDetail;
 }
 
 export interface ActiveTask {

@@ -1,4 +1,13 @@
 # 项目上下文记录
+## 2026-05-20：增加按 ZIP 数据日期校验的使用期限限制
+
+- 新增 `app/services/license.py` 和 `/api/license/status`、`/api/license/activate`：本地 `license.dat` 用 XOR+HMAC 方式加密保存到期日期，缺失时自动初始化为 `2026-06-20`，文件已加入 `.gitignore`。
+- 授权校验不读取系统日期；本地上传处理和远程下载完成后的处理入口会遍历任务目录下 ZIP 文件名，提取 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳并取最大日期作为数据日期，超过授权到期日则任务失败并返回 `LICENSE_EXPIRED` 详情。
+- 激活码为当前到期日期 `YYYY/MM/DD` 字符串的 SHA-256 hex；每次激活只按当前加密文件里的到期日校验，成功后顺延 30 天，因此旧激活码不能重复顺延。
+- `frontend/src/components/FileWorkflow.vue` 在任务因授权过期失败时弹出激活框，显示 `key: YYYY/MM/DD`，输入激活码成功后本地上传任务会继续处理，远程任务会重新发起远程下载处理。
+- 如果任务中没有 ZIP，或 ZIP 文件名没有可识别时间戳，当前实现会写入警告并跳过授权日期比对，避免误伤直接 CSV/Excel 上传流程；如需强制所有数据都必须带 ZIP 日期，可在 `check_processing_allowed()` 中收紧该策略。
+- 已执行授权逻辑临时目录验证、`.venv\Scripts\python.exe -m compileall app`、`uvx --offline ruff check .` 和 `npm run build`，均通过；前端构建仅保留 Vite 大 chunk 提示，生成产物已清理。
+
 ## 2026-05-19：配置按请求实时重载
 - `app/state.py` 新增 `reload_config()` 和 `current_config()`，后端接口不再长期依赖启动时的 `state.config` 快照；读取配置、下载配置、数据库接口、健康检查、本地处理、远程处理和脚本执行入口都会从 `Configure.json` 重新加载最新配置。
 - 配置保存类接口会先重载当前文件再修改对应配置块并保存，避免用户手工更新 `Configure.json` 后，被某个单项保存接口用旧内存配置覆盖。

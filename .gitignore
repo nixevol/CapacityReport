@@ -44,6 +44,7 @@ CapacityReportData/
 .env
 .env.local
 auth.ini
+license.dat
 
 # Logs
 *.log

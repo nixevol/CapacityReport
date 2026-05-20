@@ -146,6 +146,32 @@
         </div>
       </div>
     </div>
+
+    <n-modal
+      v-model:show="licenseModalVisible"
+      preset="card"
+      title="授权已过期"
+      :mask-closable="!activationLoading"
+      :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }"
+    >
+      <div class="license-dialog-body">
+        <p class="license-dialog-text">{{ licenseErrorMessage }}</p>
+        <div class="license-key-label">key: {{ activationKeyLabel }}</div>
+        <n-input
+          v-model:value="activationCode"
+          type="textarea"
+          :autosize="{ minRows: 3, maxRows: 5 }"
+          placeholder="请输入激活码"
+          :disabled="activationLoading"
+        />
+      </div>
+      <template #footer>
+        <div class="license-dialog-footer">
+          <n-button :disabled="activationLoading" @click="licenseModalVisible = false">取消</n-button>
+          <n-button type="primary" :loading="activationLoading" @click="submitActivation">激活</n-button>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -161,8 +187,8 @@ import {
   TrashOutline
 } from '@vicons/ionicons5';
 
-import { apiGet, apiPost, upload } from '../api/client';
-import type { ActiveTask, TaskStatus } from '../types';
+import { ApiRequestError, apiGet, apiPost, upload } from '../api/client';
+import type { ActiveTask, ApiErrorDetail, LicenseStatus, TaskStatus } from '../types';
 
 type FileStatus = 'pending' | 'uploading' | 'uploaded' | 'error';
 
@@ -199,9 +225,17 @@ const taskStatus = ref<TaskStatus | null>(null);
 const activeTask = ref<ActiveTask | null>(null);
 const keepLatestLog = ref(false);
 const logContainer = ref<HTMLElement | null>(null);
+const licenseModalVisible = ref(false);
+const activationCode = ref('');
+const activationLoading = ref(false);
+const activationKeyLabel = ref('2026/06/20');
+const licenseErrorMessage = ref('当前数据日期已超过授权到期日期，请输入激活码延长 30 天。');
+const taskMode = ref<'local' | 'remote' | 'unknown'>('unknown');
+let activationRetry: (() => Promise<void>) | null = null;
 let timer: number | undefined;
 
 const stageLabels: Record<string, string> = {
+  license: '授权校验中...',
   downloading: '远程下载中...',
   uploading: '上传文件中...',
   processing: '处理中...',
@@ -454,16 +488,16 @@ async function uploadAndStart() {
       item.progress = 100;
     });
     message.success(`上传完成：${result.file_count ?? files.value.length} 个文件`);
-    await apiPost('/api/process/start', { task_id: result.task_id });
-    taskStatus.value = { task_id: result.task_id, status: 'processing', stage: 'processing', logs: ['任务已提交，等待处理日志...'] };
-    startPolling(result.task_id);
+    await startUploadedTask(result.task_id);
   } catch (error) {
     files.value.forEach(item => {
       if (item.status === 'uploading') {
         item.status = 'error';
       }
     });
-    message.error(error instanceof Error ? error.message : '上传或启动任务失败');
+    if (!handleApiLicenseError(error)) {
+      message.error(error instanceof Error ? error.message : '上传或启动任务失败');
+    }
   } finally {
     working.value = false;
   }
@@ -490,12 +524,27 @@ async function startRemoteProcessing() {
       stage: result.stage || 'downloading',
       logs: ['远程下载任务已提交，等待处理日志...']
     };
+    taskMode.value = 'remote';
     startPolling(result.task_id);
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '启动远程自动化任务失败');
+    if (!handleApiLicenseError(error)) {
+      message.error(error instanceof Error ? error.message : '启动远程自动化任务失败');
+    }
   } finally {
     remoteStarting.value = false;
   }
+}
+
+async function startUploadedTask(taskId: string) {
+  await apiPost('/api/process/start', { task_id: taskId });
+  taskMode.value = 'local';
+  taskStatus.value = {
+    task_id: taskId,
+    status: 'processing',
+    stage: 'license',
+    logs: ['任务已提交，等待处理日志...']
+  };
+  startPolling(taskId);
 }
 
 function updateUploadingFiles(progress: number) {
@@ -510,6 +559,7 @@ async function checkActiveTask() {
   try {
     activeTask.value = await apiGet<ActiveTask>('/api/task/status');
     if (activeTask.value.has_active && activeTask.value.task_id) {
+      taskMode.value = 'unknown';
       startPolling(activeTask.value.task_id);
     }
   } catch (error) {
@@ -539,11 +589,94 @@ async function poll(taskId: string) {
     if (['completed', 'failed'].includes(taskStatus.value.status)) {
       stopPolling();
       await checkActiveTask();
+      if (taskStatus.value.status === 'failed') {
+        handleTaskLicenseError(taskStatus.value);
+      }
     }
   } catch (error) {
     stopPolling();
     message.error(error instanceof Error ? error.message : '刷新任务状态失败');
   }
+}
+
+function handleTaskLicenseError(status: TaskStatus): boolean {
+  const detail = status.error_detail || parseLicenseDetail(status.error || '');
+  if (detail?.code !== 'LICENSE_EXPIRED') {
+    return false;
+  }
+
+  const taskId = status.task_id;
+  const retry =
+    taskMode.value === 'local'
+      ? () => startUploadedTask(taskId)
+      : taskMode.value === 'remote'
+        ? () => startRemoteProcessing()
+        : null;
+  openLicenseModal(detail, retry);
+  return true;
+}
+
+function handleApiLicenseError(error: unknown): boolean {
+  if (!(error instanceof ApiRequestError) || error.code !== 'LICENSE_EXPIRED') {
+    return false;
+  }
+
+  openLicenseModal(error.detail);
+  return true;
+}
+
+function openLicenseModal(detail?: ApiErrorDetail, retry?: (() => Promise<void>) | null) {
+  activationKeyLabel.value = detail?.key_label || activationKeyLabel.value;
+  licenseErrorMessage.value =
+    detail?.message || '当前数据日期已超过授权到期日期，请输入激活码延长 30 天。';
+  activationCode.value = '';
+  activationRetry = retry || null;
+  licenseModalVisible.value = true;
+}
+
+async function submitActivation() {
+  const code = activationCode.value.trim();
+  if (!code) {
+    message.warning('请输入激活码');
+    return;
+  }
+
+  activationLoading.value = true;
+  try {
+    const result = await apiPost<LicenseStatus>('/api/license/activate', { code });
+    activationKeyLabel.value = result.key_label;
+    licenseModalVisible.value = false;
+    message.success(`激活成功，到期日期: ${result.expires_on}`);
+    if (activationRetry) {
+      const retry = activationRetry;
+      activationRetry = null;
+      await retry();
+    }
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.detail?.key_label) {
+      activationKeyLabel.value = error.detail.key_label;
+    }
+    message.error(error instanceof Error ? error.message : '激活失败');
+  } finally {
+    activationLoading.value = false;
+  }
+}
+
+function parseLicenseDetail(text: string): ApiErrorDetail | null {
+  if (!text.includes('授权已过期')) {
+    return null;
+  }
+
+  const expiresMatch = text.match(/到期日期\s+(\d{4}-\d{2}-\d{2})/);
+  const currentMatch = text.match(/数据日期\s+(\d{4}-\d{2}-\d{2})/);
+  const expiresOn = expiresMatch?.[1];
+  return {
+    code: 'LICENSE_EXPIRED',
+    message: text,
+    expires_on: expiresOn,
+    current_date: currentMatch?.[1],
+    key_label: expiresOn ? expiresOn.replace(/-/g, '/') : activationKeyLabel.value
+  };
 }
 
 function stageText(stage?: string | null): string {

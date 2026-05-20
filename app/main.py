@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import state
-from app.api.routers import auth, cache, config, database, health, history, remote, script, service, tasks, upload
+from app.api.routers import auth, cache, config, database, health, history, license, remote, script, service, tasks, upload
 from app.auth import verify_jwt_token
 from app.config import BASE_DIR
 
@@ -64,6 +64,7 @@ def register_routes(app: FastAPI) -> None:
         remote.router,
         tasks.router,
         history.router,
+        license.router,
         database.router,
         config.router,
         cache.router,

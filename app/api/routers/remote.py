@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, HTTPException
 from app import state
 from app.config import AppConfig, CACHE_DIR, RemoteDataConfig
 from app.processor import DataProcessor, ProcessLogger
+from app.services.license import LicenseError, LicenseInfo, check_processing_allowed
 from app.services.remote_download import RemoteDataDownloader
 
 
@@ -115,11 +116,13 @@ def _run_remote_processing(
             raise RuntimeError("远程目录中未下载到任何文件")
 
         state.history_manager.update(task_id, file_count=download_result.file_count)
-        logger.set_stage("extracting")
+        logger.set_stage("license")
+        _log_license_check(logger, check_processing_allowed(work_dir))
 
         processor = DataProcessor(app_config, work_dir, logger)
         result = processor.process()
         status = "completed" if result.get("success") else "failed"
+        error = result.get("error")
         if status == "completed" and remote_config.auto_delete_source:
             try:
                 deleted_count = downloader.delete_source_files(download_result.remote_files)
@@ -131,21 +134,25 @@ def _run_remote_processing(
             task_id,
             status=status,
             elapsed_time=result.get("elapsed_time", 0),
-            error=result.get("error"),
+            error=error,
             result_tables=["4G_结果表", "5G_结果表"],
         )
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": status,
             "stage": status,
+            "error": error,
         }
     except Exception as exc:
+        error_detail = exc.to_detail() if isinstance(exc, LicenseError) else None
         logger.error(f"远程自动化任务失败: {exc}")
         state.history_manager.update(task_id, status="failed", error=str(exc))
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
             "status": "failed",
             "stage": "failed",
+            "error": str(exc),
+            "error_detail": error_detail,
         }
     finally:
         try:
@@ -162,3 +169,15 @@ def _format_bytes(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} TB"
+
+
+def _log_license_check(logger: ProcessLogger, info: LicenseInfo) -> None:
+    if info.current_date:
+        logger.info(
+            f"授权校验通过，数据日期: {info.current_date.isoformat()}，"
+            f"到期日期: {info.expires_on.isoformat()}"
+        )
+    elif info.zip_count:
+        logger.warning("未从 ZIP 文件名识别到日期，已跳过授权日期比对")
+    else:
+        logger.warning("未找到 ZIP 文件，已跳过授权日期比对")

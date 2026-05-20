@@ -1,8 +1,22 @@
-import type { ApiError } from '../types';
+import type { ApiError, ApiErrorDetail } from '../types';
 
 const TOKEN_KEY = 'capacity_report_token';
 const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 let onUnauthorized: (() => void) | null = null;
+
+export class ApiRequestError extends Error {
+  status: number;
+  code?: string;
+  detail?: ApiErrorDetail;
+
+  constructor(message: string, status: number, detail?: ApiErrorDetail) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = detail?.code;
+    this.detail = detail;
+  }
+}
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || '';
@@ -49,8 +63,8 @@ export async function request<T>(url: string, init: RequestInit = {}): Promise<T
   }
 
   if (!response.ok) {
-    const message = await readError(response);
-    throw new Error(message);
+    const error = await readError(response);
+    throw new ApiRequestError(error.message, response.status, error.detail);
   }
 
   return response.json() as Promise<T>;
@@ -111,7 +125,8 @@ export async function download(url: string, body: unknown, filename: string): Pr
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    const error = await readError(response);
+    throw new ApiRequestError(error.message, response.status, error.detail);
   }
 
   await saveBlobResponse(response, parseFilename(response.headers.get('content-disposition')) || filename);
@@ -132,29 +147,44 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
   }
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    const error = await readError(response);
+    throw new ApiRequestError(error.message, response.status, error.detail);
   }
 
   const filename = parseFilename(response.headers.get('content-disposition')) || fallbackFilename;
   await saveBlobResponse(response, filename);
 }
 
-async function readError(response: Response): Promise<string> {
+async function readError(response: Response): Promise<{ message: string; detail?: ApiErrorDetail }> {
   try {
     const data = (await response.json()) as ApiError;
-    return data.detail || data.error || data.message || response.statusText;
+    return parseApiError(data, response.statusText);
   } catch {
-    return response.statusText || '请求失败';
+    return { message: response.statusText || '请求失败' };
   }
 }
 
 function parseXhrError(text: string): string {
   try {
     const data = JSON.parse(text) as ApiError;
-    return data.detail || data.error || data.message || '请求失败';
+    return parseApiError(data, '请求失败').message;
   } catch {
     return text || '请求失败';
   }
+}
+
+function parseApiError(data: ApiError, fallback: string): { message: string; detail?: ApiErrorDetail } {
+  if (typeof data.detail === 'object' && data.detail !== null) {
+    return {
+      message: data.detail.message || data.message || data.error || fallback,
+      detail: data.detail
+    };
+  }
+
+  return {
+    message: data.detail || data.error || data.message || fallback,
+    detail: data.code ? { code: data.code, message: data.message || data.error } : undefined
+  };
 }
 
 async function saveBlobResponse(response: Response, filename: string): Promise<void> {
