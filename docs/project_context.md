@@ -378,3 +378,16 @@
 - 当前项目按每周整包替换使用，不维护旧版 API 兼容层；但核心处理流程、配置文件和 `ReportScript.sql` 仍沿用现有语义。
 - `ReportScript.sql` 是业务处理链路的一部分，重构接口或前端时不要改写 SQL 语义。
 - `auth.ini`、`cache/`、`dist/`、`frontend/dist/`、`frontend/node_modules/` 均为本地运行或构建产物，不进入版本库。
+
+## 2026-05-20: Cross-platform packaging
+
+- Added one-command build entry points: `scripts/build.bat`, `scripts/build.ps1`, and `scripts/build.sh`. Targets are `server`, `desktop`, `docker`, and `all`; script output stays ASCII to avoid console encoding issues on Windows.
+- Server Portable uses PyInstaller one-dir mode and packages the backend executable with `frontend/dist`, `Configure.json`, `ReportScript.sql`, `cache/`, `logs/`, and launch scripts. The default server port remains `9081`.
+- Desktop packaging uses Tauri 2 + Vue + Python sidecar. The build sets `VITE_API_BASE=http://127.0.0.1:19082`, builds a PyInstaller one-file `capareport-server` sidecar, and the desktop app starts it on `127.0.0.1:19082`.
+- `app/config.py` supports `CAPAREPORT_BASE_DIR`; frozen PyInstaller server builds default `BASE_DIR` to the executable directory. The Tauri sidecar sets `CAPAREPORT_BASE_DIR` to the app data directory so runtime files are not written into the install directory.
+- Tauri startup creates app-data `cache/` and `logs/`, then copies bundled `Configure.json` and `ReportScript.sql` on first run. Resource lookup supports both normal Tauri resources and the `_up_` directory generated for bundled `../` resources.
+- Windows desktop shutdown uses `taskkill /F /T /PID` before killing the shell child, which avoids PyInstaller one-file sidecar process leftovers.
+- Docker build now copies only required app files and frontend build output. `.dockerignore` excludes local dependencies, caches, build output, and local config; `build/docker-compose.yml` mounts paths relative to the `build/` directory.
+- `app/main.py` accepts `--host` and `--port` and exposes `run_server()` so portable launchers, Docker, and the Tauri sidecar share the same backend entry point.
+- Windows verification completed: `scripts\build.bat server -NoArchive`, `scripts\build.bat server`, `scripts\build.bat docker`, and `scripts\build.bat desktop`. Server portable `/health`, Docker container `/health`, and desktop sidecar `/health` all returned HTTP 200; desktop first run also copied config and SQL into app data.
+- Cleanup verification completed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, PowerShell AST parse for `scripts/build.ps1`, Docker-hosted `sh -n scripts/build.sh`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Linux/macOS native server and desktop packages still need native OS verification.

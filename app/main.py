@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -117,8 +118,20 @@ def _safe_file(root: Path, path: str) -> Path | None:
 app = create_app()
 
 
-if __name__ == "__main__":
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="CapacityReport server")
+    parser.add_argument("--host", default=APP_HOST, help="Host to bind")
+    parser.add_argument("--port", default=APP_PORT, type=int, help="Port to bind")
+    return parser.parse_args()
+
+
+def run_server(host: str = APP_HOST, port: int = APP_PORT) -> None:
     print(f"CapacityReport v{APP_VERSION}")
-    print(f"配置更新时间: {state.current_config().update}")
-    print(f"前端地址: http://localhost:{APP_PORT}")
-    uvicorn.run(app, host=APP_HOST, port=APP_PORT, reload=False)
+    print(f"Config update: {state.current_config().update}")
+    print(f"Frontend: http://localhost:{port}")
+    uvicorn.run(app, host=host, port=port, reload=False)
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    run_server(args.host, args.port)

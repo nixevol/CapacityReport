@@ -36,7 +36,12 @@ cache/
 logs/
 uploads/
 build/temp/
+build/pyinstaller/
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/gen/
 CapacityReportData/
+.ruff_cache/
 
 # Local configuration and secrets
 .env

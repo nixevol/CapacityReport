@@ -2,13 +2,24 @@
 配置管理模块
 """
 import json
+import os
+import sys
 from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+def _resolve_base_dir() -> Path:
+    env_base_dir = os.environ.get("CAPAREPORT_BASE_DIR")
+    if env_base_dir:
+        return Path(env_base_dir).expanduser().resolve()
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+BASE_DIR = _resolve_base_dir()
 CACHE_DIR = BASE_DIR / "cache"
 CONFIG_FILE = BASE_DIR / "Configure.json"
 SQL_SCRIPT = BASE_DIR / "ReportScript.sql"

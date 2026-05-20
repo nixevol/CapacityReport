@@ -1,6 +1,7 @@
 import type { ApiError } from '../types';
 
 const TOKEN_KEY = 'capacity_report_token';
+const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 let onUnauthorized: (() => void) | null = null;
 
 export function getToken(): string {
@@ -40,7 +41,7 @@ export async function request<T>(url: string, init: RequestInit = {}): Promise<T
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(url, { ...init, headers });
+  const response = await fetch(apiUrl(url), { ...init, headers });
   if (response.status === 401) {
     clearToken();
     onUnauthorized?.();
@@ -62,7 +63,7 @@ export function upload<T>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
+    xhr.open('POST', apiUrl(url));
 
     const token = getToken();
     if (token) {
@@ -103,7 +104,7 @@ export async function download(url: string, body: unknown, filename: string): Pr
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(url, {
+  const response = await fetch(apiUrl(url), {
     method: 'POST',
     headers,
     body: JSON.stringify(body)
@@ -123,7 +124,7 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(url, { headers });
+  const response = await fetch(apiUrl(url), { headers });
   if (response.status === 401) {
     clearToken();
     onUnauthorized?.();
@@ -176,4 +177,11 @@ function parseFilename(disposition: string | null): string {
 
   const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
   return plainMatch?.[1] || '';
+}
+
+function apiUrl(url: string): string {
+  if (!API_BASE || /^https?:\/\//i.test(url)) {
+    return url;
+  }
+  return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
 }

@@ -1,5 +1,5 @@
 # CapacityReport Dockerfile
-# 内网离线部署镜像，前端在镜像构建阶段编译后交给 FastAPI 托管。
+# The frontend is built in a Node stage and served by the FastAPI runtime.
 
 FROM node:22-slim AS frontend-build
 
@@ -15,7 +15,7 @@ RUN npm run build
 FROM python:3.13.11-slim
 
 LABEL maintainer="CapacityReport"
-LABEL description="容量报表处理系统"
+LABEL description="CapacityReport processing service"
 
 WORKDIR /app
 
@@ -30,7 +30,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir -p /var/log/supervisor /var/run /app/cache
 
-COPY . .
+COPY app ./app
+COPY ReportScript.sql start.sh supervisord.conf ./
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
 
 RUN chmod +x /app/start.sh 2>/dev/null || true

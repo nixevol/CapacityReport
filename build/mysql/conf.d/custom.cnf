@@ -1,33 +1,27 @@
-# MySQL 自定义配置 - CapacityReport
-# 启用 LOAD DATA LOCAL INFILE 支持
+# MySQL settings for CapacityReport
 
 [mysqld]
-# 字符集
+# Charset
 character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
 
-# 启用 LOAD DATA LOCAL INFILE
+# LOAD DATA LOCAL INFILE
 local_infile = ON
 secure_file_priv = ""
 
-# 性能优化
+# Performance
 max_allowed_packet = 256M
 innodb_buffer_pool_size = 512M
 innodb_log_file_size = 128M
 innodb_flush_log_at_trx_commit = 2
 sync_binlog = 0
 
-# 连接设置
+# Connections
 max_connections = 200
 wait_timeout = 28800
 interactive_timeout = 28800
 
-# 日志（可选，生产环境建议注释掉）
-# general_log = 1
-# general_log_file = /var/lib/mysql/general.log
-
 [mysql]
-# 客户端设置
 local_infile = ON
 default-character-set = utf8mb4
 
