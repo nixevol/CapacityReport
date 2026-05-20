@@ -1,4 +1,15 @@
 # 项目上下文记录
+## 2026-05-20：统一端口、升级 3.0.0 并收敛桌面安装行为
+
+- 应用户要求，应用访问端口统一回 `9081`：Server Portable、Docker 宿主机映射、Tauri 桌面 sidecar、桌面前端 `VITE_API_BASE` 和前端 Tauri 兜底 API 地址均使用 `http://127.0.0.1:9081`；桌面版启动前只会清理同名 `capareport-server.exe` 的残留监听进程，避免误杀其它占用 `9081` 的程序。
+- 版本统一提升为 `3.0.0`，同步更新后端 `APP_VERSION`、健康检查、侧边栏显示、Tauri 配置和 Cargo 包版本。
+- `run.bat` 不再因 `frontend/dist/index.html` 缺失直接退出；缺少前端构建产物时会检查 `npm`、按需执行 `npm ci`，然后自动运行 `npm run build` 再启动后端。
+- 桌面版去除 release DevTools：`src-tauri/Cargo.toml` 移除 Tauri `devtools` feature，`tauri.conf.json` 移除窗口 `devtools` 配置，前端在 Tauri 环境下阻止右键浏览器菜单和 `F12`/`Ctrl+Shift+I`。
+- Windows NSIS 安装器改为 per-machine，并在未选择自定义安装目录时默认落到 `D:\Program Files\CapacityReport`；如果没有 D 盘，则使用系统 `Program Files\CapacityReport`。`scripts/build.ps1` 构建桌面版时会临时生成 Tauri NSIS 模板并恢复 `tauri.conf.json`，避免旧安装记录把默认路径带回 C 盘。默认授权到期日仍由 `app/services/license.py` 的 `DEFAULT_EXPIRES_ON` 控制。
+- 桌面端不再提供服务重启功能：前端移除重启按钮和等待遮罩，后端删除 `/api/service/restart`、`/api/service/status` 以及对应 runtime 重启实现，避免桌面 sidecar 无法可靠自重启时误导用户。
+- 登录后连续点击左上角品牌图标 8 次会主动打开授权延期窗口，窗口显示当前激活 key 标签并允许连续提交激活码，每次成功后按新的到期日刷新下一次 key。
+- 已验证 `cmd /c scripts\build.bat desktop` 可生成 `dist\desktop\CapacityReport_3.0.0_x64-setup.exe`；静默安装后 `capacity-report-desktop.exe`、`capareport-server.exe`、`Configure.json` 和 `ReportScript.sql` 均位于 `D:\Program Files\CapacityReport`，注册表 `InstallLocation` 指向 D 盘。已启动安装后的桌面程序验证 sidecar `/health` 返回 `3.0.0`，并验证配置、脚本和授权接口可读取；验证后已停止测试进程并清理中间产物。
+
 ## 2026-05-20：修复桌面版跨源预检导致配置网络错误
 
 - 桌面版前端访问 `127.0.0.1:19082` 属于 WebView 跨源请求，带 `Authorization` 或上传配置文件时浏览器会先发 `OPTIONS` 预检；`app/main.py` 的 JWT 中间件现在直接放行 `OPTIONS`，让 FastAPI CORS 中间件返回允许头，避免配置读取和配置上传显示“网络错误”。
@@ -381,12 +392,10 @@
   - `database.py`：数据库测试、表查询、表维护和导出。
   - `config.py`：配置读取、保存、上传和下载。
   - `cache.py`：缓存大小统计。
-  - `service.py`：服务状态和重启。
   - `script.py`：SQL 脚本读取、保存和执行。
   - `health.py`：健康检查。
 - 运行时共享状态放在 `app/state.py`，包括配置实例、历史管理器、处理任务、上传会话和全局任务锁。
 - 登录、密码文件和 Token 逻辑放在 `app/auth.py`，继续使用本地 `auth.ini`。
-- 服务重启检测和进程退出逻辑放在 `app/services/runtime.py`。
 - 文件大小等工具函数放在 `app/utils/files.py`。
 
 ### 前端

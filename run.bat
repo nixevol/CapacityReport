@@ -1,5 +1,5 @@
 @echo off
-title CapacityReport v2.0.2
+title CapacityReport v3.0.0
 
 echo ========================================
 echo   CapacityReport - report service
@@ -28,13 +28,34 @@ if errorlevel 1 (
 )
 
 if not exist "frontend\dist\index.html" (
-    echo [ERROR] Frontend build output not found.
-    echo [HINT] Run these commands first:
-    echo        cd frontend
-    echo        npm install
-    echo        npm run build
-    pause
-    exit /b 1
+    echo [INFO] Frontend build output not found. Building frontend...
+    where npm >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] npm not found. Install Node.js first.
+        pause
+        exit /b 1
+    )
+
+    pushd frontend
+    if not exist "node_modules" (
+        echo [INFO] Installing frontend dependencies...
+        call npm ci
+        if errorlevel 1 (
+            echo [ERROR] Failed to install frontend dependencies.
+            popd
+            pause
+            exit /b 1
+        )
+    )
+
+    call npm run build
+    if errorlevel 1 (
+        echo [ERROR] Failed to build frontend.
+        popd
+        pause
+        exit /b 1
+    )
+    popd
 )
 
 :loop

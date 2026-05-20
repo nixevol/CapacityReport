@@ -1,7 +1,7 @@
 import type { ApiError, ApiErrorDetail } from '../types';
 
 const TOKEN_KEY = 'capacity_report_token';
-const DESKTOP_API_BASE = 'http://127.0.0.1:19082';
+const DESKTOP_API_BASE = 'http://127.0.0.1:9081';
 const API_BASE = resolveApiBase();
 const API_FETCH_RETRIES = 8;
 const API_FETCH_RETRY_DELAY_MS = 500;

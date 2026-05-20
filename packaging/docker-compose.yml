@@ -4,7 +4,7 @@ services:
     container_name: capacity-report-app
     restart: unless-stopped
     ports:
-      - "19081:9081"
+      - "9081:9081"
     volumes:
       - ./cache:/app/cache
       - ./Configure.json:/app/Configure.json

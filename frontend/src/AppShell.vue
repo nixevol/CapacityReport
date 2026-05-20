@@ -11,7 +11,17 @@
       @update:collapsed="handleSidebarCollapsed"
     >
       <div class="brand">
-        <div class="brand-mark">📊</div>
+        <div
+          class="brand-mark"
+          role="button"
+          tabindex="0"
+          title="CapacityReport"
+          @click="handleBrandMarkClick"
+          @keydown.enter.prevent="handleBrandMarkClick"
+          @keydown.space.prevent="handleBrandMarkClick"
+        >
+          📊
+        </div>
         <div class="brand-text">CapacityReport</div>
       </div>
       <n-menu
@@ -25,7 +35,7 @@
       <div class="sider-footer">
         <span class="sider-version">
           <span class="sider-version-label">版本：</span>
-          <span class="sider-version-number">v2.0.3</span>
+          <span class="sider-version-number">v3.0.0</span>
         </span>
         <span class="sider-powered">Power by：NIXEVOL</span>
       </div>
@@ -88,15 +98,6 @@
           <button class="theme-toggle" type="button" :title="themeToggleTitle" @click="toggleTheme">
             <n-icon><component :is="themeToggleIcon" /></n-icon>
           </button>
-          <button
-            class="restart-btn"
-            type="button"
-            title="重启服务"
-            :disabled="restarting"
-            @click="restartService"
-          >
-            <n-icon><PowerOutline /></n-icon>
-          </button>
           <n-button tertiary circle title="退出登录" class="logout-button" @click="logout">
             <template #icon>
               <n-icon><LogOutOutline /></n-icon>
@@ -111,18 +112,37 @@
     </n-layout>
   </n-layout>
 
-  <div v-if="restarting" class="restart-overlay" role="status" aria-live="assertive">
-    <div class="restart-overlay-content">
-      <div class="restart-overlay-spinner"></div>
-      <div class="restart-overlay-text">{{ restartOverlayText }}</div>
+  <n-modal
+    v-model:show="licenseModalVisible"
+    preset="card"
+    title="授权延期"
+    :mask-closable="!activationLoading"
+    :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }"
+  >
+    <div class="license-dialog-body">
+      <p class="license-dialog-text">{{ licenseMessage }}</p>
+      <div class="license-key-label">key: {{ activationKeyLabel }}</div>
+      <n-input
+        v-model:value="activationCode"
+        type="textarea"
+        :autosize="{ minRows: 3, maxRows: 5 }"
+        placeholder="请输入激活码"
+        :disabled="activationLoading"
+      />
     </div>
-  </div>
+    <template #footer>
+      <div class="license-dialog-footer">
+        <n-button :disabled="activationLoading" @click="licenseModalVisible = false">取消</n-button>
+        <n-button type="primary" :loading="activationLoading" @click="submitActivation">激活</n-button>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
-import { useDialog, useMessage, type DropdownOption, type MenuOption, NIcon } from 'naive-ui';
+import { useMessage, type DropdownOption, type MenuOption, NIcon } from 'naive-ui';
 import {
   ChevronDownOutline,
   CloudUploadOutline,
@@ -130,30 +150,32 @@ import {
   FileTrayFullOutline,
   LogOutOutline,
   MoonOutline,
-  PowerOutline,
   ServerOutline,
   SettingsOutline,
   SunnyOutline
 } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
-import type { ApiMessage, LoginResponse, ServiceStatus } from './types';
+import type { LicenseStatus, LoginResponse } from './types';
 import LoginView from './components/LoginView.vue';
 import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
 import { themeName, toggleAppTheme } from './composables/theme';
 
 const message = useMessage();
-const dialog = useDialog();
 const route = useRoute();
 const router = useRouter();
 const token = ref(getToken());
 const loginLoading = ref(false);
-const restarting = ref(false);
-const restartOverlayText = ref('正在重启服务...');
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
+const licenseModalVisible = ref(false);
+const activationCode = ref('');
+const activationLoading = ref(false);
+const activationKeyLabel = ref('2026/06/20');
+const licenseMessage = ref('输入激活码可将授权到期日期延长 30 天。');
+const brandClickCount = ref(0);
 const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
-let restartPollTimer: number | undefined;
+let brandClickResetTimer: number | undefined;
 
 const menuOptions: MenuOption[] = [
   { label: '数据上传', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
@@ -182,8 +204,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('dragover', preventWindowFileDrop, { capture: true });
   window.removeEventListener('drop', preventWindowFileDrop, { capture: true });
-  if (restartPollTimer !== undefined) {
-    window.clearTimeout(restartPollTimer);
+  if (brandClickResetTimer !== undefined) {
+    window.clearTimeout(brandClickResetTimer);
   }
 });
 
@@ -224,71 +246,61 @@ function toggleTheme() {
   toggleAppTheme();
 }
 
-async function restartService() {
-  if (restarting.value) return;
-
-  dialog.warning({
-    title: '重启服务',
-    content: '确定要重启服务吗？这将中断当前所有操作。',
-    positiveText: '重启',
-    negativeText: '取消',
-    onPositiveClick: () => {
-      void executeRestartService();
-    }
-  });
-}
-
-async function executeRestartService() {
-  restarting.value = true;
-  restartOverlayText.value = '正在重启服务...';
-
-  try {
-    const result = await apiPost<ApiMessage>('/api/service/restart');
-    restartOverlayText.value = result.message || '正在等待服务恢复...';
-  } catch {
-    restartOverlayText.value = '正在等待服务恢复...';
-  }
-
-  pollServiceStatus();
-}
-
-function pollServiceStatus() {
-  let attempts = 0;
-  const maxAttempts = 60;
-  const pollInterval = 5000;
-
-  const checkService = async () => {
-    attempts += 1;
-
-    try {
-      await apiGet<ServiceStatus>('/api/service/status');
-      restartOverlayText.value = '服务已恢复，正在刷新页面...';
-      restartPollTimer = window.setTimeout(() => {
-        window.location.reload();
-      }, 500);
-      return;
-    } catch {
-      restartOverlayText.value = `正在等待服务恢复... (${attempts}/${maxAttempts})`;
-    }
-
-    if (attempts < maxAttempts) {
-      restartPollTimer = window.setTimeout(checkService, pollInterval);
-      return;
-    }
-
-    restarting.value = false;
-    restartOverlayText.value = '正在重启服务...';
-    message.warning('服务重启超时，请手动刷新页面');
-  };
-
-  restartPollTimer = window.setTimeout(checkService, 3000);
-}
-
 function handleMenuChange(key: string | number) {
   if (!isMenuKey(key) || key === activeMenu.value) {
     return;
   }
   void router.push({ name: key });
+}
+
+function handleBrandMarkClick() {
+  brandClickCount.value += 1;
+  if (brandClickResetTimer !== undefined) {
+    window.clearTimeout(brandClickResetTimer);
+  }
+
+  if (brandClickCount.value >= 8) {
+    brandClickCount.value = 0;
+    void openLicenseModal();
+    return;
+  }
+
+  brandClickResetTimer = window.setTimeout(() => {
+    brandClickCount.value = 0;
+  }, 2000);
+}
+
+async function openLicenseModal() {
+  try {
+    const status = await apiGet<LicenseStatus>('/api/license/status');
+    activationKeyLabel.value = status.key_label;
+    licenseMessage.value = `当前授权到期日期：${status.expires_on}。输入激活码可延长 30 天。`;
+    activationCode.value = '';
+    licenseModalVisible.value = true;
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '获取授权状态失败');
+  }
+}
+
+async function submitActivation() {
+  const code = activationCode.value.trim();
+  if (!code) {
+    message.warning('请输入激活码');
+    return;
+  }
+
+  activationLoading.value = true;
+  try {
+    const result = await apiPost<LicenseStatus>('/api/license/activate', { code });
+    activationKeyLabel.value = result.key_label;
+    licenseMessage.value = `当前授权到期日期：${result.expires_on}。输入激活码可继续延长 30 天。`;
+    activationCode.value = '';
+    message.success(`激活成功，到期日期: ${result.expires_on}`);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '激活失败');
+  } finally {
+    activationLoading.value = false;
+  }
 }
 
 function isMenuKey(value: unknown): value is MenuKey {

@@ -27,7 +27,7 @@ $PyInstallerDir = Join-Path $TempDir "pyinstaller"
 $FrontendDir = Join-Path $Root "frontend"
 $PackagingDir = Join-Path $Root "packaging"
 $ServerName = "capareport-server"
-$DesktopApiBase = "http://127.0.0.1:19082"
+$DesktopApiBase = "http://127.0.0.1:9081"
 
 function Write-Step($Message) {
     Write-Host ""
@@ -209,6 +209,134 @@ function Write-TextFile($Path, $Content, [switch]$Lf) {
     }
 }
 
+function Convert-ToNsisPath($Path) {
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
+function Get-TauriNsisTemplatePath {
+    $registryDir = Join-Path $env:USERPROFILE ".cargo\registry\src"
+    if (!(Test-Path $registryDir)) {
+        throw "Cargo registry not found: $registryDir"
+    }
+
+    $templates = Get-ChildItem -Path $registryDir -Recurse -Filter "installer.nsi" |
+        Where-Object { $_.FullName -match "tauri-bundler-[^\\]+\\src\\bundle\\windows\\nsis\\installer\.nsi$" } |
+        Sort-Object FullName -Descending
+
+    if (!$templates) {
+        throw "Tauri NSIS template not found. Run cargo tauri build once to fetch tauri-bundler."
+    }
+
+    return $templates[0].FullName
+}
+
+function New-DesktopNsisTemplate {
+    $source = Get-TauriNsisTemplatePath
+    $target = Join-Path $TempDir "tauri-nsis-installer.nsi"
+    $hookPath = Convert-ToNsisPath (Join-Path $Root "src-tauri\windows\nsis-hooks.nsh")
+    $content = [System.IO.File]::ReadAllText($source)
+
+    $content = [regex]::Replace(
+        $content,
+        '\{\{#if installer_hooks\}\}\s*!include "\{\{installer_hooks\}\}"\s*\{\{/if\}\}',
+        "!include `"$hookPath`""
+    )
+
+    $restoreLine = "    Call RestorePreviousInstallLocation"
+    $installDirOverride = @'
+    Call RestorePreviousInstallLocation
+
+    !if "${INSTALLMODE}" == "perMachine"
+      ${If} ${FileExists} "D:\*.*"
+        StrCpy $INSTDIR "D:\Program Files\${PRODUCTNAME}"
+      ${Else}
+        ${If} ${RunningX64}
+          StrCpy $INSTDIR "$PROGRAMFILES64\${PRODUCTNAME}"
+        ${Else}
+          StrCpy $INSTDIR "$PROGRAMFILES\${PRODUCTNAME}"
+        ${EndIf}
+      ${EndIf}
+    !endif
+'@
+
+    if (!$content.Contains($restoreLine)) {
+        throw "Tauri NSIS template changed: RestorePreviousInstallLocation marker not found"
+    }
+    $content = $content.Replace($restoreLine, $installDirOverride)
+
+    $onInitTail = @'
+  !if "${INSTALLMODE}" == "both"
+    !insertmacro MULTIUSER_INIT
+  !endif
+FunctionEnd
+'@
+    $onInitOverride = @'
+  !if "${INSTALLMODE}" == "both"
+    !insertmacro MULTIUSER_INIT
+  !endif
+
+  !if "${INSTALLMODE}" == "perMachine"
+    ${If} ${FileExists} "D:\*.*"
+      StrCpy $INSTDIR "D:\Program Files\${PRODUCTNAME}"
+    ${Else}
+      ${If} ${RunningX64}
+        StrCpy $INSTDIR "$PROGRAMFILES64\${PRODUCTNAME}"
+      ${Else}
+        StrCpy $INSTDIR "$PROGRAMFILES\${PRODUCTNAME}"
+      ${EndIf}
+    ${EndIf}
+  !endif
+FunctionEnd
+'@
+    if (!$content.Contains($onInitTail)) {
+        throw "Tauri NSIS template changed: .onInit tail marker not found"
+    }
+    $content = $content.Replace($onInitTail, $onInitOverride)
+
+    $restoreFunction = @'
+Function RestorePreviousInstallLocation
+  ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
+  StrCmp $4 "" +2 0
+    StrCpy $INSTDIR $4
+FunctionEnd
+'@
+    $restoreOverride = @'
+Function RestorePreviousInstallLocation
+  !if "${INSTALLMODE}" == "perMachine"
+    ${If} ${FileExists} "D:\*.*"
+      StrCpy $INSTDIR "D:\Program Files\${PRODUCTNAME}"
+      Return
+    ${EndIf}
+  !endif
+
+  ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
+  StrCmp $4 "" +2 0
+    StrCpy $INSTDIR $4
+FunctionEnd
+'@
+    if (!$content.Contains($restoreFunction)) {
+        throw "Tauri NSIS template changed: RestorePreviousInstallLocation function marker not found"
+    }
+    $content = $content.Replace($restoreFunction, $restoreOverride)
+
+    Write-TextFile $target $content -Lf
+    return $target
+}
+
+function Invoke-WithDesktopTauriConfig($NsisTemplatePath, [scriptblock]$Action) {
+    $configPath = Join-Path $Root "src-tauri\tauri.conf.json"
+    $original = [System.IO.File]::ReadAllText($configPath)
+    try {
+        $config = $original | ConvertFrom-Json
+        $config.bundle.windows.nsis | Add-Member -NotePropertyName "template" -NotePropertyValue $NsisTemplatePath -Force
+        Write-TextFile $configPath ($config | ConvertTo-Json -Depth 50)
+        & $Action
+    }
+    finally {
+        [System.IO.File]::WriteAllText($configPath, $original, [System.Text.UTF8Encoding]::new($false))
+    }
+}
+
 function Copy-RuntimeFiles($OutputDir) {
     Copy-Item -Path (Join-Path $Root "Configure.json") -Destination (Join-Path $OutputDir "Configure.json") -Force
     Copy-Item -Path (Join-Path $Root "ReportScript.sql") -Destination (Join-Path $OutputDir "ReportScript.sql") -Force
@@ -342,9 +470,12 @@ function Build-DesktopPackage {
         Invoke-Checked "cargo install tauri-cli --locked" $Root
     }
 
-    Remove-Tree (Join-Path $Root "src-tauri\target\release\bundle")
-    Write-Step "Building Tauri desktop package"
-    Invoke-Checked "cargo tauri build" (Join-Path $Root "src-tauri")
+    $nsisTemplate = New-DesktopNsisTemplate
+    Invoke-WithDesktopTauriConfig $nsisTemplate {
+        Remove-Tree (Join-Path $Root "src-tauri\target\release\bundle")
+        Write-Step "Building Tauri desktop package"
+        Invoke-Checked "cargo tauri build" (Join-Path $Root "src-tauri")
+    }
 
     New-Item -ItemType Directory -Force -Path $DesktopDistDir | Out-Null
     $bundleDir = Join-Path $Root "src-tauri\target\release\bundle"

@@ -7,12 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import state
-from app.api.routers import auth, cache, config, database, health, history, license, remote, script, service, tasks, upload
+from app.api.routers import auth, cache, config, database, health, history, license, remote, script, tasks, upload
 from app.auth import verify_jwt_token
 from app.config import BASE_DIR
 
 
-APP_VERSION = "2.0.3"
+APP_VERSION = "3.0.0"
 APP_HOST = "0.0.0.0"
 APP_PORT = 9081
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
@@ -71,7 +71,6 @@ def register_routes(app: FastAPI) -> None:
         database.router,
         config.router,
         cache.router,
-        service.router,
         script.router,
     ]
     for router in routers:

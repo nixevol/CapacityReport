@@ -11,7 +11,7 @@ DOCKER_DIST_DIR="$DIST_DIR/docker"
 TMP_DIR="$DIST_DIR/.tmp"
 PYINSTALLER_DIR="$TMP_DIR/pyinstaller"
 PACKAGING_DIR="$ROOT/packaging"
-DESKTOP_API_BASE="http://127.0.0.1:19082"
+DESKTOP_API_BASE="http://127.0.0.1:9081"
 SERVER_NAME="capareport-server"
 cd "$ROOT"
 

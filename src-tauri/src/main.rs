@@ -13,6 +13,11 @@ use tauri::{Manager, Runtime};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
+const SERVER_PORT: u16 = 9081;
+const SERVER_ADDR: &str = "127.0.0.1:9081";
+#[cfg(target_os = "windows")]
+const SERVER_PROCESS_NAME: &str = "capareport-server.exe";
+
 struct ServerProcess {
     child: CommandChild,
     pid: u32,
@@ -70,8 +75,9 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(data_dir.join("logs"))?;
     copy_resource(app, "Configure.json", &data_dir)?;
     copy_resource(app, "ReportScript.sql", &data_dir)?;
-    stop_existing_server_on_port(19082);
+    stop_existing_server_on_port(SERVER_PORT);
 
+    let port_arg = SERVER_PORT.to_string();
     let (mut rx, child) = app
         .shell()
         .sidecar("capareport-server")?
@@ -79,10 +85,10 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
             "CAPAREPORT_BASE_DIR",
             data_dir.to_string_lossy().to_string(),
         )
-        .args(["--host", "127.0.0.1", "--port", "19082"])
+        .args(["--host", "127.0.0.1", "--port", &port_arg])
         .spawn()?;
 
-    if let Err(error) = wait_for_server("127.0.0.1:19082", Duration::from_secs(60)) {
+    if let Err(error) = wait_for_server(SERVER_ADDR, Duration::from_secs(60)) {
         let _ = child.kill();
         return Err(error);
     }
@@ -139,11 +145,28 @@ fn stop_existing_server_on_port(port: u16) {
         if pid.parse::<u32>().is_err() {
             continue;
         }
+        if !is_capareport_server_pid(pid) {
+            continue;
+        }
 
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/T", "/PID", pid])
             .status();
     }
+}
+
+#[cfg(target_os = "windows")]
+fn is_capareport_server_pid(pid: &str) -> bool {
+    let Ok(output) = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+        .output()
+    else {
+        return false;
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .to_ascii_lowercase()
+        .contains(SERVER_PROCESS_NAME)
 }
 
 #[cfg(not(target_os = "windows"))]

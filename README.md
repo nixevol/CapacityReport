@@ -28,7 +28,7 @@ CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的�
 CapaReport/
 ├─ app/                         # FastAPI 后端源码
 │  ├─ api/routers/              # API 路由
-│  ├─ services/                 # 运行时和远程下载服务
+│  ├─ services/                 # 授权、远程下载等业务服务
 │  ├─ utils/                    # 通用工具
 │  ├─ main.py                   # 后端入口和前端托管
 │  ├─ processor.py              # 数据处理主流程
@@ -63,12 +63,11 @@ uv venv
 uv pip install -r requirements.txt
 ```
 
-安装并构建前端：
+安装前端依赖：
 
 ```powershell
 cd frontend
 npm install
-npm run build
 cd ..
 ```
 
@@ -91,7 +90,7 @@ cd frontend
 npm run dev
 ```
 
-Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。
+Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。如果 `frontend/dist` 不存在，`run.bat` 会自动安装前端依赖并执行构建。
 
 ## 一键构建
 
@@ -148,10 +147,10 @@ scripts\build.bat desktop
 dist\desktop\*-setup.exe
 ```
 
-桌面版使用 Tauri 启动 Python sidecar。sidecar 默认监听 `127.0.0.1:19082`，运行数据写入系统 app data 目录，不写入安装目录。
+桌面版使用 Tauri 启动 Python sidecar。sidecar 默认监听 `127.0.0.1:9081`，运行数据写入系统 app data 目录，不写入安装目录。
 首次启动会把安装包内置的 `Configure.json` 和 `ReportScript.sql` 复制到运行数据目录；Windows 下通常是 `%APPDATA%\com.nixevol.capacityreport\`。安装目录中的 `_up_` 只是 Tauri 打包资源目录，程序运行时不会直接编辑它。
 Windows 桌面版使用 NSIS 安装器，卸载时会询问是否同时删除 `%APPDATA%\com.nixevol.capacityreport\` 中的配置、脚本、授权、缓存和日志。
-桌面版 release 包已启用 DevTools，如需排查前端请求，可在窗口中按 `F12` 或右键打开开发者工具。
+Windows 桌面版默认安装到 `D:\Program Files\CapacityReport`；如果没有 D 盘，则默认安装到系统 `Program Files\CapacityReport`。桌面版已关闭 release DevTools 和右键浏览器菜单。
 
 构建桌面版需要 Rust 和 Tauri CLI。脚本会在缺少 Tauri CLI 时自动执行：
 
@@ -185,7 +184,7 @@ docker compose -f dist\docker\docker-compose.yml up -d
 访问：
 
 ```text
-http://localhost:19081
+http://localhost:9081
 ```
 
 停止：
@@ -219,7 +218,7 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 
 登录密码保存在本地 `auth.ini`，该文件不应提交到版本库。
 
-授权到期日期保存在本地加密文件 `license.dat`，默认到期日为 `2026-06-20`。处理任务不会读取系统日期，而是从任务目录 ZIP 文件名中的 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳取最大日期进行比对。
+授权到期日期保存在本地加密文件 `license.dat`，默认到期日由 `app/services/license.py` 中的 `DEFAULT_EXPIRES_ON` 控制，当前为 `2026-06-20`。处理任务不会读取系统日期，而是从任务目录 ZIP 文件名中的 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳取最大日期进行比对。登录后连续点击左上角品牌图标 8 次，可主动打开授权延期窗口。
 
 ## 常用接口
 
@@ -234,7 +233,6 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 - `POST /api/license/activate`：提交激活码并顺延授权期限
 - `GET /api/history`：处理历史
 - `POST /api/history/download`：下载历史原始数据
-- `POST /api/service/restart`：重启服务
 - `GET /health`：健康检查
 
 ## 维护注意事项

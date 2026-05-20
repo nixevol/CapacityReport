@@ -139,16 +139,6 @@ export interface DatabaseInfo {
   error?: string;
 }
 
-export interface ServiceStatus {
-  status: string;
-  version: string;
-  platform: string;
-  supervisor: boolean;
-  container: boolean;
-  pid: number;
-  python_version: string;
-}
-
 export interface ApiMessage {
   success: boolean;
   message?: string;
