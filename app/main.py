@@ -12,7 +12,7 @@ from app.auth import verify_jwt_token
 from app.config import BASE_DIR
 
 
-APP_VERSION = "2.0.2"
+APP_VERSION = "2.0.3"
 APP_HOST = "0.0.0.0"
 APP_PORT = 9081
 FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
@@ -43,6 +43,9 @@ def create_app() -> FastAPI:
 
 
 async def jwt_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     path = request.url.path
     if path.startswith("/api/") and path != "/api/login":
         auth_header = request.headers.get("Authorization")

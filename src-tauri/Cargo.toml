@@ -1,6 +1,6 @@
 [package]
 name = "capacity-report-desktop"
-version = "2.0.2"
+version = "2.0.3"
 description = "CapacityReport desktop shell"
 authors = ["NIXEVOL"]
 edition = "2021"
@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-shell = "2"
 
 [features]

@@ -32,7 +32,7 @@ async def health_check():
     return {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": datetime.now().isoformat(),
-        "version": "2.0.2",
+        "version": "2.0.3",
         "uptime_pid": os.getpid(),
         "checks": checks,
     }

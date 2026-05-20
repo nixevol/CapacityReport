@@ -1,4 +1,11 @@
 # 项目上下文记录
+## 2026-05-20：修复桌面版跨源预检导致配置网络错误
+
+- 桌面版前端访问 `127.0.0.1:19082` 属于 WebView 跨源请求，带 `Authorization` 或上传配置文件时浏览器会先发 `OPTIONS` 预检；`app/main.py` 的 JWT 中间件现在直接放行 `OPTIONS`，让 FastAPI CORS 中间件返回允许头，避免配置读取和配置上传显示“网络错误”。
+- 桌面版版本提升为 `2.0.3`，同步更新 `app/main.py`、健康检查、服务状态、Tauri 配置、Cargo 包版本和侧边栏版本号，避免同版本安装包覆盖时难以确认是否装到新包。
+- `src-tauri/Cargo.toml` 启用 Tauri `devtools` feature，`tauri.conf.json` 主窗口设置 `devtools: true`；Windows release 桌面包可按 `F12` 或右键打开开发者工具排查真实请求。
+- 已用真实 uvicorn 服务验证 `Origin: http://tauri.localhost` 下 `/api/config/full` 和 `/api/config/upload` 的 `OPTIONS` 预检均返回 200，并且登录后 `/api/config/full` 可正常返回；随后执行 `scripts\build.bat desktop` 生成 `dist\desktop\CapacityReport_2.0.3_x64-setup.exe`，静默安装启动后验证 `/health` 返回 `2.0.3`、配置读取正常、脚本读取正常、配置上传返回 200。
+
 ## 2026-05-20：修复桌面版残留 sidecar 和卸载用户数据选择
 
 - `src-tauri/src/main.rs` 启动 sidecar 前会先清理占用 `19082` 的旧 `capareport-server` 监听进程，避免卸载/重装或异常退出后连到旧服务；启动后不只检查端口可连接，还会请求 `/health` 返回 HTTP 200 才继续。

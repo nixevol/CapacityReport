@@ -25,7 +25,7 @@
       <div class="sider-footer">
         <span class="sider-version">
           <span class="sider-version-label">版本：</span>
-          <span class="sider-version-number">v2.0.2</span>
+          <span class="sider-version-number">v2.0.3</span>
         </span>
         <span class="sider-powered">Power by：NIXEVOL</span>
       </div>

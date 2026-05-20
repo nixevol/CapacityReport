@@ -54,7 +54,7 @@ async def restart_service():
 async def get_service_status():
     return {
         "status": "running",
-        "version": "2.0.2",
+        "version": "2.0.3",
         "platform": platform.system(),
         "supervisor": is_supervisor_running(),
         "container": is_container_runtime(),
