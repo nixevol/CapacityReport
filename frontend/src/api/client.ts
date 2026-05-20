@@ -2,6 +2,8 @@ import type { ApiError, ApiErrorDetail } from '../types';
 
 const TOKEN_KEY = 'capacity_report_token';
 const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
+const API_FETCH_RETRIES = 8;
+const API_FETCH_RETRY_DELAY_MS = 500;
 let onUnauthorized: (() => void) | null = null;
 
 export class ApiRequestError extends Error {
@@ -55,7 +57,7 @@ export async function request<T>(url: string, init: RequestInit = {}): Promise<T
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(apiUrl(url), { ...init, headers });
+  const response = await fetchWithRetry(apiUrl(url), { ...init, headers });
   if (response.status === 401) {
     if (isLoginRequest(url)) {
       const error = await readError(response);
@@ -131,7 +133,7 @@ export async function download(url: string, body: unknown, filename: string): Pr
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(apiUrl(url), {
+  const response = await fetchWithRetry(apiUrl(url), {
     method: 'POST',
     headers,
     body: JSON.stringify(body)
@@ -152,7 +154,7 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(apiUrl(url), { headers });
+  const response = await fetchWithRetry(apiUrl(url), { headers });
   if (response.status === 401) {
     clearToken();
     onUnauthorized?.();
@@ -211,6 +213,27 @@ async function saveBlobResponse(response: Response, filename: string): Promise<v
   link.download = filename;
   link.click();
   URL.revokeObjectURL(objectUrl);
+}
+
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= API_FETCH_RETRIES; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+      if (attempt === API_FETCH_RETRIES) {
+        break;
+      }
+      await sleep(API_FETCH_RETRY_DELAY_MS);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('网络请求失败');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 function parseFilename(disposition: string | null): string {

@@ -1,4 +1,12 @@
 # 项目上下文记录
+## 2026-05-20：修复桌面版启动期配置和脚本加载竞态
+
+- 桌面版运行配置和脚本仍从安装包资源 `Configure.json`、`ReportScript.sql` 首次复制到系统 AppData 后读取；安装目录中的 `_up_` 是 Tauri 对 `../` 资源的打包目录，不是后端实际运行目录。
+- `src-tauri/src/main.rs` 在启动 Python sidecar 后会等待 `127.0.0.1:19082` 可连接，最多等待 20 秒；如果端口没有起来，会主动杀掉刚启动的 sidecar 并让启动失败，避免前端先加载导致配置页停在默认空表单、脚本页停在“正在加载”。
+- `frontend/src/api/client.ts` 对普通 `fetch` 请求增加短暂重试，处理桌面 sidecar 启动或服务重启瞬间的 `Failed to fetch`；上传 XHR 不做自动重试，避免重复上传。
+- 已实测当前安装目录 `D:\Program Files\CapacityReport\_up_` 和运行目录 `%APPDATA%\com.nixevol.capacityreport` 均存在配置与脚本，`http://127.0.0.1:19082/health`、`/api/config/full`、`/api/script/content` 均能读取；本次修复的是前端初始请求早于 sidecar 就绪的竞态。
+- 已执行 `.venv\Scripts\python.exe -m compileall app`、`npm run build` 和带临时 sidecar 占位文件的 `cargo check --manifest-path src-tauri\Cargo.toml`，均通过；生成产物随后清理。
+
 ## 2026-05-20：修复登录失败误提示会话过期
 
 - `frontend/src/api/client.ts` 不再把 `/api/login` 的 401 响应当作全局会话过期处理，登录失败会按后端真实错误显示“账号或密码错误”。

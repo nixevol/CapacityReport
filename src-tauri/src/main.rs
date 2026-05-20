@@ -2,8 +2,11 @@
 
 use std::error::Error;
 use std::fs;
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use tauri::{Manager, Runtime};
 use tauri_plugin_shell::process::CommandChild;
@@ -77,12 +80,29 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
         .args(["--host", "127.0.0.1", "--port", "19082"])
         .spawn()?;
 
+    if let Err(error) = wait_for_server("127.0.0.1:19082", Duration::from_secs(20)) {
+        let _ = child.kill();
+        return Err(error);
+    }
+
     tauri::async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
 
     let pid = child.pid();
     let state = app.state::<ServerState>();
     *state.0.lock().expect("server state lock poisoned") = Some(ServerProcess { child, pid });
     Ok(())
+}
+
+fn wait_for_server(addr: &str, timeout: Duration) -> Result<(), Box<dyn Error>> {
+    let socket_addr: SocketAddr = addr.parse()?;
+    let started_at = Instant::now();
+    while started_at.elapsed() < timeout {
+        if TcpStream::connect_timeout(&socket_addr, Duration::from_millis(250)).is_ok() {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    Err(format!("Server did not start within {} seconds", timeout.as_secs()).into())
 }
 
 fn stop_server<R: Runtime>(app: &tauri::AppHandle<R>) {
