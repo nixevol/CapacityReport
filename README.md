@@ -1,55 +1,63 @@
 # CapacityReport - 容量报表处理系统
 
-CapacityReport 用于每周导入 Excel/CSV 数据，按 `Configure.json` 与 `ReportScript.sql` 完成清洗、入库和报表处理。系统面向内网运行，后端由 FastAPI 提供接口，前端由 Vue 3 构建后交给 FastAPI 托管。
+CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的字段映射和 `ReportScript.sql` 的业务脚本完成数据清洗、入库、计算和结果表生成。系统支持本地上传处理，也支持从 FTP/SFTP 远程目录递归下载数据后自动处理。
+
+## 功能概览
+
+- Excel/CSV/ZIP 数据导入与自动解压、转换、入库。
+- FTP/SFTP 远程数据源配置、连接测试、远程下载并处理。
+- MySQL 数据表查看、清空、删除、CSV/XLSX 导出。
+- SQL 脚本在线查看、保存和执行。
+- 处理历史、日志查看、历史原始数据打包下载。
+- 系统设置：数据库、远程数据源、Sheet 过滤、字段映射、历史保留、密码修改。
+- 发行形态：Server Portable、Tauri 桌面版、Docker 服务端版。
 
 ## 技术栈
 
-- 后端：FastAPI + Uvicorn + Supervisor
+- 后端：FastAPI + Uvicorn
 - 前端：Vue 3 + TypeScript + Vite + Naive UI
-- 数据库：MySQL 8.0+，通过 PyMySQL 访问
+- 桌面端：Tauri 2 + Python sidecar
+- 数据库：MySQL 8.0+
 - 数据处理：Pandas + OpenPyXL
-- 部署：Docker + Docker Compose
+- 打包：PyInstaller、Docker、Docker Compose
 
 ## 目录结构
 
 ```text
 CapaReport/
-├── app/
-│   ├── api/routers/        # FastAPI 路由模块
-│   ├── services/           # 运行时服务能力
-│   ├── utils/              # 文件和通用工具
-│   ├── main.py             # FastAPI 入口和前端托管
-│   ├── auth.py             # 登录、密码和 Token
-│   ├── state.py            # 运行期共享状态
-│   ├── processor.py        # 数据处理主流程
-│   ├── database.py         # 数据库访问
-│   ├── history.py          # 历史记录
-│   └── config.py           # 配置读写
-├── frontend/
-│   ├── src/                # Vue 3 + TypeScript 源码
-│   ├── package.json
-│   └── vite.config.ts
-├── build/                  # Docker 与离线部署构建脚本
-├── docs/project_context.md # 项目上下文记录
-├── Configure.json          # 应用配置
-├── ReportScript.sql        # SQL 处理脚本
-├── requirements.txt        # Python 依赖
-├── run.bat                 # Windows 本地启动脚本
-└── supervisord.conf        # 容器内进程管理配置
+├─ app/                         # FastAPI 后端源码
+│  ├─ api/routers/              # API 路由
+│  ├─ services/                 # 运行时和远程下载服务
+│  ├─ utils/                    # 通用工具
+│  ├─ main.py                   # 后端入口和前端托管
+│  ├─ processor.py              # 数据处理主流程
+│  ├─ database.py               # MySQL 访问
+│  ├─ history.py                # 处理历史
+│  └─ config.py                 # 配置读写
+├─ frontend/                    # Vue 前端
+├─ src-tauri/                   # Tauri 桌面壳
+├─ scripts/                     # 一键构建脚本
+├─ build/                       # Docker 和 PyInstaller 配置
+├─ docs/project_context.md      # 项目维护记录
+├─ Configure.json               # 应用配置
+├─ ReportScript.sql             # SQL 处理脚本
+├─ requirements.txt             # Python 依赖
+└─ run.bat                      # Windows 本地启动脚本
 ```
 
 ## 本地运行
 
 前置要求：
 
-- Windows 10
-- Python >= 3.10，项目虚拟环境由 `uv` 创建
-- Node.js，建议使用当前 LTS 或更新版本
-- MySQL >= 8.0
+- Windows 10/11
+- Python 与 `uv`
+- Node.js
+- MySQL 8.0+
 
 安装后端依赖：
 
 ```powershell
+uv venv
 uv pip install -r requirements.txt
 ```
 
@@ -71,10 +79,10 @@ cd ..
 访问地址：
 
 ```text
-前端：http://localhost:9081
+http://localhost:9081
 ```
 
-开发前端时可运行：
+前端开发模式：
 
 ```powershell
 cd frontend
@@ -83,41 +91,139 @@ npm run dev
 
 Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。
 
-## 配置
+## 一键构建
+
+Windows 在项目根目录执行：
+
+```bat
+scripts\build.bat -?
+```
+
+可用目标：
+
+```bat
+scripts\build.bat server
+scripts\build.bat desktop
+scripts\build.bat docker
+scripts\build.bat all
+```
+
+常用参数：
+
+```bat
+scripts\build.bat server -NoArchive
+scripts\build.bat all -Clean
+scripts\build.bat docker -SkipDockerBuild
+scripts\build.bat all -SkipDesktopBuild
+```
+
+### Server Portable
+
+```bat
+scripts\build.bat server
+```
+
+输出：
+
+```text
+dist\packages\CapacityReport-Server-windows-x64\
+dist\packages\CapacityReport-Server-windows-x64.zip
+```
+
+便携版内包含后端可执行文件、前端构建产物、`Configure.json`、`ReportScript.sql`、`cache/`、`logs/` 和启动脚本。默认监听端口为 `9081`。
+
+### 桌面版
+
+```bat
+scripts\build.bat desktop
+```
+
+输出：
+
+```text
+src-tauri\target\release\bundle\msi\*.msi
+src-tauri\target\release\bundle\nsis\*-setup.exe
+```
+
+桌面版使用 Tauri 启动 Python sidecar。sidecar 默认监听 `127.0.0.1:19082`，运行数据写入系统 app data 目录，不写入安装目录。
+
+构建桌面版需要 Rust 和 Tauri CLI。脚本会在缺少 Tauri CLI 时自动执行：
+
+```bat
+cargo install tauri-cli --locked
+```
+
+### Docker 版
+
+```bat
+scripts\build.bat docker
+```
+
+输出镜像：
+
+```text
+capacity-report-app:latest
+```
+
+启动：
+
+```bat
+docker compose -f build\docker-compose.yml up -d
+```
+
+访问：
+
+```text
+http://localhost:19081
+```
+
+停止：
+
+```bat
+docker compose -f build\docker-compose.yml down
+```
+
+## Linux / macOS 构建
+
+在对应系统原生环境执行：
+
+```bash
+sh scripts/build.sh server
+sh scripts/build.sh desktop
+sh scripts/build.sh docker
+sh scripts/build.sh all
+```
+
+Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 Windows 构建，Linux 包在 Linux 构建，macOS 包在 macOS 构建。Docker 镜像可以在 Windows 开发机上构建。
+
+## 配置说明
 
 `Configure.json` 主要包含：
 
-- `MySQL_DBInfo`：MySQL 连接信息
-- `RemoteData`：FTP/SFTP 远程数据源配置，用于递归下载目录后自动处理，可选择处理成功后删除远程源文件
-- `SheetFilter`：Excel Sheet 过滤规则
-- `ExtractField`：字段抽取映射配置
+- `MySQL_DBInfo`：MySQL 连接配置。
+- `RemoteData`：FTP/SFTP 远程数据源配置。
+- `HistoryRetention`：处理历史保留配置。
+- `SheetFilter`：Excel Sheet 过滤规则。
+- `ExtractField`：字段映射配置。
 
-登录账号密码保存在本地 `auth.ini`，首次运行会自动创建默认配置。`auth.ini` 已被 `.gitignore` 忽略。
+登录密码保存在本地 `auth.ini`，该文件不应提交到版本库。
 
-## Docker 构建与部署
-
-离线部署包由 `build/build.py` 生成：
-
-```powershell
-python build/build.py
-```
-
-脚本提供两种构建：
-
-- `1`：完整部署包，包含 MySQL 镜像和应用镜像
-- `2`：更新包，只包含应用镜像
-
-Docker 镜像构建采用多阶段流程：先在 Node 阶段执行前端构建，再把 `frontend/dist` 复制到 Python 运行镜像内。
-
-## 主要接口
+## 常用接口
 
 - `POST /api/login`：登录
 - `POST /api/change-password`：修改密码
 - `POST /api/upload`：上传文件
-- `POST /api/remote/test`：测试 FTP/SFTP 远程数据源
-- `POST /api/remote/start`：从远程目录下载数据并自动启动处理
-- `POST /api/process/start`：启动处理
+- `POST /api/remote/test`：测试 FTP/SFTP 连接
+- `POST /api/remote/start`：远程下载并处理
+- `POST /api/process/start`：启动本地处理
 - `POST /api/process/status`：查询处理状态
-- `GET /api/history`：历史记录
+- `GET /api/history`：处理历史
+- `POST /api/history/download`：下载历史原始数据
 - `POST /api/service/restart`：重启服务
 - `GET /health`：健康检查
+
+## 维护注意事项
+
+- 不要提交 `auth.ini`、`cache/`、`logs/`、`dist/`、`frontend/dist/`、`src-tauri/target/`、`src-tauri/binaries/`。
+- `src-tauri/gen/schemas/` 需要保留并提交，`src-tauri/capabilities/default.json` 的 JSON schema 会引用它。
+- `ReportScript.sql` 是业务处理链路的一部分，修改前需要确认 SQL 语义和字段映射兼容。
