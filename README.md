@@ -37,7 +37,8 @@ CapaReport/
 ├─ frontend/                    # Vue 前端
 ├─ src-tauri/                   # Tauri 桌面壳
 ├─ scripts/                     # 一键构建脚本
-├─ build/                       # Docker 和 PyInstaller 配置
+├─ packaging/                   # Docker、Compose、PyInstaller 配置
+├─ dist/                        # 一键构建后的最终产物
 ├─ docs/project_context.md      # 项目维护记录
 ├─ Configure.json               # 应用配置
 ├─ ReportScript.sql             # SQL 处理脚本
@@ -117,6 +118,8 @@ scripts\build.bat docker -SkipDockerBuild
 scripts\build.bat all -SkipDesktopBuild
 ```
 
+构建完成后只保留 `dist/` 下的最终产物；`dist/.tmp`、`frontend/dist`、`src-tauri/target`、`src-tauri/binaries` 等中间产物会自动清理。
+
 ### Server Portable
 
 ```bat
@@ -126,8 +129,8 @@ scripts\build.bat server
 输出：
 
 ```text
-dist\packages\CapacityReport-Server-windows-x64\
-dist\packages\CapacityReport-Server-windows-x64.zip
+dist\server\CapacityReport-Server-windows-x64\
+dist\server\CapacityReport-Server-windows-x64.zip
 ```
 
 便携版内包含后端可执行文件、前端构建产物、`Configure.json`、`ReportScript.sql`、`cache/`、`logs/` 和启动脚本。默认监听端口为 `9081`。
@@ -141,8 +144,8 @@ scripts\build.bat desktop
 输出：
 
 ```text
-src-tauri\target\release\bundle\msi\*.msi
-src-tauri\target\release\bundle\nsis\*-setup.exe
+dist\desktop\*.msi
+dist\desktop\*-setup.exe
 ```
 
 桌面版使用 Tauri 启动 Python sidecar。sidecar 默认监听 `127.0.0.1:19082`，运行数据写入系统 app data 目录，不写入安装目录。
@@ -159,16 +162,21 @@ cargo install tauri-cli --locked
 scripts\build.bat docker
 ```
 
-输出镜像：
+输出：
 
 ```text
 capacity-report-app:latest
+dist\docker\capacity-report-app-latest.tar
+dist\docker\docker-compose.yml
+dist\docker\Configure.json
+dist\docker\ReportScript.sql
 ```
 
 启动：
 
 ```bat
-docker compose -f build\docker-compose.yml up -d
+docker load -i dist\docker\capacity-report-app-latest.tar
+docker compose -f dist\docker\docker-compose.yml up -d
 ```
 
 访问：
@@ -180,7 +188,7 @@ http://localhost:19081
 停止：
 
 ```bat
-docker compose -f build\docker-compose.yml down
+docker compose -f dist\docker\docker-compose.yml down
 ```
 
 ## Linux / macOS 构建

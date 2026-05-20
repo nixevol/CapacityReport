@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /var/log/supervisor /var/run /app/cache
 
 COPY app ./app
-COPY ReportScript.sql start.sh supervisord.conf ./
+COPY Configure.json ReportScript.sql start.sh supervisord.conf ./
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
 
 RUN chmod +x /app/start.sh 2>/dev/null || true

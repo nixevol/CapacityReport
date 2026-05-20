@@ -35,8 +35,6 @@ dist/
 cache/
 logs/
 uploads/
-build/temp/
-build/pyinstaller/
 src-tauri/target/
 src-tauri/binaries/
 CapacityReportData/

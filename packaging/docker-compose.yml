@@ -6,10 +6,10 @@ services:
     ports:
       - "19081:9081"
     volumes:
-      - ../cache:/app/cache
-      - ../Configure.json:/app/Configure.json
-      - ../ReportScript.sql:/app/ReportScript.sql
-      - ../logs:/var/log/supervisor
+      - ./cache:/app/cache
+      - ./Configure.json:/app/Configure.json
+      - ./ReportScript.sql:/app/ReportScript.sql
+      - ./logs:/var/log/supervisor
     environment:
       - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1

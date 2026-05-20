@@ -18,14 +18,11 @@ dist
 uploads
 CapacityReportData
 auth.ini
-Configure.json
 *.log
 *.tmp
 *.temp
 *.bak
 
-build/temp
-build/pyinstaller
 target
 src-tauri/target
 src-tauri/binaries

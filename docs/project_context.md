@@ -387,7 +387,7 @@
 - `app/config.py` supports `CAPAREPORT_BASE_DIR`; frozen PyInstaller server builds default `BASE_DIR` to the executable directory. The Tauri sidecar sets `CAPAREPORT_BASE_DIR` to the app data directory so runtime files are not written into the install directory.
 - Tauri startup creates app-data `cache/` and `logs/`, then copies bundled `Configure.json` and `ReportScript.sql` on first run. Resource lookup supports both normal Tauri resources and the `_up_` directory generated for bundled `../` resources.
 - Windows desktop shutdown uses `taskkill /F /T /PID` before killing the shell child, which avoids PyInstaller one-file sidecar process leftovers.
-- Docker build now copies only required app files and frontend build output. `.dockerignore` excludes local dependencies, caches, build output, and local config; `build/docker-compose.yml` mounts paths relative to the `build/` directory.
+- Docker build now copies only required app files and frontend build output. `.dockerignore` excludes local dependencies, caches, and generated output; deployment compose files are emitted under `dist/docker/`.
 - `app/main.py` accepts `--host` and `--port` and exposes `run_server()` so portable launchers, Docker, and the Tauri sidecar share the same backend entry point.
 - Windows verification completed: `scripts\build.bat server -NoArchive`, `scripts\build.bat server`, `scripts\build.bat docker`, and `scripts\build.bat desktop`. Server portable `/health`, Docker container `/health`, and desktop sidecar `/health` all returned HTTP 200; desktop first run also copied config and SQL into app data.
 - Cleanup verification completed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, PowerShell AST parse for `scripts/build.ps1`, Docker-hosted `sh -n scripts/build.sh`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Linux/macOS native server and desktop packages still need native OS verification.
@@ -397,6 +397,13 @@
 ## 2026-05-20: Tauri desktop console and installer language
 
 - `src-tauri/src/main.rs` uses `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` so Windows release builds use the GUI subsystem and do not open an extra console window when launched from Explorer or the installer shortcut.
-- `build/capareport-server.spec` keeps Server Portable in console mode, but desktop one-file sidecar builds (`CAPAREPORT_ONEFILE=1`) use PyInstaller `console=False`; PyInstaller should select `runw.exe` for the sidecar so it also stays hidden behind the Tauri window.
+- `packaging/capareport-server.spec` keeps Server Portable in console mode, but desktop one-file sidecar builds (`CAPAREPORT_ONEFILE=1`) use PyInstaller `console=False`; PyInstaller should select `runw.exe` for the sidecar so it also stays hidden behind the Tauri window.
 - `src-tauri/tauri.conf.json` sets Windows installer localization through `bundle.windows.wix.language = "zh-CN"` and `bundle.windows.nsis.languages = ["SimpChinese"]`. NSIS language keys must use NSIS names such as `SimpChinese`, while WiX/MSI uses locale names such as `zh-CN`.
 - Verification on Windows: `cargo check --manifest-path src-tauri\Cargo.toml` passed, `scripts\build.bat desktop` generated the MSI and NSIS bundles, PE subsystem checks reported `Windows GUI` for both `capacity-report-desktop.exe` and `capareport-server.exe`, and the generated NSIS script included `MUI_LANGUAGE "SimpChinese"`.
+
+## 2026-05-20: Unified release output under dist
+
+- The former `build/` packaging source directory was renamed to `packaging/` to avoid confusing source-side packaging recipes with generated output. `packaging/` now holds `Dockerfile`, `docker-compose.yml`, the PyInstaller spec, and MySQL container config.
+- `scripts/build.ps1` and `scripts/build.sh` now use `dist/.tmp/` for PyInstaller work output and copy final deliverables to `dist/server/`, `dist/desktop/`, and `dist/docker/`. Successful builds remove `dist/.tmp`, `frontend/dist`, `src-tauri/target`, and `src-tauri/binaries`.
+- Docker builds now include `Configure.json` in the image and also create a deployable `dist/docker/` bundle containing `capacity-report-app-latest.tar`, `docker-compose.yml`, `Configure.json`, `ReportScript.sql`, `mysql/`, `cache/`, and `logs/`.
+- Server Portable still includes `Configure.json` and `ReportScript.sql` inside `dist/server/CapacityReport-Server-<platform>-x64/`. Tauri desktop still bundles both files through `src-tauri/tauri.conf.json` resources and copies them to app data on first run.

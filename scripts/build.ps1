@@ -17,13 +17,16 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Root = Resolve-Path (Join-Path $ScriptDir "..")
+$Root = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 $DistDir = Join-Path $Root "dist"
-$PackageDir = Join-Path $DistDir "packages"
-$PyInstallerDir = Join-Path $Root "build\pyinstaller"
+$ServerDistDir = Join-Path $DistDir "server"
+$DesktopDistDir = Join-Path $DistDir "desktop"
+$DockerDistDir = Join-Path $DistDir "docker"
+$TempDir = Join-Path $DistDir ".tmp"
+$PyInstallerDir = Join-Path $TempDir "pyinstaller"
 $FrontendDir = Join-Path $Root "frontend"
+$PackagingDir = Join-Path $Root "packaging"
 $ServerName = "capareport-server"
-$AppVersion = "2.0.2"
 $DesktopApiBase = "http://127.0.0.1:19082"
 
 function Write-Step($Message) {
@@ -44,6 +47,21 @@ function Show-Usage {
     Write-Host "  -Clean"
     Write-Host "  -SkipDockerBuild"
     Write-Host "  -SkipDesktopBuild"
+}
+
+function Assert-InWorkspace($Path) {
+    $resolved = (Resolve-Path -LiteralPath $Path).Path
+    if (!$resolved.StartsWith($Root, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to operate outside workspace: $resolved"
+    }
+    return $resolved
+}
+
+function Remove-Tree($Path) {
+    if (Test-Path -LiteralPath $Path) {
+        $resolved = Assert-InWorkspace $Path
+        Remove-Item -LiteralPath $resolved -Recurse -Force
+    }
 }
 
 function Invoke-Checked($Command, $WorkingDirectory = $Root) {
@@ -136,9 +154,15 @@ function Build-Frontend($ApiBase) {
 function Build-ServerBinary([switch]$OneFile) {
     Ensure-PythonEnvironment
     Write-Step "Building server binary"
-    Remove-Item -LiteralPath $PyInstallerDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Tree $PyInstallerDir
+    New-Item -ItemType Directory -Force -Path $PyInstallerDir | Out-Null
+
     $python = Join-Path $Root ".venv\Scripts\python.exe"
+    $workPath = Join-Path $PyInstallerDir "work"
+    $distPath = Join-Path $PyInstallerDir "dist"
+    $specPath = Join-Path $PackagingDir "capareport-server.spec"
     $previousOneFile = $env:CAPAREPORT_ONEFILE
+
     if ($OneFile) {
         $env:CAPAREPORT_ONEFILE = "1"
     }
@@ -147,7 +171,7 @@ function Build-ServerBinary([switch]$OneFile) {
     }
 
     try {
-        Invoke-Checked "`"$python`" -m PyInstaller --clean --noconfirm --workpath build\pyinstaller\work --distpath build\pyinstaller\dist build\capareport-server.spec" $Root
+        Invoke-Checked "`"$python`" -m PyInstaller --clean --noconfirm --workpath `"$workPath`" --distpath `"$distPath`" `"$specPath`"" $Root
     }
     finally {
         if ($null -ne $previousOneFile) {
@@ -159,14 +183,14 @@ function Build-ServerBinary([switch]$OneFile) {
     }
 
     if ($OneFile) {
-        $binaryDir = Join-Path $PyInstallerDir "dist"
+        $binaryDir = $distPath
         $binaryPath = Join-Path $binaryDir (Get-ExecutableName (Get-CurrentPlatform))
         if (!(Test-Path $binaryPath)) {
             throw "PyInstaller output not found: $binaryPath"
         }
     }
     else {
-        $binaryDir = Join-Path $PyInstallerDir "dist\$ServerName"
+        $binaryDir = Join-Path $distPath $ServerName
         if (!(Test-Path $binaryDir)) {
             throw "PyInstaller output not found: $binaryDir"
         }
@@ -237,11 +261,14 @@ function Build-ServerPortable {
         $platformName = "windows"
     }
 
+    $outputDir = Join-Path $ServerDistDir "CapacityReport-Server-$platformName-x64"
+    $archive = "$outputDir.zip"
+    Remove-Tree $outputDir
+    Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+
     Build-Frontend $null
     $binaryDir = Build-ServerBinary
 
-    $outputDir = Join-Path $PackageDir "CapacityReport-Server-$platformName-x64"
-    Remove-Item -LiteralPath $outputDir -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
     Copy-Item -Path (Join-Path $binaryDir "*") -Destination $outputDir -Recurse -Force
@@ -249,8 +276,6 @@ function Build-ServerPortable {
     Write-ServerLaunchers $outputDir $platformName
 
     if (!$NoArchive) {
-        $archive = "$outputDir.zip"
-        Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
         Compress-Archive -Path (Join-Path $outputDir "*") -DestinationPath $archive -Force
         Write-Info "Archive: $archive"
     }
@@ -258,15 +283,36 @@ function Build-ServerPortable {
     Write-Info "Server package: $outputDir"
 }
 
+function Copy-DockerBundle {
+    Remove-Tree $DockerDistDir
+    New-Item -ItemType Directory -Force -Path $DockerDistDir | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $DockerDistDir "cache") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $DockerDistDir "logs") | Out-Null
+    Copy-Item -Path (Join-Path $PackagingDir "docker-compose.yml") -Destination (Join-Path $DockerDistDir "docker-compose.yml") -Force
+    Copy-Item -Path (Join-Path $PackagingDir "mysql") -Destination (Join-Path $DockerDistDir "mysql") -Recurse -Force
+    Copy-Item -Path (Join-Path $Root "Configure.json") -Destination (Join-Path $DockerDistDir "Configure.json") -Force
+    Copy-Item -Path (Join-Path $Root "ReportScript.sql") -Destination (Join-Path $DockerDistDir "ReportScript.sql") -Force
+}
+
 function Build-DockerImage {
+    Remove-Tree $DockerDistDir
+
     if ($SkipDockerBuild) {
-        Write-Host "Docker build skipped."
+        Write-Host "Docker image build skipped."
+        Copy-DockerBundle
+        Invoke-Checked "docker compose -f `"$DockerDistDir\docker-compose.yml`" config" $Root
+        Write-Info "Docker package: $DockerDistDir"
         return
     }
 
     Write-Step "Building Docker image"
-    Invoke-Checked "docker build --progress=plain -f build\Dockerfile -t capacity-report-app:latest ." $Root
-    Invoke-Checked "docker compose -f build\docker-compose.yml config" $Root
+    Invoke-Checked "docker build --progress=plain -f `"$PackagingDir\Dockerfile`" -t capacity-report-app:latest ." $Root
+
+    Write-Step "Packaging Docker output"
+    Copy-DockerBundle
+    Invoke-Checked "docker save -o `"$DockerDistDir\capacity-report-app-latest.tar`" capacity-report-app:latest" $Root
+    Invoke-Checked "docker compose -f `"$DockerDistDir\docker-compose.yml`" config" $Root
+    Write-Info "Docker package: $DockerDistDir"
 }
 
 function Build-DesktopPackage {
@@ -278,6 +324,8 @@ function Build-DesktopPackage {
     if (!(Get-Command rustc -ErrorAction SilentlyContinue)) {
         throw "Rust is required for the Tauri desktop build"
     }
+
+    Remove-Tree $DesktopDistDir
 
     Build-Frontend $DesktopApiBase
     $binaryDir = Build-ServerBinary -OneFile
@@ -294,8 +342,23 @@ function Build-DesktopPackage {
         Invoke-Checked "cargo install tauri-cli --locked" $Root
     }
 
+    Remove-Tree (Join-Path $Root "src-tauri\target\release\bundle")
     Write-Step "Building Tauri desktop package"
     Invoke-Checked "cargo tauri build" (Join-Path $Root "src-tauri")
+
+    New-Item -ItemType Directory -Force -Path $DesktopDistDir | Out-Null
+    $bundleDir = Join-Path $Root "src-tauri\target\release\bundle"
+    Get-ChildItem -Path $bundleDir -Recurse -File -Include "*.msi", "*.exe" |
+        Copy-Item -Destination $DesktopDistDir -Force
+    Write-Info "Desktop package: $DesktopDistDir"
+}
+
+function Clean-Intermediates {
+    Write-Step "Cleaning intermediate output"
+    Remove-Tree $TempDir
+    Remove-Tree (Join-Path $Root "frontend\dist")
+    Remove-Tree (Join-Path $Root "src-tauri\binaries")
+    Remove-Tree (Join-Path $Root "src-tauri\target")
 }
 
 if ($Help) {
@@ -304,13 +367,14 @@ if ($Help) {
 }
 
 if ($Clean) {
-    Write-Step "Cleaning build output"
-    Remove-Item -LiteralPath $DistDir -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $PyInstallerDir -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath (Join-Path $Root "src-tauri\binaries") -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Step "Cleaning dist output"
+    Remove-Tree $DistDir
+    Remove-Tree (Join-Path $Root "frontend\dist")
+    Remove-Tree (Join-Path $Root "src-tauri\binaries")
+    Remove-Tree (Join-Path $Root "src-tauri\target")
 }
 
-New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
+New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
 switch ($Target) {
     "server" { Build-ServerPortable }
@@ -322,5 +386,7 @@ switch ($Target) {
         Build-DesktopPackage
     }
 }
+
+Clean-Intermediates
 
 Write-Step "Build finished"
