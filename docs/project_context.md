@@ -1,4 +1,11 @@
 # 项目上下文记录
+## 2026-05-21：排查离线机器桌面端白屏
+
+- 运行时外链扫描确认：`frontend/src`、`app`、`src-tauri/src` 中没有 CDN、在线字体或外网业务接口；桌面端前端只访问本机 `http://127.0.0.1:9081` sidecar，`src-tauri/tauri.conf.json` 的 `https://schema.tauri.app/config/2` 只是编辑器/构建 schema，不参与用户机器运行。
+- 离线白屏的主要风险点是 Windows WebView2 Runtime：Tauri 默认 `webviewInstallMode` 为 `downloadBootstrapper`，目标机器没有外网且未预装 WebView2 时，安装或启动阶段可能无法正常创建 WebView。`src-tauri/tauri.conf.json` 已改为 `bundle.windows.webviewInstallMode = { type: "offlineInstaller", silent: true }`，新的 Windows 安装包会内置 WebView2 离线安装器。
+- 清理了 `src-tauri/tauri.conf.json` 中误残留的本机构建临时 NSIS `template` 绝对路径；该路径不应进入源码或发布配置。
+- 已验证 `npm run build` 和带临时 sidecar 占位文件的 `cargo check --manifest-path src-tauri\Cargo.toml` 通过；构建产物和临时 sidecar 占位文件需在提交前清理。
+
 ## 2026-05-21：修复桌面端下载不弹保存路径
 
 - 桌面端不再依赖 WebView 的 `<a download>` 行为保存文件；`frontend/src/api/client.ts` 在 Tauri 环境下会通过 `@tauri-apps/api/core` 调用原生命令，普通浏览器和 Server Portable 仍保留原有 Blob 下载逻辑。

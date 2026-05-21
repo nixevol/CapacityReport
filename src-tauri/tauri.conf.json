@@ -41,6 +41,10 @@
       "../ReportScript.sql"
     ],
     "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": true
+      },
       "wix": {
         "language": "zh-CN"
       },

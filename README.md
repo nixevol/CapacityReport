@@ -148,6 +148,8 @@ dist\desktop\*-setup.exe
 ```
 
 桌面版使用 Tauri 启动 Python sidecar。sidecar 默认监听 `127.0.0.1:9081`，运行数据写入系统 app data 目录，不写入安装目录。
+
+Windows 桌面安装包会内置 WebView2 离线安装器，适合没有外网且未预装 WebView2 Runtime 的机器。该模式会让安装包体积增加约 127 MB；构建机需要能在构建阶段下载 WebView2 离线安装器。
 首次启动会把安装包内置的 `Configure.json` 和 `ReportScript.sql` 复制到运行数据目录；Windows 下通常是 `%APPDATA%\com.nixevol.capacityreport\`。安装目录中的 `_up_` 只是 Tauri 打包资源目录，程序运行时不会直接编辑它。
 Windows 桌面版使用 NSIS 安装器，卸载时会询问是否同时删除 `%APPDATA%\com.nixevol.capacityreport\` 中的配置、脚本、授权、缓存和日志。
 Windows 桌面版默认安装到 `D:\Program Files\CapacityReport`；如果没有 D 盘，则默认安装到系统 `Program Files\CapacityReport`。桌面版已关闭 release DevTools 和右键浏览器菜单。
