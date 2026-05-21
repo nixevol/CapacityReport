@@ -10,11 +10,13 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tauri::{Manager, Runtime};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
 const SERVER_PORT: u16 = 9081;
 const SERVER_ADDR: &str = "127.0.0.1:9081";
+const HTTP_ERROR_PREFIX: &str = "CAPAREPORT_HTTP_ERROR:";
 #[cfg(target_os = "windows")]
 const SERVER_PROCESS_NAME: &str = "capareport-server.exe";
 
@@ -24,6 +26,27 @@ struct ServerProcess {
 }
 
 struct ServerState(Mutex<Option<ServerProcess>>);
+
+#[derive(serde::Deserialize)]
+struct DownloadHeader {
+    name: String,
+    value: String,
+}
+
+#[derive(serde::Deserialize)]
+struct DownloadFileRequest {
+    url: String,
+    method: String,
+    filename: String,
+    headers: Vec<DownloadHeader>,
+    body: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct DownloadFileResult {
+    saved: bool,
+    path: Option<String>,
+}
 
 fn copy_resource<R: Runtime>(
     app: &tauri::App<R>,
@@ -186,9 +209,115 @@ fn stop_server<R: Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
+#[tauri::command]
+async fn download_to_file(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    request: DownloadFileRequest,
+) -> Result<DownloadFileResult, String> {
+    let filename = safe_download_filename(&request.filename);
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_file_name(&filename)
+        .set_parent(&window);
+
+    if let Some(extension) = Path::new(&filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+    {
+        dialog = dialog.add_filter(extension.to_ascii_uppercase(), &[extension]);
+    }
+
+    let Some(file_path) = dialog
+        .blocking_save_file()
+        .map(|file_path| file_path.into_path().map_err(|error| error.to_string()))
+        .transpose()?
+    else {
+        return Ok(DownloadFileResult {
+            saved: false,
+            path: None,
+        });
+    };
+
+    if let Err(error) = write_download(request, &file_path).await {
+        let _ = fs::remove_file(&file_path);
+        return Err(error);
+    }
+
+    Ok(DownloadFileResult {
+        saved: true,
+        path: Some(file_path.to_string_lossy().to_string()),
+    })
+}
+
+async fn write_download(request: DownloadFileRequest, file_path: &Path) -> Result<(), String> {
+    let method = reqwest::Method::from_bytes(request.method.as_bytes())
+        .map_err(|error| format!("Invalid download method: {error}"))?;
+    let client = reqwest::Client::new();
+    let mut builder = client.request(method, request.url);
+
+    for header in request.headers {
+        let name = reqwest::header::HeaderName::from_bytes(header.name.as_bytes())
+            .map_err(|error| format!("Invalid download header: {error}"))?;
+        let value = reqwest::header::HeaderValue::from_str(&header.value)
+            .map_err(|error| format!("Invalid download header value: {error}"))?;
+        builder = builder.header(name, value);
+    }
+
+    if let Some(body) = request.body {
+        builder = builder.body(body);
+    }
+
+    let mut response = builder
+        .send()
+        .await
+        .map_err(|error| format!("Download request failed: {error}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response
+            .bytes()
+            .await
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .unwrap_or_default();
+        return Err(format!("{HTTP_ERROR_PREFIX}{}:{body}", status.as_u16()));
+    }
+
+    let mut file = fs::File::create(file_path)
+        .map_err(|error| format!("Unable to create download file: {error}"))?;
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| format!("Unable to read download stream: {error}"))?
+    {
+        file.write_all(&chunk)
+            .map_err(|error| format!("Unable to write download file: {error}"))?;
+    }
+    file.flush()
+        .map_err(|error| format!("Unable to flush download file: {error}"))?;
+    Ok(())
+}
+
+fn safe_download_filename(filename: &str) -> String {
+    let trimmed = filename.trim();
+    if trimmed.is_empty() {
+        return "download.bin".to_string();
+    }
+
+    Path::new(trimmed)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("download.bin")
+        .to_string()
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![download_to_file])
         .manage(ServerState(Mutex::new(None)))
         .setup(|app| {
             start_server(app)?;

@@ -1,4 +1,11 @@
 # 项目上下文记录
+## 2026-05-21：修复桌面端下载不弹保存路径
+
+- 桌面端不再依赖 WebView 的 `<a download>` 行为保存文件；`frontend/src/api/client.ts` 在 Tauri 环境下会通过 `@tauri-apps/api/core` 调用原生命令，普通浏览器和 Server Portable 仍保留原有 Blob 下载逻辑。
+- `src-tauri/src/main.rs` 新增 `download_to_file` 命令：先弹出系统保存对话框，再使用 Rust `reqwest` 按前端传入的 HTTP 方法、URL、Header 和请求体流式请求后端接口，并写入用户选择的路径；用户取消保存时不报错，HTTP 错误会带回前端并继续触发 401 退出登录逻辑。
+- 新增依赖 `@tauri-apps/api`、`tauri-plugin-dialog`、`reqwest` 和 `serde`；Tauri schema 文件会因 dialog 插件更新，`src-tauri/gen/schemas/` 仍需保留在版本库中用于 VS Code JSON 校验。
+- 已验证 `npm run build`、`.venv\Scripts\python.exe -m compileall app`、`cargo fmt --manifest-path src-tauri\Cargo.toml --check` 和带临时 sidecar 占位文件的 `cargo check --manifest-path src-tauri\Cargo.toml` 均通过；验证后已清理 `frontend/dist`、`src-tauri/target`、`src-tauri/binaries` 和 Python 缓存。
+
 ## 2026-05-20：统一端口、升级 3.0.0 并收敛桌面安装行为
 
 - 应用户要求，应用访问端口统一回 `9081`：Server Portable、Docker 宿主机映射、Tauri 桌面 sidecar、桌面前端 `VITE_API_BASE` 和前端 Tauri 兜底 API 地址均使用 `http://127.0.0.1:9081`；桌面版启动前只会清理同名 `capareport-server.exe` 的残留监听进程，避免误杀其它占用 `9081` 的程序。

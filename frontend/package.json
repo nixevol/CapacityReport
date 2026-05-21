@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
     "@vicons/ionicons5": "^0.13.0",
     "monaco-editor": "^0.55.1",
     "naive-ui": "^2.42.0",

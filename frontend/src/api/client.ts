@@ -5,7 +5,29 @@ const DESKTOP_API_BASE = 'http://127.0.0.1:9081';
 const API_BASE = resolveApiBase();
 const API_FETCH_RETRIES = 8;
 const API_FETCH_RETRY_DELAY_MS = 500;
+const TAURI_HTTP_ERROR_PREFIX = 'CAPAREPORT_HTTP_ERROR:';
 let onUnauthorized: (() => void) | null = null;
+let cachedTauriInvoke: TauriInvoke | null = null;
+
+type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+interface TauriDownloadHeader {
+  name: string;
+  value: string;
+}
+
+interface TauriDownloadRequest {
+  url: string;
+  method: 'GET' | 'POST';
+  filename: string;
+  headers: TauriDownloadHeader[];
+  body?: string;
+}
+
+interface TauriDownloadResult {
+  saved: boolean;
+  path?: string;
+}
 
 export class ApiRequestError extends Error {
   status: number;
@@ -134,6 +156,17 @@ export async function download(url: string, body: unknown, filename: string): Pr
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  if (isTauriRuntime()) {
+    await downloadWithTauri({
+      url: apiUrl(url),
+      method: 'POST',
+      filename,
+      headers: headersToPairs(headers),
+      body: JSON.stringify(body)
+    });
+    return;
+  }
+
   const response = await fetchWithRetry(apiUrl(url), {
     method: 'POST',
     headers,
@@ -153,6 +186,16 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
   const token = getToken();
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  if (isTauriRuntime()) {
+    await downloadWithTauri({
+      url: apiUrl(url),
+      method: 'GET',
+      filename: fallbackFilename,
+      headers: headersToPairs(headers)
+    });
+    return;
   }
 
   const response = await fetchWithRetry(apiUrl(url), { headers });
@@ -214,6 +257,60 @@ async function saveBlobResponse(response: Response, filename: string): Promise<v
   link.download = filename;
   link.click();
   URL.revokeObjectURL(objectUrl);
+}
+
+async function downloadWithTauri(request: TauriDownloadRequest): Promise<void> {
+  try {
+    const invoke = await getTauriInvoke();
+    await invoke<TauriDownloadResult>('download_to_file', { request });
+  } catch (error) {
+    throw parseTauriDownloadError(error);
+  }
+}
+
+async function getTauriInvoke(): Promise<TauriInvoke> {
+  if (!cachedTauriInvoke) {
+    const api = await import('@tauri-apps/api/core');
+    cachedTauriInvoke = api.invoke;
+  }
+  return cachedTauriInvoke;
+}
+
+function headersToPairs(headers: Headers): TauriDownloadHeader[] {
+  const pairs: TauriDownloadHeader[] = [];
+  headers.forEach((value, name) => {
+    pairs.push({ name, value });
+  });
+  return pairs;
+}
+
+function parseTauriDownloadError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error || '下载失败');
+  if (!message.startsWith(TAURI_HTTP_ERROR_PREFIX)) {
+    return error instanceof Error ? error : new Error(message);
+  }
+
+  const payload = message.slice(TAURI_HTTP_ERROR_PREFIX.length);
+  const separator = payload.indexOf(':');
+  const status = Number(payload.slice(0, separator));
+  const body = separator >= 0 ? payload.slice(separator + 1) : '';
+  const parsed = parseApiErrorText(body, `下载失败 (${status || 'HTTP'})`);
+
+  if (status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
+
+  return new ApiRequestError(parsed.message, status || 500, parsed.detail);
+}
+
+function parseApiErrorText(text: string, fallback: string): { message: string; detail?: ApiErrorDetail } {
+  try {
+    const data = JSON.parse(text) as ApiError;
+    return parseApiError(data, fallback);
+  } catch {
+    return { message: text || fallback };
+  }
 }
 
 async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
