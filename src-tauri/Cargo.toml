@@ -11,6 +11,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 reqwest = { version = "0.13", default-features = false, features = ["stream"] }
 serde = { version = "1", features = ["derive"] }
+sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"

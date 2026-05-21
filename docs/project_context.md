@@ -1,4 +1,11 @@
 # 项目上下文记录
+## 2026-05-21：桌面端 sidecar 进程改为跨平台管理
+
+- Tauri 桌面端启动/关闭后端 sidecar 不再调用 Windows `netstat`、`tasklist`、`taskkill` 等控制台命令，避免启动和退出时闪过 DOS 窗口。
+- 桌面端启动 sidecar 后会在应用数据目录写入 `server.pid`；下次启动前读取该 pid，并通过 `sysinfo` 跨平台确认进程名为 `capareport-server` 后再终止残留进程，pid 被复用为其他程序时不会误杀。
+- 关闭桌面端时只使用 Tauri shell 的 `CommandChild.kill()` 停止当前 sidecar，并删除 `server.pid`；若 `9081` 被非本程序占用，则启动前直接报端口占用错误。
+- 新增 Rust 依赖 `sysinfo`，仅启用 `system` feature；已验证 `npm run build` 和带临时 sidecar 占位文件的 `cargo check --manifest-path src-tauri\Cargo.toml` 通过，验证产物已清理。
+
 ## 2026-05-21：收紧系统设置页头部空间
 
 - 系统设置页移除了内容卡片内重复的“系统设置/更新时间”标题栏，保留外层统一页面标题，减少首屏垂直空间占用。

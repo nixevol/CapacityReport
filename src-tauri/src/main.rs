@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use sysinfo::{Pid, ProcessesToUpdate, Signal, System};
 use tauri::{Manager, Runtime};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::CommandChild;
@@ -17,12 +18,12 @@ use tauri_plugin_shell::ShellExt;
 const SERVER_PORT: u16 = 9081;
 const SERVER_ADDR: &str = "127.0.0.1:9081";
 const HTTP_ERROR_PREFIX: &str = "CAPAREPORT_HTTP_ERROR:";
-#[cfg(target_os = "windows")]
-const SERVER_PROCESS_NAME: &str = "capareport-server.exe";
+const SERVER_PROCESS_NAME: &str = "capareport-server";
+const SERVER_PID_FILE: &str = "server.pid";
 
 struct ServerProcess {
     child: CommandChild,
-    pid: u32,
+    pid_file: PathBuf,
 }
 
 struct ServerState(Mutex<Option<ServerProcess>>);
@@ -98,7 +99,9 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(data_dir.join("logs"))?;
     copy_resource(app, "Configure.json", &data_dir)?;
     copy_resource(app, "ReportScript.sql", &data_dir)?;
-    stop_existing_server_on_port(SERVER_PORT);
+    let pid_file = data_dir.join(SERVER_PID_FILE);
+    stop_recorded_server(&pid_file);
+    ensure_server_port_available(SERVER_ADDR)?;
 
     let port_arg = SERVER_PORT.to_string();
     let (mut rx, child) = app
@@ -110,17 +113,27 @@ fn start_server<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn Error>> {
         )
         .args(["--host", "127.0.0.1", "--port", &port_arg])
         .spawn()?;
+    let pid = child.pid();
+    fs::write(&pid_file, pid.to_string())?;
 
     if let Err(error) = wait_for_server(SERVER_ADDR, Duration::from_secs(60)) {
         let _ = child.kill();
+        let _ = fs::remove_file(&pid_file);
         return Err(error);
     }
 
     tauri::async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
 
-    let pid = child.pid();
     let state = app.state::<ServerState>();
-    *state.0.lock().expect("server state lock poisoned") = Some(ServerProcess { child, pid });
+    *state.0.lock().expect("server state lock poisoned") = Some(ServerProcess { child, pid_file });
+    Ok(())
+}
+
+fn ensure_server_port_available(addr: &str) -> Result<(), Box<dyn Error>> {
+    let socket_addr: SocketAddr = addr.parse()?;
+    if TcpStream::connect_timeout(&socket_addr, Duration::from_millis(300)).is_ok() {
+        return Err(format!("Port {SERVER_PORT} is already in use").into());
+    }
     Ok(())
 }
 
@@ -146,66 +159,68 @@ fn health_check(socket_addr: &SocketAddr) -> Result<bool, Box<dyn Error>> {
     Ok(response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200"))
 }
 
-#[cfg(target_os = "windows")]
-fn stop_existing_server_on_port(port: u16) {
-    let Ok(output) = std::process::Command::new("netstat")
-        .args(["-ano", "-p", "tcp"])
-        .output()
-    else {
+fn stop_recorded_server(pid_file: &Path) {
+    let Ok(content) = fs::read_to_string(pid_file) else {
         return;
     };
 
-    let marker = format!(":{port}");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if !line.contains(&marker) || !line.to_ascii_uppercase().contains("LISTENING") {
-            continue;
+    if let Ok(pid) = content.trim().parse::<u32>() {
+        if !terminate_server_process(pid) {
+            let _ = fs::remove_file(pid_file);
+            return;
         }
-
-        let Some(pid) = line.split_whitespace().last() else {
-            continue;
-        };
-        if pid.parse::<u32>().is_err() {
-            continue;
-        }
-        if !is_capareport_server_pid(pid) {
-            continue;
-        }
-
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/T", "/PID", pid])
-            .status();
+        wait_for_process_exit(pid, Duration::from_secs(5));
     }
+    let _ = fs::remove_file(pid_file);
 }
 
-#[cfg(target_os = "windows")]
-fn is_capareport_server_pid(pid: &str) -> bool {
-    let Ok(output) = std::process::Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-        .output()
-    else {
+fn terminate_server_process(pid: u32) -> bool {
+    let mut system = System::new();
+    let pid = Pid::from_u32(pid);
+    system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+
+    let Some(process) = system.process(pid) else {
         return false;
     };
 
-    String::from_utf8_lossy(&output.stdout)
-        .to_ascii_lowercase()
-        .contains(SERVER_PROCESS_NAME)
+    if !is_server_process_name(process.name()) {
+        return false;
+    }
+
+    if process.kill_with(Signal::Kill) != Some(true) {
+        let _ = process.kill();
+    }
+    true
 }
 
-#[cfg(not(target_os = "windows"))]
-fn stop_existing_server_on_port(_port: u16) {}
+fn wait_for_process_exit(pid: u32, timeout: Duration) {
+    let started_at = Instant::now();
+    while started_at.elapsed() < timeout {
+        if !is_process_running(pid) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn is_process_running(pid: u32) -> bool {
+    let mut system = System::new();
+    let pid = Pid::from_u32(pid);
+    system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+    system.process(pid).is_some()
+}
+
+fn is_server_process_name(name: &std::ffi::OsStr) -> bool {
+    let normalized = name.to_string_lossy().to_ascii_lowercase();
+    normalized == SERVER_PROCESS_NAME || normalized == format!("{SERVER_PROCESS_NAME}.exe")
+}
 
 fn stop_server<R: Runtime>(app: &tauri::AppHandle<R>) {
     let state = app.state::<ServerState>();
     let child = state.0.lock().expect("server state lock poisoned").take();
     if let Some(process) = child {
-        #[cfg(target_os = "windows")]
-        {
-            let _ = std::process::Command::new("taskkill")
-                .args(["/F", "/T", "/PID", &process.pid.to_string()])
-                .status();
-        }
         let _ = process.child.kill();
+        let _ = fs::remove_file(process.pid_file);
     }
 }
 
