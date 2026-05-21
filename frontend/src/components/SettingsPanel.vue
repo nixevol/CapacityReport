@@ -3,13 +3,6 @@
     <input ref="configInput" class="hidden-input" type="file" accept=".json" @change="uploadConfigFile" />
 
     <n-card size="small" class="work-card settings-tabs-card">
-      <template #header>
-        <div class="settings-card-header">
-          <span>系统设置</span>
-          <span class="muted-line">更新时间：{{ configUpdate || '-' }}</span>
-        </div>
-      </template>
-
       <n-tabs type="line" animated class="settings-tabs">
         <n-tab-pane name="connection" tab="连接配置">
           <div class="settings-section-grid">
@@ -331,6 +324,7 @@ const message = useMessage();
 const dialog = useDialog();
 const configInput = ref<HTMLInputElement | null>(null);
 const configUpdate = ref('');
+const configUpdateText = computed(() => `更新时间：${configUpdate.value || '-'}`);
 const loading = ref(false);
 const testingDb = ref(false);
 const testingRemote = ref(false);
@@ -404,6 +398,7 @@ const visibleFieldMappings = computed(() => {
 onMounted(() => {
   setPageHeader({
     actions: [
+      { key: 'config-update', kind: 'text', label: configUpdateText },
       { key: 'download-config', label: '下载配置', icon: CloudDownloadOutline, onClick: downloadConfig },
       { key: 'upload-config', label: '上传配置', icon: CloudUploadOutline, onClick: () => configInput.value?.click() }
     ]

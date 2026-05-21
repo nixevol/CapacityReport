@@ -123,7 +123,6 @@ select {
   width: 100%;
 }
 
-.muted-line,
 .page-subtitle {
   overflow: hidden;
   color: var(--td-text-color-placeholder);
@@ -1152,14 +1151,6 @@ select {
   flex-direction: column;
 }
 
-.settings-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-width: 0;
-  gap: 16px;
-}
-
 .settings-tabs-card > .n-card__content,
 .settings-tabs-card > .n-card-content {
   flex: 1;
@@ -1671,7 +1662,6 @@ select {
   }
 
   .card-actions,
-  .settings-card-header,
   .field-card-title-row,
   .extract-list-header {
     align-items: stretch;
