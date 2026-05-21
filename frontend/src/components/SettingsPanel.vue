@@ -312,11 +312,12 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { useMessage, type SelectOption } from 'naive-ui';
+import { useDialog, useMessage, type SelectOption } from 'naive-ui';
 import { CloseOutline, CloudDownloadOutline, CloudUploadOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type { ApiMessage, AppConfig, HistoryRetentionConfig, RemoteDataConfig } from '../types';
+import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 interface ExtractFieldConfig {
@@ -327,6 +328,7 @@ interface ExtractFieldConfig {
 }
 
 const message = useMessage();
+const dialog = useDialog();
 const configInput = ref<HTMLInputElement | null>(null);
 const configUpdate = ref('');
 const loading = ref(false);
@@ -661,7 +663,11 @@ async function changePassword() {
 
 async function downloadConfig() {
   try {
-    await downloadGet('/api/config/download', 'Configure.json');
+    const filename = 'Configure.json';
+    const completed = await downloadGet('/api/config/download', filename);
+    if (completed) {
+      showDownloadCompleteDialog(dialog, filename);
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '下载配置失败');
   }

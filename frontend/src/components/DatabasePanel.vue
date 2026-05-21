@@ -231,6 +231,7 @@ import {
 
 import { apiGet, apiPost, download } from '../api/client';
 import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
+import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type RowData = Record<string, unknown>;
@@ -483,14 +484,18 @@ async function downloadSelectedCsv() {
   if (!selectedCsvTable.value) return;
   if (downloadingFormat.value) return;
 
+  const filename = `${selectedCsvTable.value}.csv`;
   downloadingFormat.value = 'csv';
   try {
-    await download(
+    const completed = await download(
       '/api/download',
       { table_name: selectedCsvTable.value, format: 'csv' },
-      `${selectedCsvTable.value}.csv`
+      filename
     );
-    csvDialogVisible.value = false;
+    if (completed) {
+      csvDialogVisible.value = false;
+      showDownloadCompleteDialog(dialog, filename);
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '导出失败');
   } finally {
@@ -503,13 +508,17 @@ async function downloadSelectedXlsx() {
   if (downloadingFormat.value) return;
 
   downloadingFormat.value = 'xlsx';
+  const filename = selectedXlsxTables.value.length === 1 ? `${selectedXlsxTables.value[0]}.xlsx` : 'tables.xlsx';
   try {
-    await download(
+    const completed = await download(
       '/api/download',
       { table_names: selectedXlsxTables.value, format: 'xlsx' },
-      selectedXlsxTables.value.length === 1 ? `${selectedXlsxTables.value[0]}.xlsx` : 'tables.xlsx'
+      filename
     );
-    xlsxDialogVisible.value = false;
+    if (completed) {
+      xlsxDialogVisible.value = false;
+      showDownloadCompleteDialog(dialog, filename);
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '导出失败');
   } finally {

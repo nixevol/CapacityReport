@@ -1,4 +1,9 @@
 # 项目上下文记录
+## 2026-05-21：增加下载完成提示弹窗
+
+- 数据表 CSV/XLSX 导出、历史数据压缩包下载和配置文件下载在下载流程完成后会弹出 Naive UI 成功对话框，使用绿色成功图标提示用户文件已下载完成。
+- 提示逻辑统一放在 `frontend/src/composables/downloadFeedback.ts`；桌面端会在 Tauri 原生保存流程确认写入后提示，用户取消保存时不弹完成提示，Web 端会在浏览器下载触发后提示。
+
 ## 2026-05-21：排查离线机器桌面端白屏
 
 - 运行时外链扫描确认：`frontend/src`、`app`、`src-tauri/src` 中没有 CDN、在线字体或外网业务接口；桌面端前端只访问本机 `http://127.0.0.1:9081` sidecar，`src-tauri/tauri.conf.json` 的 `https://schema.tauri.app/config/2` 只是编辑器/构建 schema，不参与用户机器运行。

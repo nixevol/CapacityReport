@@ -100,6 +100,7 @@ import { CopyOutline, DownloadOutline, FileTrayOutline, RefreshOutline, TrashOut
 
 import { apiGet, apiPost, download as downloadFile } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
+import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type LogLevel = 'default' | 'info' | 'success' | 'warning' | 'error';
@@ -184,8 +185,11 @@ async function downloadHistory(record: HistoryRecord) {
 
   downloadingRecordId.value = record.id;
   try {
-    await downloadFile('/api/history/download', { record_id: record.id }, `${record.id}.zip`);
-    message.success('历史数据下载已开始');
+    const filename = `${record.id}.zip`;
+    const completed = await downloadFile('/api/history/download', { record_id: record.id }, filename);
+    if (completed) {
+      showDownloadCompleteDialog(dialog, filename);
+    }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '下载历史数据失败');
   } finally {

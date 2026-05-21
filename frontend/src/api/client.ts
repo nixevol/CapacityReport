@@ -149,7 +149,7 @@ export function upload<T>(
   });
 }
 
-export async function download(url: string, body: unknown, filename: string): Promise<void> {
+export async function download(url: string, body: unknown, filename: string): Promise<boolean> {
   const headers = new Headers({ 'Content-Type': 'application/json' });
   const token = getToken();
   if (token) {
@@ -157,14 +157,13 @@ export async function download(url: string, body: unknown, filename: string): Pr
   }
 
   if (isTauriRuntime()) {
-    await downloadWithTauri({
+    return await downloadWithTauri({
       url: apiUrl(url),
       method: 'POST',
       filename,
       headers: headersToPairs(headers),
       body: JSON.stringify(body)
     });
-    return;
   }
 
   const response = await fetchWithRetry(apiUrl(url), {
@@ -178,10 +177,10 @@ export async function download(url: string, body: unknown, filename: string): Pr
     throw new ApiRequestError(error.message, response.status, error.detail);
   }
 
-  await saveBlobResponse(response, parseFilename(response.headers.get('content-disposition')) || filename);
+  return await saveBlobResponse(response, parseFilename(response.headers.get('content-disposition')) || filename);
 }
 
-export async function downloadGet(url: string, fallbackFilename: string): Promise<void> {
+export async function downloadGet(url: string, fallbackFilename: string): Promise<boolean> {
   const headers = new Headers();
   const token = getToken();
   if (token) {
@@ -189,13 +188,12 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
   }
 
   if (isTauriRuntime()) {
-    await downloadWithTauri({
+    return await downloadWithTauri({
       url: apiUrl(url),
       method: 'GET',
       filename: fallbackFilename,
       headers: headersToPairs(headers)
     });
-    return;
   }
 
   const response = await fetchWithRetry(apiUrl(url), { headers });
@@ -214,7 +212,7 @@ export async function downloadGet(url: string, fallbackFilename: string): Promis
   }
 
   const filename = parseFilename(response.headers.get('content-disposition')) || fallbackFilename;
-  await saveBlobResponse(response, filename);
+  return await saveBlobResponse(response, filename);
 }
 
 async function readError(response: Response): Promise<{ message: string; detail?: ApiErrorDetail }> {
@@ -249,7 +247,7 @@ function parseApiError(data: ApiError, fallback: string): { message: string; det
   };
 }
 
-async function saveBlobResponse(response: Response, filename: string): Promise<void> {
+async function saveBlobResponse(response: Response, filename: string): Promise<boolean> {
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -257,12 +255,14 @@ async function saveBlobResponse(response: Response, filename: string): Promise<v
   link.download = filename;
   link.click();
   URL.revokeObjectURL(objectUrl);
+  return true;
 }
 
-async function downloadWithTauri(request: TauriDownloadRequest): Promise<void> {
+async function downloadWithTauri(request: TauriDownloadRequest): Promise<boolean> {
   try {
     const invoke = await getTauriInvoke();
-    await invoke<TauriDownloadResult>('download_to_file', { request });
+    const result = await invoke<TauriDownloadResult>('download_to_file', { request });
+    return result.saved;
   } catch (error) {
     throw parseTauriDownloadError(error);
   }
