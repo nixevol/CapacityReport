@@ -146,3 +146,28 @@ export interface ApiMessage {
   update?: string;
   task_id?: string;
 }
+
+export interface ApiTokenRecord {
+  id: string;
+  name: string;
+  prefix: string;
+  suffix: string;
+  created_at: string;
+  expires_at: string | null;
+  enabled: boolean;
+  expired: boolean;
+  last_used_at?: string | null;
+  last_used_from?: string | null;
+}
+
+export interface ApiTokenListResponse {
+  success: boolean;
+  tokens: ApiTokenRecord[];
+}
+
+export interface ApiTokenMutationResponse {
+  success: boolean;
+  message?: string;
+  token?: string;
+  record: ApiTokenRecord;
+}

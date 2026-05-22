@@ -1,4 +1,12 @@
 # 项目上下文记录
+
+## 2026-05-23：新增 API Token 和离线 API 文档
+- 新增 `app/services/api_tokens.py` 和 `app/api/routers/api_tokens.py`：API Token 存储在运行时 `api_tokens.json`，只保存 HMAC-SHA256 哈希、前后缀、启用状态、到期时间和最近使用信息；完整 Token 仅在创建或重生成时返回一次。`api_tokens.json` 已加入 `.gitignore`。
+- `app/auth.py` 增加登录态和访问态解析：登录态只接受 JWT/cookie，业务访问态接受登录 JWT、`Authorization: Bearer <api-token>` 和 `X-API-Token`。Token 管理、系统配置、授权和 API 文档仍要求登录后访问。
+- `app/main.py` 的全局鉴权中间件改为 JWT + API Token 双鉴权；业务 API 可由 API Token 调用，`/api/openapi.json` 和 `/api/docs-info` 仅登录后可见。OpenAPI schema 同时声明 `BearerAuth` 和 `ApiTokenHeader`，便于外部系统对接。
+- 前端新增 `frontend/src/components/ApiCenter.vue`，侧边栏新增 `API 中心`；页面支持 Token 列表、创建、编辑启停/有效期、重生成、删除、复制一次性完整 Token，并内嵌本地 `swagger-ui-dist` 文档。API 中心懒加载，避免 Swagger UI 影响普通页面首屏。
+- 新增前端依赖 `swagger-ui-dist`，并在 `frontend/package.json` 中关闭 Scarf 安装期匿名统计配置，确保运行期和离线部署不依赖外网 CDN。
+- 已验证：`.venv\Scripts\python.exe -m compileall app`、`npm run build` 通过；本地服务实测未登录访问 `/api/openapi.json` 返回 401，登录创建临时 Token 成功，API Token 可访问 `/api/database/tables` 且不能访问 `/api/tokens`，登录访问 `/api/openapi.json` 成功，非法到期日期返回 400，临时 Token 已删除。
 ## 2026-05-22：统一日志框与桌面端下载路径反馈
 
 - 数据处理页菜单从“数据上传”改为“数据处理”，路由标题同步改为“数据处理”。

@@ -146,6 +146,7 @@ import { useMessage, type DropdownOption, type MenuOption, NIcon } from 'naive-u
 import {
   ChevronDownOutline,
   CloudUploadOutline,
+  CodeSlashOutline,
   ConstructOutline,
   FileTrayFullOutline,
   LogOutOutline,
@@ -173,7 +174,7 @@ const activationLoading = ref(false);
 const activationKeyLabel = ref('2026/06/20');
 const licenseMessage = ref('输入激活码可将授权到期日期延长 30 天。');
 const brandClickCount = ref(0);
-const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
+const menuKeys = ['workflow', 'history', 'database', 'script', 'api-center', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
 let brandClickResetTimer: number | undefined;
 
@@ -182,6 +183,7 @@ const menuOptions: MenuOption[] = [
   { label: '处理历史', key: 'history', icon: renderIcon(FileTrayFullOutline) },
   { label: '数据管理', key: 'database', icon: renderIcon(ServerOutline) },
   { label: '脚本编辑', key: 'script', icon: renderIcon(ConstructOutline) },
+  { label: 'API 中心', key: 'api-center', icon: renderIcon(CodeSlashOutline) },
   { label: '系统设置', key: 'settings', icon: renderIcon(SettingsOutline) }
 ];
 

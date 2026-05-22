@@ -4,7 +4,10 @@ import hashlib
 import hmac
 import json
 import time
+from dataclasses import dataclass
 from typing import Optional
+
+from starlette.requests import Request
 
 from app.config import BASE_DIR
 
@@ -13,6 +16,12 @@ SECRET_KEY = "CapaReportSecretKey2026"
 AUTH_INI_PATH = BASE_DIR / "auth.ini"
 DEFAULT_USERNAME = "root"
 DEFAULT_PASSWORD = "Capacity"
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    kind: str
+    payload: dict
 
 
 def _ensure_auth_ini() -> None:
@@ -66,6 +75,61 @@ def verify_jwt_token(token: str) -> Optional[dict]:
         return data
     except Exception:
         return None
+
+
+def extract_login_token(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        if token:
+            return token
+
+    cookie_token = request.cookies.get("token", "").strip()
+    return cookie_token or None
+
+
+def extract_access_token(request: Request) -> str | None:
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        if token:
+            return token
+
+    api_token = request.headers.get("X-API-Token", "").strip()
+    if api_token:
+        return api_token
+
+    cookie_token = request.cookies.get("token", "").strip()
+    return cookie_token or None
+
+
+def resolve_login_context(request: Request) -> AuthContext | None:
+    token = extract_login_token(request)
+    if not token:
+        return None
+
+    payload = verify_jwt_token(token)
+    if not payload:
+        return None
+    return AuthContext(kind="jwt", payload=payload)
+
+
+def resolve_access_context(request: Request) -> AuthContext | None:
+    token = extract_access_token(request)
+    if not token:
+        return None
+
+    payload = verify_jwt_token(token)
+    if payload:
+        return AuthContext(kind="jwt", payload=payload)
+
+    from app.services.api_tokens import verify_api_token
+
+    api_payload = verify_api_token(token)
+    if api_payload:
+        return AuthContext(kind="api_token", payload=api_payload)
+
+    return None
 
 
 def _encode_json(data: dict) -> str:
