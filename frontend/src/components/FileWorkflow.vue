@@ -141,7 +141,12 @@
             {{ taskStatus.error }}
           </n-alert>
           <div ref="logContainer" class="log-container">
-            <pre class="log-content">{{ logText }}</pre>
+            <pre class="colored-log-content"><span
+              v-for="(line, index) in logLines"
+              :key="index"
+              class="colored-log-line"
+              :class="`log-level-${line.level}`"
+            >{{ line.text }}</span></pre>
           </div>
         </div>
       </div>
@@ -189,6 +194,7 @@ import {
 
 import { ApiRequestError, apiGet, apiPost, upload } from '../api/client';
 import type { ActiveTask, ApiErrorDetail, LicenseStatus, TaskStatus } from '../types';
+import { toColoredLogLines } from '../composables/logLines';
 
 type FileStatus = 'pending' | 'uploading' | 'uploaded' | 'error';
 
@@ -248,6 +254,7 @@ const stageLabels: Record<string, string> = {
 };
 
 const logText = computed(() => taskStatus.value?.logs?.join('\n') || '等待任务开始');
+const logLines = computed(() => toColoredLogLines(logText.value, '等待任务开始'));
 const processVisible = computed(() => Boolean(taskStatus.value || activeTask.value?.has_active));
 const taskInProgress = computed(() => {
   if (activeTask.value?.has_active) {

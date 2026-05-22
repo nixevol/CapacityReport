@@ -4,14 +4,8 @@
       <div ref="editorHost" class="script-editor" />
     </div>
 
-    <div class="script-status-bar">
-      <span>{{ cursorText }}</span>
-      <span>{{ editorStatus }}</span>
-      <span>{{ lineCount }} 行</span>
-    </div>
-
-    <div v-if="taskStatus" class="process-section script-process-section">
-      <div class="upload-process-card">
+    <div v-if="taskStatus || taskId" class="script-process-section">
+      <div class="upload-process-card script-process-card">
         <div class="card-header">
           <div class="card-header-left">
             <span class="card-title">脚本执行进度</span>
@@ -22,9 +16,22 @@
           </div>
         </div>
         <div class="card-body">
-          <n-log :log="logText" language="text" trim class="script-log" />
+          <div class="colored-log-panel script-log" role="log" aria-label="脚本执行日志">
+            <pre class="colored-log-content"><span
+              v-for="(line, index) in logLines"
+              :key="index"
+              class="colored-log-line"
+              :class="`log-level-${line.level}`"
+            >{{ line.text }}</span></pre>
+          </div>
         </div>
       </div>
+    </div>
+
+    <div class="script-status-bar">
+      <span>{{ cursorText }}</span>
+      <span>{{ editorStatus }}</span>
+      <span>{{ lineCount }} 行</span>
     </div>
   </div>
 </template>
@@ -39,11 +46,16 @@ import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 
 import { apiGet, apiPost } from '../api/client';
 import type { ApiMessage, ScriptContent, TaskStatus } from '../types';
+import { toColoredLogLines } from '../composables/logLines';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type MonacoGlobal = typeof globalThis & {
   MonacoEnvironment?: {
     getWorker: (_moduleId: string, _label: string) => Worker;
+  };
+  __capacityReportScriptTaskState?: {
+    taskId: ReturnType<typeof ref<string>>;
+    taskStatus: ReturnType<typeof ref<TaskStatus | null>>;
   };
 };
 
@@ -65,13 +77,21 @@ const isModified = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const executing = ref(false);
-const taskId = ref('');
-const taskStatus = ref<TaskStatus | null>(null);
 let timer: number | undefined;
 let themeObserver: MutationObserver | undefined;
 let applyingRemoteContent = false;
 
+const globalWindow = window as MonacoGlobal;
+const scriptTaskState = globalWindow.__capacityReportScriptTaskState || {
+  taskId: ref(''),
+  taskStatus: ref<TaskStatus | null>(null)
+};
+globalWindow.__capacityReportScriptTaskState = scriptTaskState;
+const taskId = scriptTaskState.taskId;
+const taskStatus = scriptTaskState.taskStatus;
+
 const logText = computed(() => taskStatus.value?.logs?.join('\n') || '等待执行日志');
+const logLines = computed(() => toColoredLogLines(logText.value, '等待执行日志'));
 const statusClass = computed(() => {
   if (taskStatus.value?.status === 'completed') return 'completed';
   if (taskStatus.value?.status === 'failed') return 'failed';
@@ -123,6 +143,9 @@ onMounted(async () => {
   createEditor();
   observeTheme();
   await loadScript();
+  if (taskId.value && taskStatus.value && !['completed', 'failed'].includes(taskStatus.value.status)) {
+    startPolling();
+  }
 });
 
 onBeforeUnmount(() => {

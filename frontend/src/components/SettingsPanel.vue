@@ -659,9 +659,9 @@ async function changePassword() {
 async function downloadConfig() {
   try {
     const filename = 'Configure.json';
-    const completed = await downloadGet('/api/config/download', filename);
-    if (completed) {
-      showDownloadCompleteDialog(dialog, filename);
+    const result = await downloadGet('/api/config/download', filename);
+    if (result.saved) {
+      showDownloadCompleteDialog(dialog, filename, result.path);
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '下载配置失败');

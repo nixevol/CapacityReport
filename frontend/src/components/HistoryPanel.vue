@@ -101,9 +101,8 @@ import { CopyOutline, DownloadOutline, FileTrayOutline, RefreshOutline, TrashOut
 import { apiGet, apiPost, download as downloadFile } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
+import { toColoredLogLines } from '../composables/logLines';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
-
-type LogLevel = 'default' | 'info' | 'success' | 'warning' | 'error';
 
 const message = useMessage();
 const dialog = useDialog();
@@ -120,13 +119,7 @@ let recordSizeToken = 0;
 const totalSizeText = computed(() => `总占用: ${cacheSize.value?.size_formatted || '计算中...'}`);
 const hasRecords = computed(() => records.value.length > 0);
 const detailLogText = computed(() => detail.value?.logs?.join('\n') || '');
-const detailLogLines = computed(() => {
-  const lines = detailLogText.value ? detailLogText.value.split(/\r?\n/) : ['暂无日志'];
-  return lines.map(line => ({
-    text: line,
-    level: resolveLogLevel(line)
-  }));
-});
+const detailLogLines = computed(() => toColoredLogLines(detailLogText.value));
 
 onMounted(() => {
   setPageHeader({
@@ -186,9 +179,9 @@ async function downloadHistory(record: HistoryRecord) {
   downloadingRecordId.value = record.id;
   try {
     const filename = `${record.id}.zip`;
-    const completed = await downloadFile('/api/history/download', { record_id: record.id }, filename);
-    if (completed) {
-      showDownloadCompleteDialog(dialog, filename);
+    const result = await downloadFile('/api/history/download', { record_id: record.id }, filename);
+    if (result.saved) {
+      showDownloadCompleteDialog(dialog, filename, result.path);
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '下载历史数据失败');
@@ -254,14 +247,6 @@ async function writeClipboardText(text: string) {
   } finally {
     document.body.removeChild(textarea);
   }
-}
-
-function resolveLogLevel(line: string): LogLevel {
-  if (/\b(ERROR|FAILED|FAILURE)\b|错误|失败/i.test(line)) return 'error';
-  if (/\b(WARN|WARNING)\b|警告/i.test(line)) return 'warning';
-  if (/\b(SUCCESS|SUCCEEDED|COMPLETED)\b|成功|完成/i.test(line)) return 'success';
-  if (/\bINFO\b|信息/i.test(line)) return 'info';
-  return 'default';
 }
 
 function confirmDelete(recordId: string) {

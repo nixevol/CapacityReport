@@ -487,14 +487,14 @@ async function downloadSelectedCsv() {
   const filename = `${selectedCsvTable.value}.csv`;
   downloadingFormat.value = 'csv';
   try {
-    const completed = await download(
+    const result = await download(
       '/api/download',
       { table_name: selectedCsvTable.value, format: 'csv' },
       filename
     );
-    if (completed) {
+    if (result.saved) {
       csvDialogVisible.value = false;
-      showDownloadCompleteDialog(dialog, filename);
+      showDownloadCompleteDialog(dialog, filename, result.path);
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '导出失败');
@@ -510,14 +510,14 @@ async function downloadSelectedXlsx() {
   downloadingFormat.value = 'xlsx';
   const filename = selectedXlsxTables.value.length === 1 ? `${selectedXlsxTables.value[0]}.xlsx` : 'tables.xlsx';
   try {
-    const completed = await download(
+    const result = await download(
       '/api/download',
       { table_names: selectedXlsxTables.value, format: 'xlsx' },
       filename
     );
-    if (completed) {
+    if (result.saved) {
       xlsxDialogVisible.value = false;
-      showDownloadCompleteDialog(dialog, filename);
+      showDownloadCompleteDialog(dialog, filename, result.path);
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '导出失败');

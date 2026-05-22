@@ -178,7 +178,7 @@ type MenuKey = (typeof menuKeys)[number];
 let brandClickResetTimer: number | undefined;
 
 const menuOptions: MenuOption[] = [
-  { label: '数据上传', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
+  { label: '数据处理', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
   { label: '处理历史', key: 'history', icon: renderIcon(FileTrayFullOutline) },
   { label: '数据管理', key: 'database', icon: renderIcon(ServerOutline) },
   { label: '脚本编辑', key: 'script', icon: renderIcon(ConstructOutline) },

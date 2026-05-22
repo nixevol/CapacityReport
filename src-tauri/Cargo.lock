@@ -237,6 +237,7 @@ dependencies = [
 name = "capacity-report-desktop"
 version = "3.0.0"
 dependencies = [
+ "open",
  "reqwest",
  "serde",
  "sysinfo",

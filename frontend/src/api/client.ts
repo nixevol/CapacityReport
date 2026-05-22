@@ -11,6 +11,11 @@ let cachedTauriInvoke: TauriInvoke | null = null;
 
 type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
+export interface DownloadResult {
+  saved: boolean;
+  path?: string;
+}
+
 interface TauriDownloadHeader {
   name: string;
   value: string;
@@ -149,7 +154,7 @@ export function upload<T>(
   });
 }
 
-export async function download(url: string, body: unknown, filename: string): Promise<boolean> {
+export async function download(url: string, body: unknown, filename: string): Promise<DownloadResult> {
   const headers = new Headers({ 'Content-Type': 'application/json' });
   const token = getToken();
   if (token) {
@@ -180,7 +185,7 @@ export async function download(url: string, body: unknown, filename: string): Pr
   return await saveBlobResponse(response, parseFilename(response.headers.get('content-disposition')) || filename);
 }
 
-export async function downloadGet(url: string, fallbackFilename: string): Promise<boolean> {
+export async function downloadGet(url: string, fallbackFilename: string): Promise<DownloadResult> {
   const headers = new Headers();
   const token = getToken();
   if (token) {
@@ -247,7 +252,7 @@ function parseApiError(data: ApiError, fallback: string): { message: string; det
   };
 }
 
-async function saveBlobResponse(response: Response, filename: string): Promise<boolean> {
+async function saveBlobResponse(response: Response, filename: string): Promise<DownloadResult> {
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -255,17 +260,23 @@ async function saveBlobResponse(response: Response, filename: string): Promise<b
   link.download = filename;
   link.click();
   URL.revokeObjectURL(objectUrl);
-  return true;
+  return { saved: true };
 }
 
-async function downloadWithTauri(request: TauriDownloadRequest): Promise<boolean> {
+async function downloadWithTauri(request: TauriDownloadRequest): Promise<DownloadResult> {
   try {
     const invoke = await getTauriInvoke();
     const result = await invoke<TauriDownloadResult>('download_to_file', { request });
-    return result.saved;
+    return { saved: result.saved, path: result.path };
   } catch (error) {
     throw parseTauriDownloadError(error);
   }
+}
+
+export async function openPathInFileManager(path: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const invoke = await getTauriInvoke();
+  await invoke('open_path_in_file_manager', { path });
 }
 
 async function getTauriInvoke(): Promise<TauriInvoke> {

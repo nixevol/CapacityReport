@@ -267,6 +267,21 @@ async fn download_to_file(
     })
 }
 
+#[tauri::command]
+fn open_path_in_file_manager(path: String) -> Result<(), String> {
+    let target = PathBuf::from(path);
+    let directory = if target.is_dir() {
+        target
+    } else {
+        target
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "Unable to resolve download directory".to_string())?
+    };
+
+    open::that(directory).map_err(|error| format!("Unable to open download directory: {error}"))
+}
+
 async fn write_download(request: DownloadFileRequest, file_path: &Path) -> Result<(), String> {
     let method = reqwest::Method::from_bytes(request.method.as_bytes())
         .map_err(|error| format!("Invalid download method: {error}"))?;
@@ -332,7 +347,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![download_to_file])
+        .invoke_handler(tauri::generate_handler![
+            download_to_file,
+            open_path_in_file_manager
+        ])
         .manage(ServerState(Mutex::new(None)))
         .setup(|app| {
             start_server(app)?;
