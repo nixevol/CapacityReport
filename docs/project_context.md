@@ -1,6 +1,8 @@
 # 项目上下文记录
 
 ## 2026-05-23：新增 API Token 和离线 API 文档
+- API Token 验收补强：非永久 Token 必须明确传入到期日期，非法或缺失到期日期返回 400；到期、停用、重生成旧 Token 均会拒绝业务 API。已实测 API Token 可执行 `/api/database/execute` 和 `/api/database/table/query`，但不能访问 `/api/tokens` 管理接口。
+- `frontend/src/components/ApiCenter.vue` 的 Swagger UI 改为通过 `apiUrl('/api/openapi.json')` 加载文档，并在请求拦截器中只在未手动填写 Authorization 时补登录 JWT；桌面端或配置 `VITE_API_BASE` 时，Try it out 请求会自动补全后端基址，避免相对 `/api/*` 请求打到错误 origin。
 - 新增 `app/services/api_tokens.py` 和 `app/api/routers/api_tokens.py`：API Token 存储在运行时 `api_tokens.json`，只保存 HMAC-SHA256 哈希、前后缀、启用状态、到期时间和最近使用信息；完整 Token 仅在创建或重生成时返回一次。`api_tokens.json` 已加入 `.gitignore`。
 - `app/auth.py` 增加登录态和访问态解析：登录态只接受 JWT/cookie，业务访问态接受登录 JWT、`Authorization: Bearer <api-token>` 和 `X-API-Token`。Token 管理、系统配置、授权和 API 文档仍要求登录后访问。
 - `app/main.py` 的全局鉴权中间件改为 JWT + API Token 双鉴权；业务 API 可由 API Token 调用，`/api/openapi.json` 和 `/api/docs-info` 仅登录后可见。OpenAPI schema 同时声明 `BearerAuth` 和 `ApiTokenHeader`，便于外部系统对接。

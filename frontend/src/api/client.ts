@@ -357,11 +357,15 @@ function parseFilename(disposition: string | null): string {
   return plainMatch?.[1] || '';
 }
 
-function apiUrl(url: string): string {
+export function apiUrl(url: string): string {
   if (!API_BASE || /^https?:\/\//i.test(url)) {
     return url;
   }
   return `${API_BASE}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE || window.location.origin;
 }
 
 function resolveApiBase(): string {

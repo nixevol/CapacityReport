@@ -50,7 +50,7 @@
             </div>
             <n-space size="small">
               <n-button size="small" tertiary @click="copyHeaderSample">复制传参示例</n-button>
-              <n-button size="small" tertiary tag="a" href="/api/openapi.json" target="_blank">OpenAPI JSON</n-button>
+              <n-button size="small" tertiary tag="a" :href="openApiUrl" target="_blank">OpenAPI JSON</n-button>
             </n-space>
           </div>
         </template>
@@ -135,7 +135,7 @@ import { AddOutline, RefreshOutline } from '@vicons/ionicons5';
 import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle.js';
 import 'swagger-ui-dist/swagger-ui.css';
 
-import { apiGet, apiPost, getToken } from '../api/client';
+import { apiGet, apiPost, apiUrl, getApiBaseUrl, getToken } from '../api/client';
 import type { ApiMessage, ApiTokenListResponse, ApiTokenMutationResponse, ApiTokenRecord } from '../types';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
@@ -149,6 +149,7 @@ type SwaggerSystem = {
 
 interface SwaggerRequest {
   headers: Record<string, string>;
+  url?: string;
 }
 
 const message = useMessage();
@@ -167,6 +168,7 @@ const tokenForm = reactive({
   expires_at: '',
   enabled: true
 });
+const openApiUrl = apiUrl('/api/openapi.json');
 let swaggerUi: SwaggerSystem | undefined;
 
 onMounted(async () => {
@@ -201,8 +203,9 @@ function initSwagger() {
 
   swaggerHost.value.innerHTML = '';
   swaggerUi = SwaggerUIBundle({
-    url: '/api/openapi.json',
+    url: openApiUrl,
     domNode: swaggerHost.value,
+    requestSnippetsEnabled: true,
     deepLinking: true,
     docExpansion: 'none',
     persistAuthorization: true,
@@ -211,8 +214,11 @@ function initSwagger() {
     showExtensions: true,
     requestInterceptor: (request: SwaggerRequest) => {
       const token = getToken();
-      if (token) {
+      if (token && !request.headers.Authorization && !request.headers.authorization) {
         request.headers.Authorization = `Bearer ${token}`;
+      }
+      if (request.url?.startsWith('/')) {
+        request.url = `${getApiBaseUrl()}${request.url}`;
       }
       return request;
     },
