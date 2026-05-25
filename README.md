@@ -6,6 +6,7 @@ CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的�
 
 - Excel/CSV/ZIP 数据导入与自动解压、转换、入库。
 - FTP/SFTP 远程数据源配置、连接测试、远程下载并处理。
+- 远程自动调度：按远程 ZIP 文件名日期检查目标自然周 7 天数据，就绪后自动下载并处理。
 - MySQL 数据表查看、清空、删除、CSV/XLSX 导出。
 - SQL 脚本在线查看、保存和执行。
 - 处理历史、日志查看、历史原始数据打包下载。
@@ -219,6 +220,26 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 - `SheetFilter`：Excel Sheet 过滤规则。
 - `ExtractField`：字段映射配置。
 
+`RemoteData.auto_scheduler` 用于远程自动调度：
+
+```json
+{
+  "enabled": false,
+  "check_interval_hours": 1,
+  "expected_directories": ["4G/FDD", "4G/900", "5G/2.6", "5G/700"],
+  "week_offset": 0
+}
+```
+
+- `enabled`：是否启用自动调度。
+- `check_interval_hours`：检查间隔，最小 1 小时。
+- `expected_directories`：相对 `remote_dir` 的预期数据目录；为空时按远程 ZIP 实际所在目录检测。
+- `week_offset`：`0` 表示上周自然周，`-1` 表示上上周。
+
+自动调度开启后，系统会强制开启 `RemoteData.enabled` 和 `auto_delete_source`。调度器每轮先检查 `cache/auto_scheduler/ready.flag`；如果标识存在则直接触发远程下载并处理。没有标识时，会按 ZIP 文件名中的第一个时间戳判断每个目录是否覆盖目标自然周 7 天；全部就绪后写入标识，下一个检查周期再启动处理。处理成功并完成远程源文件清理后会删除标识；处理失败或源文件清理失败会保留标识，后续自动重试。
+
+无论手动上传还是远程下载，处理流程都会按文件名日期对每个目录只保留最近 7 天文件。文件名支持 `XXX_YYYYMMDDHHMM_YYYYMMDDHHMM` 和 `XXX_YYYYMMDDHHMM` 两类格式，数据日期始终取第一个时间戳。
+
 登录密码保存在本地 `auth.ini`，该文件不应提交到版本库。
 API Token 保存在本地 `api_tokens.json`，包含 HMAC 哈希、显示用前后缀和完整 Token，登录后可在列表中重复复制。该文件属于运行时数据，不应提交到版本库。
 
@@ -254,6 +275,8 @@ API Token 与登录态一样可访问业务 API，包括文件上传、远程下
 - `POST /api/upload`：上传文件
 - `POST /api/remote/test`：测试 FTP/SFTP 连接
 - `POST /api/remote/start`：远程下载并处理
+- `GET /api/remote/scheduler/status`：查询远程自动调度状态
+- `POST /api/remote/scheduler/trigger`：手动触发一次自动调度检查
 - `POST /api/process/start`：启动本地处理
 - `POST /api/process/status`：查询处理状态
 - `GET /api/license/status`：查询授权状态

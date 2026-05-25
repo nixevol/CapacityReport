@@ -1,4 +1,5 @@
 import argparse
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -25,6 +26,7 @@ from app.api.routers import (
 from app.auth import extract_access_token, resolve_access_context, resolve_login_context
 from app.config import BASE_DIR
 from app.services.api_tokens import touch_token_usage
+from app.services.auto_scheduler import AutoScheduler
 
 
 APP_VERSION = "3.0.0"
@@ -139,6 +141,14 @@ OPENAPI_OPERATION_DOCS = {
         "summary": "远程下载并处理",
         "description": "从已配置的 FTP/SFTP 目录递归下载源数据，然后自动执行完整处理流程。",
     },
+    ("get", "/api/remote/scheduler/status"): {
+        "summary": "查询远程自动调度状态",
+        "description": "返回自动调度启用状态、目标周、就绪标识、下次检查时间和各远程目录的日期覆盖情况。",
+    },
+    ("post", "/api/remote/scheduler/trigger"): {
+        "summary": "手动触发自动调度检查",
+        "description": "立即执行一次远程目录就绪检查；如果已存在就绪标识，会直接触发远程下载并处理。",
+    },
     ("post", "/api/history"): {
         "summary": "查询处理历史",
         "description": "按最近时间返回处理历史记录。",
@@ -249,6 +259,12 @@ OPENAPI_OPERATION_DOCS = {
             "passive": True,
             "timeout": 30,
             "auto_delete_source": False,
+            "auto_scheduler": {
+                "enabled": False,
+                "check_interval_hours": 1,
+                "expected_directories": ["4G/FDD", "4G/900", "5G/2.6", "5G/700"],
+                "week_offset": 0,
+            },
         },
     },
     ("post", "/api/config/history-retention"): {
@@ -312,6 +328,17 @@ OPENAPI_OPERATION_DOCS = {
 }
 
 
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    state.auto_scheduler = AutoScheduler()
+    state.auto_scheduler.start()
+    try:
+        yield
+    finally:
+        if state.auto_scheduler is not None:
+            state.auto_scheduler.stop()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="CapacityReport",
@@ -320,6 +347,7 @@ def create_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=app_lifespan,
     )
     app.openapi = lambda: custom_openapi(app)  # type: ignore[method-assign]
 

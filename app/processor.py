@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.config import AppConfig, SQL_SCRIPT
 from app.database import DatabaseManager
+from app.utils.file_dates import DirectoryDateSelection, select_recent_items_by_directory
 
 
 class ProcessLogger:
@@ -246,7 +247,7 @@ class DataProcessor:
     def _unzip_files(self):
         """解压所有 ZIP 文件（支持中文文件名）"""
         self.logger.info("正在解压 ZIP 文件...")
-        zip_files = list(self.work_dir.rglob("*.zip"))
+        zip_files = self._filter_recent_files(list(self.work_dir.rglob("*.zip")), "ZIP")
         zip_count = 0
         
         for zip_file in zip_files:
@@ -338,6 +339,43 @@ class DataProcessor:
         for ext in extensions:
             for file in directory.rglob(f"*{ext}"):
                 yield file
+
+    def _filter_recent_files(self, files: list[Path], label: str, root: Path | None = None) -> list[Path]:
+        if not files:
+            return files
+
+        base = (root or self.work_dir).resolve()
+
+        def parent_key(file_path: Path) -> str:
+            try:
+                parent = file_path.parent.resolve().relative_to(base)
+            except ValueError:
+                parent = file_path.parent
+            parent_text = str(parent).replace("\\", "/")
+            return "" if parent_text == "." else parent_text
+
+        selected, summaries = select_recent_items_by_directory(
+            files,
+            parent_key=parent_key,
+            name_key=lambda file_path: file_path.name,
+        )
+        self._log_recent_file_selection(label, summaries)
+        return sorted(selected)
+
+    def _log_recent_file_selection(self, label: str, summaries: list[DirectoryDateSelection]) -> None:
+        skipped_total = sum(summary.skipped_count for summary in summaries)
+        if not skipped_total:
+            return
+
+        for summary in summaries:
+            if not summary.skipped_count or not summary.start_date or not summary.max_date:
+                continue
+            self.logger.info(
+                f"{label}目录 {summary.directory or '.'}: 仅处理 "
+                f"{summary.start_date.isoformat()} 至 {summary.max_date.isoformat()} "
+                f"的 {summary.selected_count}/{summary.total_count} 个文件，"
+                f"跳过 {summary.skipped_count} 个旧文件"
+            )
     
     def _process_single_excel(self, excel_file: Path, sheet_filter: set) -> int:
         """处理单个 Excel 文件（用于并行）"""
@@ -368,7 +406,7 @@ class DataProcessor:
     def _process_excel_files_parallel(self):
         """并行处理 Excel 文件"""
         self.logger.info("正在并行处理 Excel 文件...")
-        excel_files = list(self._scan_files(self.work_dir, ['.xlsx', '.xls']))
+        excel_files = self._filter_recent_files(list(self._scan_files(self.work_dir, ['.xlsx', '.xls'])), "Excel")
         self.logger.info(f"找到 {len(excel_files)} 个 Excel 文件")
         
         if not excel_files:
@@ -794,7 +832,7 @@ class DataProcessor:
             self.db.drop_table(table_name)
             
             # 处理该目录下的所有 CSV
-            csv_files = list(self._scan_files(subdir, ['.csv']))
+            csv_files = self._filter_recent_files(list(self._scan_files(subdir, ['.csv'])), "CSV", root=subdir)
             self.logger.info(f"找到 {len(csv_files)} 个 CSV 文件")
             
             total_rows = 0

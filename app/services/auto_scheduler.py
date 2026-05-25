@@ -1,0 +1,408 @@
+from __future__ import annotations
+
+import json
+import threading
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from typing import Any
+
+from fastapi import HTTPException
+
+from app import state
+from app.config import CACHE_DIR, AutoSchedulerConfig, RemoteDataConfig
+from app.services.remote_download import RemoteDataDownloader, RemoteFileInfo
+from app.utils.file_dates import extract_file_date, required_week_days
+
+
+READY_DIR = CACHE_DIR / "auto_scheduler"
+READY_FLAG = READY_DIR / "ready.flag"
+DISABLED_CHECK_SECONDS = 60
+STARTUP_CHECK_SECONDS = 5
+FAILURE_RESULTS = {"scan_failed", "trigger_failed", "source_cleanup_failed", "failed", "invalid_flag"}
+
+
+@dataclass(frozen=True)
+class DirectoryReadyStatus:
+    directory: str
+    ready: bool
+    found_days: list[date]
+    missing_days: list[date]
+    file_count: int
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "found_days": [item.isoformat() for item in self.found_days],
+            "missing_days": [item.isoformat() for item in self.missing_days],
+            "found_count": len(self.found_days),
+            "required_count": len(self.found_days) + len(self.missing_days),
+            "file_count": self.file_count,
+            "error": self.error,
+        }
+
+
+class AutoScheduler:
+    def __init__(self) -> None:
+        self._stop_event = threading.Event()
+        self._check_lock = threading.Lock()
+        self._status_lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._running = False
+        self._last_check_at: datetime | None = None
+        self._next_check_at: datetime | None = None
+        self._last_result = "not_started"
+        self._last_message = "自动调度器尚未检查"
+        self._directory_status: dict[str, dict[str, Any]] = {}
+        self._task_running = False
+        self._task_id: str | None = None
+        self._failure_count = 0
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._running = True
+        self._stop_event.clear()
+        self._set_next_check(datetime.now() + timedelta(seconds=STARTUP_CHECK_SECONDS))
+        self._thread = threading.Thread(target=self._run_loop, name="auto-scheduler", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._running = False
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
+
+    def get_status(self) -> dict[str, Any]:
+        config = state.current_config().remote_data.normalized()
+        scheduler = config.auto_scheduler.normalized()
+        target_days = required_week_days(scheduler.week_offset)
+        ready_flag = self._read_ready_flag()
+
+        with self._status_lock:
+            return {
+                "enabled": scheduler.enabled,
+                "running": self._running,
+                "check_interval_hours": scheduler.check_interval_hours,
+                "expected_directories": scheduler.expected_directories,
+                "week_offset": scheduler.week_offset,
+                "auto_delete_source": config.auto_delete_source,
+                "next_check_at": self._format_dt(self._next_check_at),
+                "last_check_at": self._format_dt(self._last_check_at),
+                "last_result": self._last_result,
+                "last_message": self._last_message,
+                "failure_count": self._failure_count,
+                "task_running": self._task_running,
+                "task_id": self._task_id,
+                "ready_flag": ready_flag,
+                "target_week": {
+                    "start": target_days[0].isoformat(),
+                    "end": target_days[-1].isoformat(),
+                    "days": [item.isoformat() for item in target_days],
+                },
+                "directory_status": self._directory_status,
+            }
+
+    def check_and_run(self, manual: bool = False) -> dict[str, Any]:
+        if not self._check_lock.acquire(blocking=False):
+            return self._finish_check("busy", "自动调度器正在检查中", manual)
+
+        try:
+            return self._check_and_run_locked(manual)
+        finally:
+            self._check_lock.release()
+
+    def _run_loop(self) -> None:
+        while not self._stop_event.wait(self._seconds_until_next_check()):
+            self.check_and_run(manual=False)
+
+    def _check_and_run_locked(self, manual: bool) -> dict[str, Any]:
+        now = datetime.now()
+        remote_config = state.current_config().remote_data.normalized()
+        scheduler = remote_config.auto_scheduler.normalized()
+        self._last_check_at = now
+
+        if not scheduler.enabled:
+            self._set_next_check(now + timedelta(seconds=DISABLED_CHECK_SECONDS))
+            return self._finish_check("disabled", "自动调度未启用", manual)
+
+        self._set_next_check(now + timedelta(hours=scheduler.check_interval_hours))
+
+        if not remote_config.enabled:
+            return self._finish_check("remote_disabled", "远程数据源未启用", manual)
+
+        if state.global_task_lock["locked"]:
+            return self._finish_check("task_running", "已有任务在运行，本轮自动调度跳过", manual)
+
+        ready_flag = self._read_ready_flag()
+        if ready_flag["exists"]:
+            if ready_flag.get("invalid"):
+                self._clear_ready_flag()
+                return self._finish_check("invalid_flag", "就绪标识格式错误，已清除，本轮不触发处理", manual)
+            target_dates = self._target_dates_from_flag(ready_flag, scheduler)
+            return self._trigger_processing(target_dates, ready_flag, manual)
+
+        target_days = required_week_days(scheduler.week_offset)
+        directory_status = self._check_remote_ready(remote_config, scheduler, target_days)
+        ready = bool(directory_status) and all(item.ready for item in directory_status.values())
+        self._set_directory_status(directory_status)
+
+        error_count = sum(1 for item in directory_status.values() if item.error)
+        if error_count:
+            return self._finish_check(
+                "scan_failed",
+                f"远程目录扫描失败，{error_count}/{len(directory_status)} 个目录无法访问或扫描失败",
+                manual,
+            )
+
+        if ready:
+            self._mark_ready(target_days, directory_status)
+            return self._finish_check(
+                "marked_ready",
+                "远程数据已满足目标周 7 天，已写入就绪标识，下次检查将自动处理",
+                manual,
+            )
+
+        ready_count = sum(1 for item in directory_status.values() if item.ready)
+        return self._finish_check(
+            "waiting",
+            f"远程数据未就绪，{ready_count}/{len(directory_status)} 个目录满足目标周 7 天",
+            manual,
+        )
+
+    def _check_remote_ready(
+        self,
+        remote_config: RemoteDataConfig,
+        scheduler: AutoSchedulerConfig,
+        target_days: list[date],
+    ) -> dict[str, DirectoryReadyStatus]:
+        downloader = RemoteDataDownloader(remote_config)
+        expected_directories = scheduler.expected_directories
+        if expected_directories:
+            return {
+                directory: self._directory_ready_status(
+                    directory,
+                    self._safe_list_remote_zip_files(downloader, directory),
+                    target_days,
+                )
+                for directory in expected_directories
+            }
+
+        files = self._safe_list_remote_zip_files(downloader, None)
+        if files is None:
+            return {
+                ".": DirectoryReadyStatus(
+                    directory=".",
+                    ready=False,
+                    found_days=[],
+                    missing_days=target_days,
+                    file_count=0,
+                    error="远程目录扫描失败",
+                )
+            }
+
+        grouped: dict[str, list[RemoteFileInfo]] = defaultdict(list)
+        for remote_file in files:
+            grouped[remote_file.parent or "."].append(remote_file)
+
+        if not grouped:
+            return {
+                ".": DirectoryReadyStatus(
+                    directory=".",
+                    ready=False,
+                    found_days=[],
+                    missing_days=target_days,
+                    file_count=0,
+                    error="远程目录未找到 ZIP 文件",
+                )
+            }
+
+        return {
+            directory: self._directory_ready_status(directory, directory_files, target_days)
+            for directory, directory_files in sorted(grouped.items(), key=lambda item: item[0])
+        }
+
+    def _safe_list_remote_zip_files(
+        self,
+        downloader: RemoteDataDownloader,
+        directory: str | None,
+    ) -> list[RemoteFileInfo] | None:
+        try:
+            return downloader.list_remote_zip_files(directory)
+        except Exception:
+            return None
+
+    def _directory_ready_status(
+        self,
+        directory: str,
+        files: list[RemoteFileInfo] | None,
+        target_days: list[date],
+    ) -> DirectoryReadyStatus:
+        if files is None:
+            return DirectoryReadyStatus(
+                directory=directory,
+                ready=False,
+                found_days=[],
+                missing_days=target_days,
+                file_count=0,
+                error="远程目录不存在或无法访问",
+            )
+
+        required = set(target_days)
+        found = {
+            file_date
+            for remote_file in files
+            if (file_date := extract_file_date(remote_file.name)) in required
+        }
+        missing = [item for item in target_days if item not in found]
+        return DirectoryReadyStatus(
+            directory=directory,
+            ready=not missing,
+            found_days=sorted(found),
+            missing_days=missing,
+            file_count=len(files),
+        )
+
+    def _trigger_processing(
+        self,
+        target_dates: list[date],
+        ready_flag: dict[str, Any],
+        manual: bool,
+    ) -> dict[str, Any]:
+        from app.api.routers.remote import start_remote_processing_job
+
+        try:
+            result = start_remote_processing_job(
+                source="scheduler",
+                on_finish=self._on_processing_finish,
+                target_dates=target_dates,
+            )
+        except HTTPException as exc:
+            return self._finish_check("trigger_failed", str(exc.detail), manual)
+        except Exception as exc:
+            return self._finish_check("trigger_failed", f"自动调度触发失败: {exc}", manual)
+
+        task_id = result.get("task_id")
+        with self._status_lock:
+            self._task_running = True
+            self._task_id = str(task_id) if task_id else None
+            self._last_result = "triggered"
+            self._last_message = "已根据就绪标识触发远程下载并处理"
+        return {
+            "success": True,
+            "result": "triggered",
+            "message": "已根据就绪标识触发远程下载并处理",
+            "task_id": task_id,
+            "ready_flag": ready_flag,
+            "status": self.get_status(),
+        }
+
+    def _mark_ready(
+        self,
+        target_days: list[date],
+        directory_status: dict[str, DirectoryReadyStatus],
+    ) -> None:
+        READY_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "ready_at": datetime.now().isoformat(timespec="seconds"),
+            "week_start": target_days[0].isoformat(),
+            "week_end": target_days[-1].isoformat(),
+            "target_dates": [item.isoformat() for item in target_days],
+            "directories": {
+                name: item.to_dict()
+                for name, item in directory_status.items()
+            },
+        }
+        READY_FLAG.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _clear_ready_flag(self) -> None:
+        try:
+            READY_FLAG.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def _read_ready_flag(self) -> dict[str, Any]:
+        if not READY_FLAG.exists():
+            return {"exists": False}
+        try:
+            data = json.loads(READY_FLAG.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {"exists": True, **data}
+        except Exception as exc:
+            return {"exists": True, "invalid": True, "error": str(exc)}
+        return {"exists": True, "invalid": True, "error": "ready.flag 格式错误"}
+
+    def _target_dates_from_flag(
+        self,
+        ready_flag: dict[str, Any],
+        scheduler: AutoSchedulerConfig,
+    ) -> list[date]:
+        raw_dates = ready_flag.get("target_dates")
+        if isinstance(raw_dates, list):
+            dates: list[date] = []
+            for raw_date in raw_dates:
+                try:
+                    dates.append(date.fromisoformat(str(raw_date)))
+                except ValueError:
+                    continue
+            if dates:
+                return sorted(dates)
+        return required_week_days(scheduler.week_offset)
+
+    def _on_processing_finish(self, task_id: str, status: str) -> None:
+        if status == "completed":
+            self._clear_ready_flag()
+            message = "自动调度任务处理成功，已清除就绪标识"
+            result = "completed"
+        else:
+            message = "自动调度任务未完成，就绪标识已保留，下次检查会重试"
+            result = status or "failed"
+
+        with self._status_lock:
+            self._task_running = False
+            self._task_id = task_id
+            self._last_result = result
+            self._last_message = message
+            self._failure_count = 0 if result == "completed" else self._failure_count + 1
+
+    def _finish_check(self, result: str, message: str, manual: bool) -> dict[str, Any]:
+        with self._status_lock:
+            self._last_result = result
+            self._last_message = message
+            if result in FAILURE_RESULTS:
+                self._failure_count += 1
+            elif result not in {"busy", "task_running"}:
+                self._failure_count = 0
+            if result not in {"triggered", "task_running"}:
+                self._task_running = False
+
+        return {
+            "success": result not in FAILURE_RESULTS,
+            "manual": manual,
+            "result": result,
+            "message": message,
+            "status": self.get_status(),
+        }
+
+    def _set_directory_status(self, directory_status: dict[str, DirectoryReadyStatus]) -> None:
+        with self._status_lock:
+            self._directory_status = {
+                name: item.to_dict()
+                for name, item in directory_status.items()
+            }
+
+    def _set_next_check(self, value: datetime) -> None:
+        with self._status_lock:
+            self._next_check_at = value
+
+    def _seconds_until_next_check(self) -> float:
+        with self._status_lock:
+            next_check_at = self._next_check_at
+        if not next_check_at:
+            return STARTUP_CHECK_SECONDS
+        return max((next_check_at - datetime.now()).total_seconds(), 0)
+
+    @staticmethod
+    def _format_dt(value: datetime | None) -> str | None:
+        return value.isoformat(timespec="seconds") if value else None

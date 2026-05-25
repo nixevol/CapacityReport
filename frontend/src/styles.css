@@ -1346,6 +1346,104 @@ select {
   line-height: 20px;
 }
 
+.settings-compact-divider {
+  margin: 12px 0;
+}
+
+.scheduler-dir-editor {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scheduler-dir-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.scheduler-status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
+}
+
+.scheduler-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--td-text-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scheduler-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scheduler-status-grid > div {
+  min-width: 0;
+}
+
+.scheduler-status-grid span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--td-text-color-placeholder);
+  font-size: 11px;
+}
+
+.scheduler-status-grid strong {
+  display: block;
+  overflow: hidden;
+  color: var(--td-text-color-primary);
+  font-family: var(--td-font-family-mono);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.scheduler-directory-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.scheduler-directory-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-small);
+}
+
+.scheduler-directory-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--td-text-color-primary);
+  font-family: var(--td-font-family-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .field-mapping-card {
   display: flex !important;
   height: 100%;
@@ -1760,5 +1858,10 @@ select {
   .extract-add-group {
     width: 100%;
     flex: none;
+  }
+
+  .scheduler-status-grid,
+  .scheduler-directory-list {
+    grid-template-columns: 1fr;
   }
 }

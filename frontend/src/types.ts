@@ -94,6 +94,55 @@ export interface RemoteDataConfig {
   passive: boolean;
   timeout: number;
   auto_delete_source: boolean;
+  auto_scheduler: RemoteAutoSchedulerConfig;
+}
+
+export interface RemoteAutoSchedulerConfig {
+  enabled: boolean;
+  check_interval_hours: number;
+  expected_directories: string[];
+  week_offset: number;
+}
+
+export interface RemoteSchedulerStatus {
+  enabled: boolean;
+  running: boolean;
+  check_interval_hours?: number;
+  expected_directories?: string[];
+  week_offset?: number;
+  auto_delete_source?: boolean;
+  next_check_at?: string | null;
+  last_check_at?: string | null;
+  last_result?: string;
+  last_message?: string;
+  failure_count?: number;
+  task_running?: boolean;
+  task_id?: string | null;
+  ready_flag?: {
+    exists: boolean;
+    ready_at?: string;
+    week_start?: string;
+    week_end?: string;
+    [key: string]: unknown;
+  };
+  target_week?: {
+    start: string;
+    end: string;
+    days?: string[];
+  };
+  directory_status?: Record<
+    string,
+    {
+      ready: boolean;
+      found_days: string[];
+      missing_days: string[];
+      found_count: number;
+      required_count: number;
+      file_count: number;
+      error?: string | null;
+    }
+  >;
+  message?: string;
 }
 
 export interface HistoryRetentionConfig {

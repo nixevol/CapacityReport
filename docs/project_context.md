@@ -1,5 +1,16 @@
 # 项目上下文记录
 
+## 2026-05-25：新增远程自动调度和每目录 7 天处理窗口
+
+- 新增 `app/utils/file_dates.py`，统一解析文件名中的第一个 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳，并提供按目录筛选最近 7 个自然日文件的工具；本地手动上传和远程下载后的 ZIP、Excel、CSV 处理都会按所在目录只保留最近 7 天文件，未携带日期且同目录没有任何可识别日期时保留兼容。
+- `app/services/remote_download.py` 增加远程 ZIP 清单扫描和筛选下载：普通远程处理按每个远程目录下载最近 7 天 ZIP；自动调度触发时按 ready flag 中记录的目标日期精确下载，若没有匹配 ZIP 不会回退全量下载，避免误处理新旧混杂数据。
+- `app/config.py` 增加 `RemoteData.auto_scheduler` 配置，包含 `enabled`、`check_interval_hours`、`expected_directories` 和 `week_offset`。自动调度开启时后端会强制 `RemoteData.enabled=True` 和 `auto_delete_source=True`，前端也同步灰显并强制打开相关开关。
+- 新增 `app/services/auto_scheduler.py` 后台线程：应用启动后按配置间隔检查 FTP/SFTP 目录，使用本机当前日期计算目标自然周（`week_offset=0` 为上周，`-1` 为上上周），但文件覆盖情况完全以 ZIP 文件名日期为准；全部目录覆盖 7 天后写入 `cache/auto_scheduler/ready.flag`，下一轮检测再触发远程下载并处理。
+- 调度成功且远程源文件清理成功后会删除 ready flag；处理失败、触发失败或源文件清理失败会保留 ready flag 供下轮重试。扫描失败会记录 `scan_failed`，连续失败次数通过状态接口返回，前端会显示红色失败状态。
+- `app/api/routers/remote.py` 新增 `/api/remote/scheduler/status` 和 `/api/remote/scheduler/trigger`，并将远程处理启动逻辑抽成 `start_remote_processing_job()` 供手动按钮和调度器复用。
+- `frontend/src/components/SettingsPanel.vue` 在远程数据源配置中加入自动调度区域：启用开关、检查间隔、目标周期、预期目录维护、调度状态、刷新状态和立即检查。配置下载/上传会随 `RemoteData` 一起携带自动调度配置。
+- 已验证：文件名日期解析、目标周计算、每目录 7 天筛选、调度开启强制删除源文件配置、调度日期精确筛选逻辑均通过临时 Python 片段；`.venv\Scripts\python.exe -m compileall app` 与 `npm run build` 通过，前端构建仅保留既有 Vite 大 chunk 警告。
+
 ## 2026-05-25：修复 API Token 指定日期输入不可见
 
 - `frontend/src/components/ApiTokenManager.vue` 中创建/编辑 Token 的到期日期控件从 `n-date-picker` 改为原生 `input[type=date]`，避免日期选择组件在弹窗内出现占位但输入框不可见的问题。

@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from threading import Thread
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from fastapi import APIRouter, Body, HTTPException
 
@@ -27,6 +27,29 @@ async def test_remote_connection(config: dict[str, Any] | None = Body(None)):
 
 @router.post("/api/remote/start")
 async def start_remote_processing():
+    return start_remote_processing_job(source="manual")
+
+
+@router.get("/api/remote/scheduler/status")
+def get_scheduler_status():
+    if state.auto_scheduler is None:
+        return {"enabled": False, "running": False, "message": "自动调度器未启动"}
+    return state.auto_scheduler.get_status()
+
+
+@router.post("/api/remote/scheduler/trigger")
+def trigger_scheduler_check():
+    if state.auto_scheduler is None:
+        raise HTTPException(status_code=503, detail="自动调度器未启动")
+    return state.auto_scheduler.check_and_run(manual=True)
+
+
+def start_remote_processing_job(
+    *,
+    source: str = "manual",
+    on_finish: Callable[[str, str], None] | None = None,
+    target_dates: Iterable[date] | None = None,
+) -> dict[str, Any]:
     if state.global_task_lock["locked"]:
         raise HTTPException(status_code=409, detail="已有任务在运行，请等待当前任务完成")
 
@@ -70,14 +93,14 @@ async def start_remote_processing():
 
     thread = Thread(
         target=_run_remote_processing,
-        args=(task_id, work_dir, app_config, remote_config, logger),
+        args=(task_id, work_dir, app_config, remote_config, logger, source, on_finish, target_dates),
         daemon=True,
     )
     thread.start()
 
     return {
         "success": True,
-        "message": "远程下载处理任务已启动",
+        "message": "自动调度远程下载处理任务已启动" if source == "scheduler" else "远程下载处理任务已启动",
         "task_id": task_id,
         "stage": "downloading",
     }
@@ -99,14 +122,18 @@ def _run_remote_processing(
     app_config: AppConfig,
     remote_config: RemoteDataConfig,
     logger: ProcessLogger,
+    source: str = "manual",
+    on_finish: Callable[[str, str], None] | None = None,
+    target_dates: Iterable[date] | None = None,
 ) -> None:
+    final_status = "failed"
     try:
         logger.info(
             f"开始远程下载，协议: {remote_config.protocol.upper()}，"
             f"服务器: {remote_config.host}:{remote_config.port}，目录: {remote_config.remote_dir}"
         )
         downloader = RemoteDataDownloader(remote_config, logger.info)
-        download_result = downloader.download_to(work_dir)
+        download_result = downloader.download_to(work_dir, target_dates=target_dates)
         logger.success(
             f"远程下载完成，共 {download_result.file_count} 个文件，"
             f"{_format_bytes(download_result.total_bytes)}"
@@ -127,8 +154,12 @@ def _run_remote_processing(
             try:
                 deleted_count = downloader.delete_source_files(download_result.remote_files)
                 logger.success(f"远程源文件清理完成，共删除 {deleted_count} 个文件，目录已保留")
+                final_status = status
             except Exception as exc:
                 logger.warning(f"远程源文件清理失败，数据处理结果已保留: {exc}")
+                final_status = "source_cleanup_failed"
+        else:
+            final_status = status
 
         state.history_manager.update(
             task_id,
@@ -145,7 +176,10 @@ def _run_remote_processing(
         }
     except Exception as exc:
         error_detail = exc.to_detail() if isinstance(exc, LicenseError) else None
-        logger.error(f"远程自动化任务失败: {exc}")
+        if source == "scheduler":
+            logger.error(f"自动调度任务失败: {exc}")
+        else:
+            logger.error(f"远程自动化任务失败: {exc}")
         state.history_manager.update(task_id, status="failed", error=str(exc))
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),
@@ -160,6 +194,8 @@ def _run_remote_processing(
         except Exception as exc:
             print(f"自动清理处理历史失败: {exc}")
         state.reset_task_lock()
+        if on_finish:
+            on_finish(task_id, final_status)
 
 
 def _format_bytes(size: int) -> str:

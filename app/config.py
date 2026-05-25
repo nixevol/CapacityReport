@@ -35,6 +35,59 @@ class MySQLConfig:
 
 
 @dataclass
+class AutoSchedulerConfig:
+    enabled: bool = False
+    check_interval_hours: int = 1
+    expected_directories: List[str] = field(default_factory=list)
+    week_offset: int = 0
+
+    def normalized(self) -> "AutoSchedulerConfig":
+        try:
+            check_interval_hours = int(self.check_interval_hours)
+        except (TypeError, ValueError):
+            check_interval_hours = 1
+        try:
+            week_offset = int(self.week_offset)
+        except (TypeError, ValueError):
+            week_offset = 0
+
+        directories = []
+        seen = set()
+        for directory in self.expected_directories or []:
+            normalized = str(directory).replace("\\", "/").strip().strip("/")
+            if normalized and normalized not in seen:
+                directories.append(normalized)
+                seen.add(normalized)
+
+        return AutoSchedulerConfig(
+            enabled=bool(self.enabled),
+            check_interval_hours=max(check_interval_hours, 1),
+            expected_directories=directories,
+            week_offset=week_offset,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        normalized = self.normalized()
+        return {
+            "enabled": normalized.enabled,
+            "check_interval_hours": normalized.check_interval_hours,
+            "expected_directories": normalized.expected_directories,
+            "week_offset": normalized.week_offset,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "AutoSchedulerConfig":
+        data = data or {}
+        directories = data.get("expected_directories", [])
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            check_interval_hours=data.get("check_interval_hours", 1),
+            expected_directories=directories if isinstance(directories, list) else [],
+            week_offset=data.get("week_offset", 0),
+        ).normalized()
+
+
+@dataclass
 class RemoteDataConfig:
     enabled: bool = False
     protocol: str = "sftp"
@@ -46,6 +99,7 @@ class RemoteDataConfig:
     passive: bool = True
     timeout: int = 30
     auto_delete_source: bool = False
+    auto_scheduler: AutoSchedulerConfig = field(default_factory=AutoSchedulerConfig)
 
     def normalized(self) -> "RemoteDataConfig":
         protocol = self.protocol.lower().strip()
@@ -53,8 +107,9 @@ class RemoteDataConfig:
             protocol = "sftp"
 
         port = self.port or (22 if protocol == "sftp" else 21)
+        scheduler = self.auto_scheduler.normalized()
         return RemoteDataConfig(
-            enabled=bool(self.enabled),
+            enabled=bool(self.enabled) or scheduler.enabled,
             protocol=protocol,
             host=self.host.strip(),
             port=port,
@@ -63,7 +118,8 @@ class RemoteDataConfig:
             remote_dir=(self.remote_dir or "/").strip() or "/",
             passive=bool(self.passive),
             timeout=max(int(self.timeout or 30), 1),
-            auto_delete_source=bool(self.auto_delete_source),
+            auto_delete_source=bool(self.auto_delete_source) or scheduler.enabled,
+            auto_scheduler=scheduler,
         )
 
     def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
@@ -77,6 +133,7 @@ class RemoteDataConfig:
             "passive": self.passive,
             "timeout": self.timeout,
             "auto_delete_source": self.auto_delete_source,
+            "auto_scheduler": self.auto_scheduler.normalized().to_dict(),
         }
         if include_password:
             data["passwd"] = self.passwd
@@ -106,6 +163,7 @@ class RemoteDataConfig:
             passive=bool(data.get("passive", True)),
             timeout=timeout,
             auto_delete_source=bool(data.get("auto_delete_source", False)),
+            auto_scheduler=AutoSchedulerConfig.from_dict(data.get("auto_scheduler")),
         ).normalized()
 
 

@@ -84,12 +84,15 @@
                 <n-grid :cols="12" :x-gap="12">
                   <n-gi :span="6">
                     <n-form-item label="启用远程自动化">
-                      <n-switch v-model:value="remoteForm.enabled" />
+                      <n-switch v-model:value="remoteForm.enabled" :disabled="remoteForm.auto_scheduler.enabled" />
                     </n-form-item>
                   </n-gi>
                   <n-gi :span="6">
                     <n-form-item label="处理成功后删除源文件">
-                      <n-switch v-model:value="remoteForm.auto_delete_source" />
+                      <n-switch
+                        v-model:value="remoteForm.auto_delete_source"
+                        :disabled="remoteForm.auto_scheduler.enabled"
+                      />
                     </n-form-item>
                   </n-gi>
                 </n-grid>
@@ -142,6 +145,111 @@
                   <n-input v-model:value="remoteForm.remote_dir" placeholder="/CapacityReportData" />
                 </n-form-item>
                 <p class="form-hint">自动化执行会递归下载该目录下的全部文件和文件夹到本地缓存，再按现有处理流程入库和执行脚本；自动删除源文件只会在处理成功后删除远程文件，保留目录结构。</p>
+
+                <n-divider class="settings-compact-divider">自动调度</n-divider>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="4">
+                    <n-form-item label="启用自动调度">
+                      <n-switch v-model:value="remoteForm.auto_scheduler.enabled" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="检查间隔（小时）">
+                      <n-input-number
+                        v-model:value="remoteForm.auto_scheduler.check_interval_hours"
+                        class="full-width"
+                        :min="1"
+                        :precision="0"
+                        :disabled="!remoteForm.auto_scheduler.enabled"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="目标周期">
+                      <n-select
+                        v-model:value="remoteForm.auto_scheduler.week_offset"
+                        :options="schedulerWeekOptions"
+                        :disabled="!remoteForm.auto_scheduler.enabled"
+                      />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-form-item label="预期目录">
+                  <div class="scheduler-dir-editor">
+                    <n-input-group>
+                      <n-input
+                        v-model:value="newSchedulerDirectory"
+                        placeholder="例如 4G/FDD"
+                        :disabled="!remoteForm.auto_scheduler.enabled"
+                        @keydown.enter.prevent="addSchedulerDirectory"
+                      />
+                      <n-button :disabled="!remoteForm.auto_scheduler.enabled" @click="addSchedulerDirectory">
+                        添加
+                      </n-button>
+                    </n-input-group>
+                    <div class="scheduler-dir-tags">
+                      <n-tag
+                        v-for="(directory, index) in remoteForm.auto_scheduler.expected_directories"
+                        :key="`${directory}-${index}`"
+                        closable
+                        :disabled="!remoteForm.auto_scheduler.enabled"
+                        @close="removeSchedulerDirectory(index)"
+                      >
+                        {{ directory }}
+                      </n-tag>
+                      <n-tag v-if="remoteForm.auto_scheduler.expected_directories.length === 0" type="default">
+                        按实际 ZIP 目录检测
+                      </n-tag>
+                    </div>
+                  </div>
+                </n-form-item>
+                <p class="form-hint">自动调度会按文件名日期检查目标自然周 7 天；开启后会强制启用远程自动化和处理成功后删除源文件。</p>
+
+                <div class="scheduler-status-panel">
+                  <div class="scheduler-status-header">
+                    <span>调度状态</span>
+                    <n-tag size="small" :type="schedulerStatusTagType">
+                      {{ schedulerStatusLabel }}
+                    </n-tag>
+                  </div>
+                  <div class="scheduler-status-grid">
+                    <div>
+                      <span>目标周</span>
+                      <strong>{{ schedulerTargetWeekText }}</strong>
+                    </div>
+                    <div>
+                      <span>下次检查</span>
+                      <strong>{{ schedulerStatus?.next_check_at || '-' }}</strong>
+                    </div>
+                    <div>
+                      <span>就绪标识</span>
+                      <strong>{{ schedulerStatus?.ready_flag?.exists ? '已存在' : '无' }}</strong>
+                    </div>
+                  </div>
+                  <p class="form-hint">{{ schedulerStatus?.last_message || '自动调度状态尚未加载' }}</p>
+                  <div v-if="schedulerDirectoryRows.length > 0" class="scheduler-directory-list">
+                    <div v-for="row in schedulerDirectoryRows" :key="row.name" class="scheduler-directory-row">
+                      <span class="scheduler-directory-name">{{ row.name }}</span>
+                      <n-tag size="small" :type="row.ready ? 'success' : 'warning'">
+                        {{ row.ready ? '就绪' : `缺 ${row.missing_days.length} 天` }}
+                      </n-tag>
+                    </div>
+                  </div>
+                  <n-space justify="end" size="small">
+                    <n-button size="small" :loading="loadingSchedulerStatus" @click="loadSchedulerStatus">
+                      刷新状态
+                    </n-button>
+                    <n-button
+                      size="small"
+                      type="primary"
+                      :loading="triggeringScheduler"
+                      :disabled="!remoteForm.auto_scheduler.enabled"
+                      @click="triggerSchedulerCheck"
+                    >
+                      立即检查
+                    </n-button>
+                  </n-space>
+                </div>
               </n-form>
 
               <template #footer>
@@ -310,12 +418,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useDialog, useMessage, type SelectOption } from 'naive-ui';
 import { CloseOutline, CloudDownloadOutline, CloudUploadOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
-import type { ApiMessage, AppConfig, HistoryRetentionConfig, RemoteDataConfig } from '../types';
+import type {
+  ApiMessage,
+  AppConfig,
+  HistoryRetentionConfig,
+  RemoteAutoSchedulerConfig,
+  RemoteDataConfig,
+  RemoteSchedulerStatus
+} from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 import ApiTokenManager from './ApiTokenManager.vue';
@@ -335,6 +450,8 @@ const configUpdateText = computed(() => `更新时间：${configUpdate.value || 
 const loading = ref(false);
 const testingDb = ref(false);
 const testingRemote = ref(false);
+const loadingSchedulerStatus = ref(false);
+const triggeringScheduler = ref(false);
 const savingMysql = ref(false);
 const savingRemote = ref(false);
 const savingHistoryRetention = ref(false);
@@ -345,6 +462,8 @@ const sheetFilters = ref<string[]>([]);
 const newSheetFilter = ref('');
 const extractFields = ref<ExtractFieldConfig[]>([]);
 const fieldSearch = ref('');
+const newSchedulerDirectory = ref('');
+const schedulerStatus = ref<RemoteSchedulerStatus | null>(null);
 const newExtractValues = reactive<Record<number, string>>({});
 
 const mysqlForm = reactive({
@@ -365,7 +484,13 @@ const remoteForm = reactive<RemoteDataConfig>({
   remote_dir: '/',
   passive: true,
   timeout: 30,
-  auto_delete_source: false
+  auto_delete_source: false,
+  auto_scheduler: {
+    enabled: false,
+    check_interval_hours: 1,
+    expected_directories: [],
+    week_offset: 0
+  }
 });
 
 const historyRetentionForm = reactive<HistoryRetentionConfig>({
@@ -389,6 +514,10 @@ const remoteProtocolOptions: SelectOption[] = [
   { label: 'SFTP', value: 'sftp' },
   { label: 'FTP', value: 'ftp' }
 ];
+const schedulerWeekOptions: SelectOption[] = [
+  { label: '上周', value: 0 },
+  { label: '上上周', value: -1 }
+];
 
 const visibleFieldMappings = computed(() => {
   const keyword = fieldSearch.value.trim().toLowerCase();
@@ -401,6 +530,49 @@ const visibleFieldMappings = computed(() => {
       return fieldName.includes(keyword) || extractText.includes(keyword);
     });
 });
+const schedulerStatusLabel = computed(() => {
+  if (!schedulerStatus.value) return '未加载';
+  if (!schedulerStatus.value.enabled) return '未启用';
+  if (schedulerStatus.value.task_running) return '处理中';
+  if ((schedulerStatus.value.failure_count || 0) >= 3) return '连续失败';
+  if (schedulerStatus.value.ready_flag?.exists) return '已就绪';
+  if (schedulerStatus.value.last_result === 'scan_failed') return '检查失败';
+  if (schedulerStatus.value.last_result === 'trigger_failed') return '触发失败';
+  if (schedulerStatus.value.last_result === 'waiting') return '等待数据';
+  if (schedulerStatus.value.last_result === 'marked_ready') return '已标记';
+  if (schedulerStatus.value.last_result === 'completed') return '已完成';
+  return schedulerStatus.value.running ? '运行中' : '已停止';
+});
+const schedulerStatusTagType = computed(() => {
+  if (!schedulerStatus.value?.enabled) return 'default';
+  if ((schedulerStatus.value.failure_count || 0) >= 3) return 'error';
+  if (schedulerStatus.value.task_running || schedulerStatus.value.ready_flag?.exists) return 'success';
+  if (['scan_failed', 'trigger_failed'].includes(schedulerStatus.value.last_result || '')) return 'error';
+  if (schedulerStatus.value.last_result === 'waiting') return 'warning';
+  return 'info';
+});
+const schedulerTargetWeekText = computed(() => {
+  const week = schedulerStatus.value?.target_week;
+  if (!week) return '-';
+  return `${week.start} 至 ${week.end}`;
+});
+const schedulerDirectoryRows = computed(() => {
+  const directoryStatus = schedulerStatus.value?.directory_status || {};
+  return Object.entries(directoryStatus).map(([name, status]) => ({
+    name,
+    ...status
+  }));
+});
+
+watch(
+  () => remoteForm.auto_scheduler.enabled,
+  enabled => {
+    if (enabled) {
+      remoteForm.enabled = true;
+      remoteForm.auto_delete_source = true;
+    }
+  }
+);
 
 onMounted(() => {
   setPageHeader({
@@ -411,6 +583,7 @@ onMounted(() => {
     ]
   });
   void loadConfig();
+  void loadSchedulerStatus();
 });
 
 onBeforeUnmount(() => {
@@ -432,6 +605,7 @@ async function loadConfig() {
     sheetFilters.value = [...config.sheet_filter];
     extractFields.value = normalizeExtractFields(config.extract_fields);
     resetExtractInputs();
+    enforceRemoteSchedulerRules();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载配置失败');
   } finally {
@@ -470,6 +644,8 @@ async function saveMysql() {
 }
 
 function getRemotePayload(): RemoteDataConfig {
+  enforceRemoteSchedulerRules();
+  const autoScheduler = normalizeAutoSchedulerConfig(remoteForm.auto_scheduler);
   return {
     ...remoteForm,
     protocol: remoteForm.protocol,
@@ -480,7 +656,8 @@ function getRemotePayload(): RemoteDataConfig {
     remote_dir: remoteForm.remote_dir.trim() || '/',
     passive: remoteForm.passive,
     timeout: remoteForm.timeout || 30,
-    auto_delete_source: remoteForm.auto_delete_source
+    auto_delete_source: remoteForm.auto_delete_source,
+    auto_scheduler: autoScheduler
   };
 }
 
@@ -500,10 +677,56 @@ async function saveRemote() {
     const result = await apiPost<ApiMessage>('/api/config/remote', getRemotePayload());
     configUpdate.value = result.update || configUpdate.value;
     message.success(result.message || '远程数据源配置已保存');
+    await loadSchedulerStatus();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '保存远程数据源配置失败');
   } finally {
     savingRemote.value = false;
+  }
+}
+
+function addSchedulerDirectory() {
+  const value = normalizeDirectoryText(newSchedulerDirectory.value);
+  if (!value) return;
+  if (remoteForm.auto_scheduler.expected_directories.includes(value)) {
+    message.warning('该目录已存在');
+    return;
+  }
+  remoteForm.auto_scheduler.expected_directories.push(value);
+  newSchedulerDirectory.value = '';
+}
+
+function removeSchedulerDirectory(index: number) {
+  remoteForm.auto_scheduler.expected_directories.splice(index, 1);
+}
+
+async function loadSchedulerStatus() {
+  loadingSchedulerStatus.value = true;
+  try {
+    schedulerStatus.value = await apiGet<RemoteSchedulerStatus>('/api/remote/scheduler/status');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载自动调度状态失败');
+  } finally {
+    loadingSchedulerStatus.value = false;
+  }
+}
+
+async function triggerSchedulerCheck() {
+  triggeringScheduler.value = true;
+  try {
+    const result = await apiPost<{ success: boolean; message?: string; status?: RemoteSchedulerStatus }>(
+      '/api/remote/scheduler/trigger'
+    );
+    if (result.status) {
+      schedulerStatus.value = result.status;
+    } else {
+      await loadSchedulerStatus();
+    }
+    message[result.success ? 'success' : 'warning'](result.message || '自动调度检查已执行');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '自动调度检查失败');
+  } finally {
+    triggeringScheduler.value = false;
   }
 }
 
@@ -694,6 +917,7 @@ async function uploadConfigFile(event: Event) {
 
 function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteDataConfig {
   const protocol = config?.protocol === 'ftp' ? 'ftp' : 'sftp';
+  const autoScheduler = normalizeAutoSchedulerConfig(config?.auto_scheduler);
   return {
     enabled: Boolean(config?.enabled),
     protocol,
@@ -704,8 +928,32 @@ function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteData
     remote_dir: config?.remote_dir || '/',
     passive: config?.passive ?? true,
     timeout: config?.timeout || 30,
-    auto_delete_source: Boolean(config?.auto_delete_source)
+    auto_delete_source: Boolean(config?.auto_delete_source) || autoScheduler.enabled,
+    auto_scheduler: autoScheduler
   };
+}
+
+function normalizeAutoSchedulerConfig(config: RemoteAutoSchedulerConfig | undefined): RemoteAutoSchedulerConfig {
+  return {
+    enabled: Boolean(config?.enabled),
+    check_interval_hours: Math.max(Number(config?.check_interval_hours ?? 1) || 1, 1),
+    expected_directories: uniqueStrings(config?.expected_directories || []).map(normalizeDirectoryText).filter(Boolean),
+    week_offset: Number.isFinite(Number(config?.week_offset)) ? Number(config?.week_offset) : 0
+  };
+}
+
+function enforceRemoteSchedulerRules() {
+  if (!remoteForm.auto_scheduler.enabled) return;
+  remoteForm.enabled = true;
+  remoteForm.auto_delete_source = true;
+  remoteForm.auto_scheduler.check_interval_hours = Math.max(Number(remoteForm.auto_scheduler.check_interval_hours) || 1, 1);
+  remoteForm.auto_scheduler.expected_directories = uniqueStrings(remoteForm.auto_scheduler.expected_directories)
+    .map(normalizeDirectoryText)
+    .filter(Boolean);
+}
+
+function normalizeDirectoryText(value: string): string {
+  return value.replace(/\\/g, '/').trim().replace(/^\/+|\/+$/g, '');
 }
 
 function normalizeHistoryRetentionConfig(config: HistoryRetentionConfig | undefined): HistoryRetentionConfig {

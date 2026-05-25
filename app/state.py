@@ -8,6 +8,7 @@ config = AppConfig.load()
 history_manager = HistoryManager()
 processing_tasks: dict[str, dict[str, Any]] = {}
 upload_sessions: dict[str, dict[str, Any]] = {}
+auto_scheduler: Any | None = None
 
 global_task_lock: dict[str, Any] = {
     "locked": False,
