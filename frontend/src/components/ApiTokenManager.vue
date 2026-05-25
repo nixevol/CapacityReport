@@ -65,12 +65,11 @@
           </n-radio-group>
         </n-form-item>
         <n-form-item v-if="!tokenForm.permanent" label="到期日期">
-          <n-date-picker
-            v-model:formatted-value="tokenForm.expires_at"
+          <input
+            v-model="tokenForm.expires_at"
+            class="api-token-date-input"
             type="date"
-            value-format="yyyy-MM-dd"
-            clearable
-            class="full-width"
+            :disabled="savingToken"
           />
         </n-form-item>
         <n-form-item label="启用">
@@ -385,6 +384,29 @@ function formatDateTime(value?: string | null): string {
   flex: 0 0 auto;
   flex-direction: column;
   gap: 6px;
+}
+
+.api-token-date-input {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--td-border-color);
+  border-radius: var(--td-radius-default);
+  background: var(--td-card-bg);
+  color: var(--td-text-color-primary);
+  font: inherit;
+  outline: none;
+}
+
+.api-token-date-input:focus {
+  border-color: var(--n-primary-color, #18a058);
+  box-shadow: 0 0 0 2px rgba(24, 160, 88, 0.12);
+}
+
+.api-token-date-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .raw-token-input {

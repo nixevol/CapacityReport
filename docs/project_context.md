@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-05-25：修复 API Token 指定日期输入不可见
+
+- `frontend/src/components/ApiTokenManager.vue` 中创建/编辑 Token 的到期日期控件从 `n-date-picker` 改为原生 `input[type=date]`，避免日期选择组件在弹窗内出现占位但输入框不可见的问题。
+- 原生日期输入继续使用 `YYYY-MM-DD` 字符串绑定到 `tokenForm.expires_at`，后端 `/api/tokens/create` 和 `/api/tokens/update` 请求体不变；仅补充本地样式以匹配当前主题和 Naive UI 表单尺寸。
+- 已验证：`npm run build` 和 `.venv\Scripts\python.exe -m compileall app` 通过；浏览器实测 `系统设置 > API Token > 生成 Token > 指定日期` 下日期输入框可见，并可输入 `2026-12-31`。
+
 ## 2026-05-25：拆分 API Token 管理和 API 文档
 
 - 前端删除旧 `frontend/src/components/ApiCenter.vue`，拆为 `ApiTokenManager.vue` 和 `ApiDocs.vue`：API Token 管理迁入 `系统设置 > API Token` 独立分页，左侧菜单“API 中心”改为“API 文档”，只展示 Swagger 文档。
