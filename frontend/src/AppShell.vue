@@ -183,7 +183,7 @@ const menuOptions: MenuOption[] = [
   { label: '处理历史', key: 'history', icon: renderIcon(FileTrayFullOutline) },
   { label: '数据管理', key: 'database', icon: renderIcon(ServerOutline) },
   { label: '脚本编辑', key: 'script', icon: renderIcon(ConstructOutline) },
-  { label: 'API 中心', key: 'api-center', icon: renderIcon(CodeSlashOutline) },
+  { label: 'API 文档', key: 'api-center', icon: renderIcon(CodeSlashOutline) },
   { label: '系统设置', key: 'settings', icon: renderIcon(SettingsOutline) }
 ];
 

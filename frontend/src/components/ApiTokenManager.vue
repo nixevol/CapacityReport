@@ -1,8 +1,8 @@
 <template>
-  <div class="api-center-workspace">
-    <section class="api-token-panel">
-      <n-card size="small" class="work-card api-card" title="API Token">
-        <div class="api-token-toolbar">
+  <div class="api-token-manager" :class="{ embedded }">
+    <n-card size="small" class="work-card api-token-card" title="API Token">
+      <template #header-extra>
+        <n-space size="small">
           <n-button size="small" type="primary" @click="openCreateDialog">
             <template #icon><n-icon><AddOutline /></n-icon></template>
             生成 Token
@@ -11,53 +11,39 @@
             <template #icon><n-icon><RefreshOutline /></n-icon></template>
             刷新
           </n-button>
+        </n-space>
+      </template>
+
+      <div class="api-token-intro">
+        API Token 用于内网程序直接调用业务接口。完整 Token 只会在生成或重生成时显示一次，请立即复制保存。
+      </div>
+
+      <n-spin v-if="loadingTokens" class="api-token-loading" />
+      <n-empty v-else-if="tokens.length === 0" description="暂无 API Token" />
+      <n-scrollbar v-else class="api-token-list">
+        <div v-for="token in tokens" :key="token.id" class="api-token-item">
+          <div class="api-token-main">
+            <div class="api-token-title-row">
+              <span class="api-token-name">{{ token.name }}</span>
+              <n-tag size="small" :type="token.enabled && !token.expired ? 'success' : 'warning'">
+                {{ tokenStatusText(token) }}
+              </n-tag>
+            </div>
+            <div class="api-token-mask monospace">{{ token.prefix }}...{{ token.suffix }}</div>
+            <div class="api-token-meta">
+              <span>到期：{{ formatExpiration(token.expires_at) }}</span>
+              <span>最近使用：{{ formatDateTime(token.last_used_at) }}</span>
+              <span v-if="token.last_used_from">来源：{{ token.last_used_from }}</span>
+            </div>
+          </div>
+          <div class="api-token-actions">
+            <n-button size="tiny" tertiary @click="openEditDialog(token)">编辑</n-button>
+            <n-button size="tiny" tertiary type="warning" @click="confirmRegenerate(token)">重生成</n-button>
+            <n-button size="tiny" tertiary type="error" @click="confirmDelete(token)">删除</n-button>
+          </div>
         </div>
-
-        <n-spin v-if="loadingTokens" class="api-token-loading" />
-        <n-empty v-else-if="tokens.length === 0" description="暂无 API Token" />
-        <n-scrollbar v-else class="api-token-list">
-          <div v-for="token in tokens" :key="token.id" class="api-token-item">
-            <div class="api-token-main">
-              <div class="api-token-title-row">
-                <span class="api-token-name">{{ token.name }}</span>
-                <n-tag size="small" :type="token.enabled && !token.expired ? 'success' : 'warning'">
-                  {{ tokenStatusText(token) }}
-                </n-tag>
-              </div>
-              <div class="api-token-mask monospace">{{ token.prefix }}...{{ token.suffix }}</div>
-              <div class="api-token-meta">
-                <span>到期：{{ formatExpiration(token.expires_at) }}</span>
-                <span>最近使用：{{ formatDateTime(token.last_used_at) }}</span>
-              </div>
-            </div>
-            <div class="api-token-actions">
-              <n-button size="tiny" tertiary @click="openEditDialog(token)">编辑</n-button>
-              <n-button size="tiny" tertiary type="warning" @click="confirmRegenerate(token)">重生成</n-button>
-              <n-button size="tiny" tertiary type="error" @click="confirmDelete(token)">删除</n-button>
-            </div>
-          </div>
-        </n-scrollbar>
-      </n-card>
-    </section>
-
-    <section class="api-docs-panel">
-      <n-card size="small" class="work-card api-docs-card">
-        <template #header>
-          <div class="api-docs-header">
-            <div>
-              <span class="api-docs-title">API 文档</span>
-              <p class="api-docs-hint">Token 通过 Authorization: Bearer &lt;token&gt; 传递，也兼容 X-API-Token。</p>
-            </div>
-            <n-space size="small">
-              <n-button size="small" tertiary @click="copyHeaderSample">复制传参示例</n-button>
-              <n-button size="small" tertiary tag="a" :href="openApiUrl" target="_blank">OpenAPI JSON</n-button>
-            </n-space>
-          </div>
-        </template>
-
-        <div ref="swaggerHost" class="swagger-host" />
-      </n-card>
-    </section>
+      </n-scrollbar>
+    </n-card>
 
     <n-modal
       v-model:show="tokenDialogVisible"
@@ -129,32 +115,19 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
 import { AddOutline, RefreshOutline } from '@vicons/ionicons5';
-import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle.js';
-import 'swagger-ui-dist/swagger-ui.css';
 
-import { apiGet, apiPost, apiUrl, getApiBaseUrl, getToken } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import type { ApiMessage, ApiTokenListResponse, ApiTokenMutationResponse, ApiTokenRecord } from '../types';
-import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
-type SwaggerSystem = {
-  getSystem?: () => {
-    authActions?: {
-      authorize?: (payload: Record<string, { name: string; schema: unknown; value: string }>) => void;
-    };
-  };
-};
-
-interface SwaggerRequest {
-  headers: Record<string, string>;
-  url?: string;
-}
+defineProps<{
+  embedded?: boolean;
+}>();
 
 const message = useMessage();
 const dialog = useDialog();
-const swaggerHost = ref<HTMLDivElement | null>(null);
 const tokens = ref<ApiTokenRecord[]>([]);
 const loadingTokens = ref(false);
 const savingToken = ref(false);
@@ -168,22 +141,9 @@ const tokenForm = reactive({
   expires_at: '',
   enabled: true
 });
-const openApiUrl = apiUrl('/api/openapi.json');
-let swaggerUi: SwaggerSystem | undefined;
 
-onMounted(async () => {
-  setPageHeader({
-    actions: [
-      { key: 'refresh-api-tokens', label: '刷新 Token', icon: RefreshOutline, loading: loadingTokens, onClick: loadTokens }
-    ]
-  });
-  await loadTokens();
-  await nextTick();
-  initSwagger();
-});
-
-onBeforeUnmount(() => {
-  resetPageHeader();
+onMounted(() => {
+  void loadTokens();
 });
 
 async function loadTokens() {
@@ -196,44 +156,6 @@ async function loadTokens() {
   } finally {
     loadingTokens.value = false;
   }
-}
-
-function initSwagger() {
-  if (!swaggerHost.value) return;
-
-  swaggerHost.value.innerHTML = '';
-  swaggerUi = SwaggerUIBundle({
-    url: openApiUrl,
-    domNode: swaggerHost.value,
-    requestSnippetsEnabled: true,
-    deepLinking: true,
-    docExpansion: 'none',
-    persistAuthorization: true,
-    validatorUrl: null,
-    showCommonExtensions: true,
-    showExtensions: true,
-    requestInterceptor: (request: SwaggerRequest) => {
-      const token = getToken();
-      if (token && !request.headers.Authorization && !request.headers.authorization) {
-        request.headers.Authorization = `Bearer ${token}`;
-      }
-      if (request.url?.startsWith('/')) {
-        request.url = `${getApiBaseUrl()}${request.url}`;
-      }
-      return request;
-    },
-    onComplete: () => {
-      const token = getToken();
-      if (!token) return;
-      swaggerUi?.getSystem?.().authActions?.authorize?.({
-        BearerAuth: {
-          name: 'BearerAuth',
-          schema: { type: 'http', scheme: 'bearer' },
-          value: token
-        }
-      });
-    }
-  }) as SwaggerSystem;
 }
 
 function openCreateDialog() {
@@ -337,11 +259,6 @@ async function copyRawToken() {
   message.success('Token 已复制');
 }
 
-async function copyHeaderSample() {
-  await writeClipboard('Authorization: Bearer <token>\nX-API-Token: <token>');
-  message.success('传参示例已复制');
-}
-
 async function writeClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -379,35 +296,35 @@ function formatDateTime(value?: string | null): string {
 </script>
 
 <style scoped>
-.api-center-workspace {
-  display: grid;
-  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
-  gap: 20px;
+.api-token-manager {
+  min-height: 0;
+}
+
+.api-token-manager.embedded {
   height: 100%;
   min-height: 0;
-  min-width: 0;
-  padding: 24px 32px;
 }
 
-.api-token-panel,
-.api-docs-panel,
-.api-card,
-.api-docs-card {
-  min-height: 0;
-}
-
-.api-card,
-.api-docs-card {
+.api-token-card {
   display: flex;
   height: 100%;
+  min-height: 0;
   flex-direction: column;
 }
 
-.api-token-toolbar {
+.api-token-card > :deep(.n-card__content),
+.api-token-card > :deep(.n-card-content) {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.api-token-intro {
   margin-bottom: 12px;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .api-token-loading {
@@ -415,8 +332,8 @@ function formatDateTime(value?: string | null): string {
 }
 
 .api-token-list {
-  height: calc(100vh - 236px);
-  min-height: 320px;
+  flex: 1;
+  min-height: 220px;
 }
 
 .api-token-item {
@@ -450,6 +367,7 @@ function formatDateTime(value?: string | null): string {
 .api-token-mask {
   margin-top: 6px;
   color: var(--td-text-color-secondary);
+  font-family: var(--td-font-family-mono);
   font-size: 12px;
 }
 
@@ -469,34 +387,6 @@ function formatDateTime(value?: string | null): string {
   gap: 6px;
 }
 
-.api-docs-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.api-docs-title {
-  color: var(--td-text-color-primary);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.api-docs-hint {
-  margin: 4px 0 0;
-  color: var(--td-text-color-secondary);
-  font-size: 12px;
-}
-
-.swagger-host {
-  height: calc(100vh - 188px);
-  min-height: 420px;
-  overflow: auto;
-  border: 1px solid var(--td-border-color-light);
-  border-radius: var(--td-radius-default);
-  background: #fff;
-}
-
 .raw-token-input {
   margin-top: 12px;
 }
@@ -507,25 +397,13 @@ function formatDateTime(value?: string | null): string {
   gap: 8px;
 }
 
-:deep(.swagger-ui) {
-  color: #1f2937;
-}
-
-:deep(.swagger-ui .scheme-container) {
-  box-shadow: none;
-}
-
-@media (max-width: 1100px) {
-  .api-center-workspace {
-    grid-template-columns: 1fr;
-    height: auto;
-    padding: 16px;
+@media (max-width: 720px) {
+  .api-token-item {
+    flex-direction: column;
   }
 
-  .api-token-list,
-  .swagger-host {
-    height: auto;
-    max-height: 70vh;
+  .api-token-actions {
+    flex-direction: row;
   }
 }
 </style>

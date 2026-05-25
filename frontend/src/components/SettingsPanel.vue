@@ -298,6 +298,12 @@
             </n-card>
           </div>
         </n-tab-pane>
+
+        <n-tab-pane name="api-token" tab="API Token">
+          <div class="settings-token-panel">
+            <ApiTokenManager embedded />
+          </div>
+        </n-tab-pane>
       </n-tabs>
     </n-card>
   </div>
@@ -312,6 +318,7 @@ import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type { ApiMessage, AppConfig, HistoryRetentionConfig, RemoteDataConfig } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
+import ApiTokenManager from './ApiTokenManager.vue';
 
 interface ExtractFieldConfig {
   Field: string;

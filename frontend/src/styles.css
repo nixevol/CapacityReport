@@ -1318,6 +1318,12 @@ select {
   max-width: 560px;
 }
 
+.settings-token-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .card-actions {
   display: flex;
   align-items: center;

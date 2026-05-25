@@ -6,7 +6,7 @@ import DatabasePanel from './components/DatabasePanel.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 
 const ScriptPanel = () => import('./components/ScriptPanel.vue');
-const ApiCenter = () => import('./components/ApiCenter.vue');
+const ApiDocs = () => import('./components/ApiDocs.vue');
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: { name: 'workflow' } },
@@ -14,7 +14,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/history', name: 'history', component: HistoryPanel, meta: { title: '处理历史' } },
   { path: '/database', name: 'database', component: DatabasePanel, meta: { title: '数据管理' } },
   { path: '/script', name: 'script', component: ScriptPanel, meta: { title: '脚本编辑' } },
-  { path: '/api-center', name: 'api-center', component: ApiCenter, meta: { title: 'API 中心' } },
+  { path: '/api-docs', alias: '/api-center', name: 'api-center', component: ApiDocs, meta: { title: 'API 文档' } },
   { path: '/settings', name: 'settings', component: SettingsPanel, meta: { title: '系统设置' } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'workflow' } }
 ];

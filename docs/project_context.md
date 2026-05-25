@@ -1,5 +1,13 @@
 # 项目上下文记录
 
+## 2026-05-25：拆分 API Token 管理和 API 文档
+
+- 前端删除旧 `frontend/src/components/ApiCenter.vue`，拆为 `ApiTokenManager.vue` 和 `ApiDocs.vue`：API Token 管理迁入 `系统设置 > API Token` 独立分页，左侧菜单“API 中心”改为“API 文档”，只展示 Swagger 文档。
+- API 文档正式路由为 `/api-docs`，旧 `/api-center` 保留为前端兼容别名；后端 `/api/docs-ui` 改为跳转 `/api-docs`。Swagger UI 仍从登录后可见的 `/api/openapi.json` 加载，Token 传递示例指向系统设置中的 API Token 分页。
+- `app/main.py` 的 OpenAPI 后处理增加中文 tag、接口 summary/description、常用请求示例和稳定 operationId；业务 API 声明登录 JWT 或 API Token 鉴权，配置/授权/Token 管理/文档接口仍只声明登录 JWT。Swagger 前端隐藏底部 Schemas 区域，减少噪音。
+- 修复登录页按钮点击不触发登录的问题：登录按钮改为显式调用 `submit()`，保留密码框回车提交，并在 loading 时防止重复提交。
+- 已验证：`.venv\Scripts\python.exe -m compileall app`、`npm run build` 通过；真实 HTTP 检查未登录 `/api/openapi.json` 返回 401、登录后返回 `CapacityReport API`；浏览器实测点击登录按钮可登录，左侧显示 `API 文档`，系统设置显示 `API Token` 分页，API 文档页可见中文 Swagger 分组。
+
 ## 2026-05-23：新增 API Token 和离线 API 文档
 - API Token 验收补强：非永久 Token 必须明确传入到期日期，非法或缺失到期日期返回 400；到期、停用、重生成旧 Token 均会拒绝业务 API。已实测 API Token 可执行 `/api/database/execute` 和 `/api/database/table/query`，但不能访问 `/api/tokens` 管理接口。
 - `frontend/src/components/ApiCenter.vue` 的 Swagger UI 改为通过 `apiUrl('/api/openapi.json')` 加载文档，并在请求拦截器中只在未手动填写 Authorization 时补登录 JWT；桌面端或配置 `VITE_API_BASE` 时，Try it out 请求会自动补全后端基址，避免相对 `/api/*` 请求打到错误 origin。

@@ -9,9 +9,9 @@ CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的�
 - MySQL 数据表查看、清空、删除、CSV/XLSX 导出。
 - SQL 脚本在线查看、保存和执行。
 - 处理历史、日志查看、历史原始数据打包下载。
-- API Token 管理和登录后可见的离线 API 文档，便于内网系统直接调用上传、远程处理、查表和 SQL 执行接口。
+- 系统设置内置 API Token 管理，左侧提供登录后可见的离线 API 文档，便于内网系统直接调用上传、远程处理、查表和 SQL 执行接口。
 - 按 ZIP 文件名数据日期校验本地授权期限，过期后可输入激活码顺延。
-- 系统设置：数据库、远程数据源、Sheet 过滤、字段映射、历史保留、密码修改。
+- 系统设置：数据库、远程数据源、Sheet 过滤、字段映射、API Token、历史保留、密码修改。
 - 发行形态：Server Portable、Tauri 桌面版、Docker 服务端版。
 
 ## 技术栈
@@ -224,7 +224,7 @@ API Token 保存在本地 `api_tokens.json`，只保存 HMAC 哈希和显示用�
 
 ## API Token 与文档
 
-登录后进入左侧 `API 中心` 可生成、停用、设置永久或指定日期到期的 API Token，并查看内置 API 文档。API 文档基于本地 `swagger-ui-dist` 打包，不依赖外网 CDN。
+登录后在 `系统设置 > API Token` 可生成、停用、设置永久或指定日期到期的 API Token；左侧 `API 文档` 只展示内置 Swagger 文档。API 文档基于本地 `swagger-ui-dist` 打包，不依赖外网 CDN。
 如果 Token 未设置为永久有效，则必须明确选择到期日期；到期、停用或重生成后的旧 Token 都不能继续调用业务 API。
 
 Token 调用方式：
@@ -238,7 +238,7 @@ X-API-Token: <token>
 ```
 
 API Token 与登录态一样可访问业务 API，包括文件上传、远程下载并处理、数据库表查询、筛选查询、导出以及 `/api/database/execute` 自定义 SQL 执行。Token 管理、系统配置、授权和 API 文档本身仍要求登录后访问。
-桌面端和配置了 `VITE_API_BASE` 的部署中，API 文档会自动使用当前后端基址加载 OpenAPI，并且不会覆盖用户在 Swagger UI 中手动填写的 API Token。
+桌面端和配置了 `VITE_API_BASE` 的部署中，API 文档会自动使用当前后端基址加载 OpenAPI，并且不会覆盖用户在 Swagger UI 中手动填写的 API Token；Swagger 默认隐藏底部 Schemas 区域，接口分组、说明和常用请求示例使用中文。
 
 授权到期日期保存在本地加密文件 `license.dat`，默认到期日由 `app/services/license.py` 中的 `DEFAULT_EXPIRES_ON` 控制，当前为 `2026-06-20`。处理任务不会读取系统日期，而是从任务目录 ZIP 文件名中的 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳取最大日期进行比对。登录后连续点击左上角品牌图标 8 次，可主动打开授权延期窗口。
 

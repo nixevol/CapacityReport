@@ -16,7 +16,7 @@
         <n-form-item label="密码" path="password">
           <n-input v-model:value="form.password" type="password" show-password-on="click" @keydown.enter.prevent="submit" />
         </n-form-item>
-        <n-button type="primary" block native-type="submit" :loading="loading">登录</n-button>
+        <n-button type="primary" block :loading="loading" @click="submit">登录</n-button>
       </n-form>
     </n-card>
   </div>
@@ -26,7 +26,7 @@
 import { reactive, ref } from 'vue';
 import type { FormInst, FormRules } from 'naive-ui';
 
-defineProps<{ loading: boolean }>();
+const props = defineProps<{ loading: boolean }>();
 const emit = defineEmits<{ login: [{ username: string; password: string }] }>();
 
 const formRef = ref<FormInst | null>(null);
@@ -37,6 +37,7 @@ const rules: FormRules = {
 };
 
 async function submit() {
+  if (props.loading) return;
   await formRef.value?.validate();
   emit('login', { ...form });
 }
