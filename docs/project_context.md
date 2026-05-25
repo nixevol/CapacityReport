@@ -10,6 +10,7 @@
 - `app/api/routers/remote.py` 新增 `/api/remote/scheduler/status` 和 `/api/remote/scheduler/trigger`，并将远程处理启动逻辑抽成 `start_remote_processing_job()` 供手动按钮和调度器复用。
 - `frontend/src/components/SettingsPanel.vue` 在远程数据源配置中加入自动调度区域：启用开关、检查间隔、目标周期、预期目录维护、调度状态、刷新状态和立即检查。配置下载/上传会随 `RemoteData` 一起携带自动调度配置。
 - 已验证：文件名日期解析、目标周计算、每目录 7 天筛选、调度开启强制删除源文件配置、调度日期精确筛选逻辑均通过临时 Python 片段；`.venv\Scripts\python.exe -m compileall app` 与 `npm run build` 通过，前端构建仅保留既有 Vite 大 chunk 警告。
+- 后续调整：预期目录可访问但完全没有 ZIP 文件时，自动调度会把该目录标记为 `skipped/已停推`，不再阻塞其他目录就绪；但所有目录都为空时不会写入 ready flag，也不会触发处理。
 
 ## 2026-05-25：修复 API Token 指定日期输入不可见
 

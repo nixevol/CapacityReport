@@ -30,6 +30,8 @@ class DirectoryReadyStatus:
     missing_days: list[date]
     file_count: int
     error: str | None = None
+    skipped: bool = False
+    skip_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -40,6 +42,8 @@ class DirectoryReadyStatus:
             "required_count": len(self.found_days) + len(self.missing_days),
             "file_count": self.file_count,
             "error": self.error,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
         }
 
 
@@ -145,7 +149,6 @@ class AutoScheduler:
 
         target_days = required_week_days(scheduler.week_offset)
         directory_status = self._check_remote_ready(remote_config, scheduler, target_days)
-        ready = bool(directory_status) and all(item.ready for item in directory_status.values())
         self._set_directory_status(directory_status)
 
         error_count = sum(1 for item in directory_status.values() if item.error)
@@ -156,18 +159,30 @@ class AutoScheduler:
                 manual,
             )
 
+        active_status = [item for item in directory_status.values() if not item.skipped]
+        skipped_count = len(directory_status) - len(active_status)
+        ready = bool(active_status) and all(item.ready for item in active_status)
         if ready:
             self._mark_ready(target_days, directory_status)
+            skipped_text = f"，已跳过 {skipped_count} 个停推目录" if skipped_count else ""
             return self._finish_check(
                 "marked_ready",
-                "远程数据已满足目标周 7 天，已写入就绪标识，下次检查将自动处理",
+                f"远程数据已满足目标周 7 天{skipped_text}，已写入就绪标识，下次检查将自动处理",
                 manual,
             )
 
-        ready_count = sum(1 for item in directory_status.values() if item.ready)
+        if not active_status and directory_status:
+            return self._finish_check(
+                "waiting",
+                f"远程数据未就绪，{len(directory_status)} 个目录均为空，已视为停推但不会触发处理",
+                manual,
+            )
+
+        ready_count = sum(1 for item in active_status if item.ready)
+        skipped_text = f"，跳过 {skipped_count} 个停推目录" if skipped_count else ""
         return self._finish_check(
             "waiting",
-            f"远程数据未就绪，{ready_count}/{len(directory_status)} 个目录满足目标周 7 天",
+            f"远程数据未就绪，{ready_count}/{len(active_status)} 个有效目录满足目标周 7 天{skipped_text}",
             manual,
         )
 
@@ -247,6 +262,17 @@ class AutoScheduler:
                 missing_days=target_days,
                 file_count=0,
                 error="远程目录不存在或无法访问",
+            )
+
+        if not files:
+            return DirectoryReadyStatus(
+                directory=directory,
+                ready=True,
+                found_days=[],
+                missing_days=[],
+                file_count=0,
+                skipped=True,
+                skip_reason="目录为空，视为已停推并跳过",
             )
 
         required = set(target_days)

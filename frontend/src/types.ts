@@ -140,6 +140,8 @@ export interface RemoteSchedulerStatus {
       required_count: number;
       file_count: number;
       error?: string | null;
+      skipped?: boolean;
+      skip_reason?: string | null;
     }
   >;
   message?: string;

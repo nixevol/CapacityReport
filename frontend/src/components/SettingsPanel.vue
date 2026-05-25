@@ -230,8 +230,8 @@
                   <div v-if="schedulerDirectoryRows.length > 0" class="scheduler-directory-list">
                     <div v-for="row in schedulerDirectoryRows" :key="row.name" class="scheduler-directory-row">
                       <span class="scheduler-directory-name">{{ row.name }}</span>
-                      <n-tag size="small" :type="row.ready ? 'success' : 'warning'">
-                        {{ row.ready ? '就绪' : `缺 ${row.missing_days.length} 天` }}
+                      <n-tag size="small" :type="row.skipped ? 'info' : row.ready ? 'success' : 'warning'">
+                        {{ row.skipped ? '已停推' : row.ready ? '就绪' : `缺 ${row.missing_days.length} 天` }}
                       </n-tag>
                     </div>
                   </div>

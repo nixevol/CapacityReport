@@ -202,6 +202,7 @@ def get_target_week_range(week_offset: int = 0) -> tuple[date, date]:
 1. **自动调度开启时，`auto_delete_source` 强制为 `true`**（前端灰显、后端校验）
 2. `expected_directories` 为空时按远程 ZIP 实际所在目录逐个检测
 3. `check_interval_hours` 最小值为 1
+4. 配置了 `expected_directories` 时，某个预期目录可访问但完全没有 ZIP 文件，视为该目录已停推并跳过；所有目录都为空时不触发自动处理
 
 ---
 
@@ -308,7 +309,7 @@ GET /api/remote/scheduler/status
 | 连续失败 ≥3 次 | 在前端调度状态面板显示红色失败状态 |
 | 处理失败 | **保留就绪标识**，下次检查时直接触发处理（不重新检测） |
 | 远程目录不存在 | 跳过该目录，记录警告，其他目录正常检测 |
-| 目录内无 ZIP 文件 | 该目录判定为未就绪 |
+| 预期目录内无 ZIP 文件 | 视为该目录已停推并跳过，不阻塞其他目录；如果所有目录都为空，则继续等待，不触发处理 |
 | 手动触发远程处理 | 自动调度运行中禁止手动触发，反之亦然（互斥锁复用 `global_task_lock`） |
 
 ---
