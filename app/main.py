@@ -63,7 +63,7 @@ OPENAPI_TAGS = [
     {"name": "系统配置", "description": "数据库、远程数据源、过滤规则、字段映射等配置。仅登录态可调用。"},
     {"name": "缓存", "description": "查看服务端缓存占用。"},
     {"name": "授权", "description": "查看和延长程序授权有效期。仅登录态可调用。"},
-    {"name": "API Token", "description": "生成、编辑、重生成和删除 API Token。仅登录态可调用。"},
+    {"name": "API Token", "description": "生成、复制、启停、编辑、重生成和批量删除 API Token。仅登录态可调用。"},
     {"name": "健康检查", "description": "服务健康状态检查。"},
 ]
 OPENAPI_OPERATION_DOCS = {
@@ -266,10 +266,13 @@ OPENAPI_OPERATION_DOCS = {
         "description": "设置 Excel/CSV 源字段到数据库字段的映射规则。",
         "example": [{"Field": "日期时间", "Extract": ["开始时间"], "Type": "datetime"}],
     },
-    ("get", "/api/config/download"): {"summary": "下载配置文件", "description": "下载当前 Configure.json。"},
+    ("get", "/api/config/download"): {
+        "summary": "下载配置文件",
+        "description": "下载当前 Configure.json，并附带 ApiTokens，用于迁移或恢复 API Token 配置。",
+    },
     ("post", "/api/config/upload"): {
         "summary": "上传配置文件",
-        "description": "上传并应用 Configure.json。仅登录态可访问。",
+        "description": "上传并应用 Configure.json。文件中包含 ApiTokens 时会同步恢复 API Token。仅登录态可访问。",
         "request_description": "multipart/form-data，file 为 Configure.json 文件。",
     },
     ("get", "/api/cache/size"): {"summary": "查询缓存大小", "description": "统计当前 cache 目录的大小、文件数和目录数。"},
@@ -279,10 +282,10 @@ OPENAPI_OPERATION_DOCS = {
         "description": "提交激活码，将授权到期日期延长 30 天。",
         "example": {"code": "sha256-value"},
     },
-    ("get", "/api/tokens"): {"summary": "列出 API Token", "description": "返回已创建 Token 的脱敏列表。仅登录态可访问。"},
+    ("get", "/api/tokens"): {"summary": "列出 API Token", "description": "返回已创建 Token 列表，包含可复制的完整 Token。仅登录态可访问。"},
     ("post", "/api/tokens/create"): {
         "summary": "生成 API Token",
-        "description": "创建新的 API Token。完整 Token 只在本次响应中返回一次。",
+        "description": "创建新的 API Token。完整 Token 会保存到本地，后续可在列表中重复复制。",
         "example": {"name": "外部系统接入", "permanent": True, "expires_at": None, "enabled": True},
     },
     ("post", "/api/tokens/update"): {
@@ -299,6 +302,11 @@ OPENAPI_OPERATION_DOCS = {
         "summary": "删除 API Token",
         "description": "删除指定 Token。",
         "example": {"id": "token-id"},
+    },
+    ("post", "/api/tokens/batch-delete"): {
+        "summary": "批量删除 API Token",
+        "description": "按 ID 批量删除 Token。",
+        "example": {"ids": ["token-id-1", "token-id-2"]},
     },
     ("get", "/api/docs-info"): {"summary": "查询 API 文档入口", "description": "返回 API 文档和 OpenAPI JSON 地址。仅登录态可访问。"},
 }

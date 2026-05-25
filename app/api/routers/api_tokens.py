@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Request
 
 from app.auth import resolve_login_context
-from app.services.api_tokens import create_token, delete_token, list_tokens, regenerate_token, update_token
+from app.services.api_tokens import create_token, delete_token, delete_tokens, list_tokens, regenerate_token, update_token
 
 
 router = APIRouter(tags=["api-tokens"])
@@ -64,13 +64,16 @@ async def update_api_token(request: Request, payload: dict[str, Any] = Body(...)
     if not token_id:
         raise HTTPException(status_code=400, detail="缺少 Token ID")
 
+    changes: dict[str, Any] = {}
+    if "name" in payload:
+        changes["name"] = payload.get("name")
+    if "enabled" in payload:
+        changes["enabled"] = payload.get("enabled")
+    if "permanent" in payload or "expires_at" in payload:
+        changes["expires_at"] = _resolve_expires_at(payload)
+
     try:
-        record = update_token(
-            token_id,
-            name=payload.get("name"),
-            enabled=payload.get("enabled"),
-            expires_at=_resolve_expires_at(payload),
-        )
+        record = update_token(token_id, **changes)
         return {"success": True, "message": "API Token 已更新", "record": record}
     except ValueError as exc:
         raise _bad_expiration_error(exc) from exc
@@ -106,6 +109,17 @@ async def delete_api_token(request: Request, payload: dict[str, Any] = Body(...)
 
     delete_token(token_id)
     return {"success": True, "message": "API Token 已删除"}
+
+
+@router.post("/api/tokens/batch-delete")
+async def batch_delete_api_tokens(request: Request, payload: dict[str, Any] = Body(...)):
+    _require_login(request)
+    token_ids = payload.get("ids", [])
+    if not isinstance(token_ids, list) or not token_ids:
+        raise HTTPException(status_code=400, detail="请选择要删除的 Token")
+
+    deleted_count = delete_tokens([str(token_id) for token_id in token_ids])
+    return {"success": True, "message": f"已删除 {deleted_count} 个 API Token", "deleted_count": deleted_count}
 
 
 @router.get("/api/docs-info")

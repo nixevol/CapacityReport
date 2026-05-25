@@ -152,6 +152,8 @@ export interface ApiTokenRecord {
   name: string;
   prefix: string;
   suffix: string;
+  token?: string | null;
+  token_available?: boolean;
   created_at: string;
   expires_at: string | null;
   enabled: boolean;

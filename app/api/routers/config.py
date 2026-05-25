@@ -8,6 +8,7 @@ from fastapi.responses import Response
 
 from app import state
 from app.config import HistoryRetentionConfig, RemoteDataConfig
+from app.services.api_tokens import export_tokens, import_tokens
 
 
 router = APIRouter(tags=["config"])
@@ -77,7 +78,9 @@ async def update_extract_fields(fields: list[dict[str, Any]] = Body(...)):
 async def download_config():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"Configure_{timestamp}.json"
-    content = json.dumps(state.current_config().to_file_dict(), ensure_ascii=False, indent=2)
+    config_data = state.current_config().to_file_dict()
+    config_data["ApiTokens"] = export_tokens()
+    content = json.dumps(config_data, ensure_ascii=False, indent=2)
     return Response(
         content=content,
         media_type="application/json",
@@ -97,6 +100,8 @@ async def upload_config(file: UploadFile = File(...)):
 
         state.reload_config()
         _apply_config_data(data)
+        if "ApiTokens" in data:
+            import_tokens(data["ApiTokens"])
         state.config.save()
         return {"success": True, "message": "配置文件上传成功", "update": state.config.update}
     except json.JSONDecodeError as exc:

@@ -518,3 +518,12 @@
 - `scripts/build.ps1` and `scripts/build.sh` now use `dist/.tmp/` for PyInstaller work output and copy final deliverables to `dist/server/`, `dist/desktop/`, and `dist/docker/`. Successful builds remove `dist/.tmp`, `frontend/dist`, `src-tauri/target`, and `src-tauri/binaries`.
 - Docker builds now include `Configure.json` in the image and also create a deployable `dist/docker/` bundle containing `capacity-report-app-latest.tar`, `docker-compose.yml`, `Configure.json`, `ReportScript.sql`, `mysql/`, `cache/`, and `logs/`.
 - Server Portable still includes `Configure.json` and `ReportScript.sql` inside `dist/server/CapacityReport-Server-<platform>-x64/`. Tauri desktop still bundles both files through `src-tauri/tauri.conf.json` resources and copies them to app data on first run.
+
+## 2026-05-25: API Token management improvements
+
+- API Token records now persist the complete token value in `api_tokens.json` in addition to the HMAC hash, prefix, and suffix. Existing hash-only records remain readable but cannot expose the full token; the UI asks users to regenerate those tokens before copying.
+- `app/services/api_tokens.py` now supports exporting/importing token records for configuration migration and batch deletion by token ID. Config download adds an `ApiTokens` block, and config upload restores it when present.
+- Token update is a partial update path: callers may change only `name`, `enabled`, or expiration fields without accidentally changing unspecified fields.
+- `frontend/src/components/ApiTokenManager.vue` now shows selectable token rows, a batch delete button, a compact per-row action dropdown, copy-token action, and enable/disable action. New token creation defaults to a specified expiration date one month after the current browser date, while permanent tokens remain available via the radio option.
+- OpenAPI and README text were updated to describe repeatable token copying, token migration through config upload/download, and batch delete.
+- Verification performed: `api_tokens` service create/list/verify/enable/disable/export/import/batch-delete test passed, HTTP endpoints for create/list/update/config download/batch-delete passed on local port `9081`, `.venv\Scripts\python.exe -m compileall app` passed, and `npm run build` passed with only the existing Vite large chunk warning.

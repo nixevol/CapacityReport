@@ -29,6 +29,7 @@ class ApiTokenRecord:
     enabled: bool
     last_used_at: str | None = None
     last_used_from: str | None = None
+    token: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -46,6 +47,28 @@ def ensure_store() -> None:
 def list_tokens() -> list[dict[str, Any]]:
     with _STORE_LOCK:
         return [record_to_public_dict(record) for record in _load_records()]
+
+
+def export_tokens() -> list[dict[str, Any]]:
+    with _STORE_LOCK:
+        return [record.to_dict() for record in _load_records()]
+
+
+def import_tokens(items: Any) -> int:
+    if not isinstance(items, list):
+        return 0
+
+    records: list[ApiTokenRecord] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        record = _record_from_dict(item)
+        if record.token_hash:
+            records.append(record)
+
+    with _STORE_LOCK:
+        _save_records(records)
+    return len(records)
 
 
 def create_token(
@@ -68,6 +91,7 @@ def create_token(
         created_at=utc_now(),
         expires_at=resolved_expires_at,
         enabled=bool(enabled),
+        token=raw_token,
     )
 
     with _STORE_LOCK:
@@ -105,6 +129,18 @@ def delete_token(token_id: str) -> None:
         _save_records(records)
 
 
+def delete_tokens(token_ids: list[str]) -> int:
+    token_id_set = {str(token_id).strip() for token_id in token_ids if str(token_id).strip()}
+    if not token_id_set:
+        return 0
+
+    with _STORE_LOCK:
+        records = _load_records()
+        kept_records = [record for record in records if record.id not in token_id_set]
+        _save_records(kept_records)
+        return len(records) - len(kept_records)
+
+
 def regenerate_token(token_id: str) -> tuple[str, dict[str, Any]]:
     with _STORE_LOCK:
         records = _load_records()
@@ -116,6 +152,7 @@ def regenerate_token(token_id: str) -> tuple[str, dict[str, Any]]:
             record.token_hash = hash_token(raw_token)
             record.prefix = raw_token[:12]
             record.suffix = raw_token[-12:]
+            record.token = raw_token
             record.created_at = utc_now()
             record.last_used_at = None
             record.last_used_from = None
@@ -222,6 +259,8 @@ def record_to_public_dict(record: ApiTokenRecord, include_hash: bool = False) ->
         "last_used_at": record.last_used_at,
         "last_used_from": record.last_used_from,
         "expired": bool(expires_at and expires_at < datetime.now(timezone.utc)),
+        "token": record.token,
+        "token_available": bool(record.token),
     }
     if include_hash:
         data["token_hash"] = record.token_hash
@@ -250,23 +289,39 @@ def _load_records() -> list[ApiTokenRecord]:
     for item in tokens:
         if not isinstance(item, dict):
             continue
-        records.append(
-            ApiTokenRecord(
-                id=str(item.get("id", "")) or secrets.token_hex(8),
-                name=str(item.get("name", "未命名 Token")),
-                token_hash=str(item.get("token_hash", "")),
-                prefix=str(item.get("prefix", "")),
-                suffix=str(item.get("suffix", "")),
-                created_at=str(item.get("created_at", utc_now())),
-                expires_at=item.get("expires_at"),
-                enabled=bool(item.get("enabled", True)),
-                last_used_at=item.get("last_used_at"),
-                last_used_from=item.get("last_used_from"),
-            )
-        )
+        record = _record_from_dict(item)
+        if record.token_hash:
+            records.append(record)
 
     records.sort(key=lambda record: record.created_at, reverse=True)
     return records
+
+
+def _record_from_dict(item: dict[str, Any]) -> ApiTokenRecord:
+    raw_token = str(item.get("token") or "").strip() or None
+    token_hash = str(item.get("token_hash") or "").strip()
+    if raw_token and not token_hash:
+        token_hash = hash_token(raw_token)
+
+    prefix = str(item.get("prefix") or "")
+    suffix = str(item.get("suffix") or "")
+    if raw_token:
+        prefix = prefix or raw_token[:12]
+        suffix = suffix or raw_token[-12:]
+
+    return ApiTokenRecord(
+        id=str(item.get("id", "")) or secrets.token_hex(8),
+        name=str(item.get("name", "未命名 Token")),
+        token_hash=token_hash,
+        prefix=prefix,
+        suffix=suffix,
+        created_at=str(item.get("created_at", utc_now())),
+        expires_at=item.get("expires_at"),
+        enabled=bool(item.get("enabled", True)),
+        last_used_at=item.get("last_used_at"),
+        last_used_from=item.get("last_used_from"),
+        token=raw_token,
+    )
 
 
 def _save_records(records: list[ApiTokenRecord]) -> None:
