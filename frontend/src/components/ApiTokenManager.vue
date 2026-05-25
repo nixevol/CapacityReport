@@ -75,6 +75,7 @@
               </div>
             </div>
             <div class="api-token-meta">
+              <span>创建：{{ formatDateTime(token.created_at) }}</span>
               <span>到期：{{ formatExpiration(token.expires_at) }}</span>
               <span>最近使用：{{ formatDateTime(token.last_used_at) }}</span>
               <span v-if="token.last_used_from">来源：{{ token.last_used_from }}</span>
@@ -564,7 +565,8 @@ function formatDateInput(date: Date): string {
 
 .api-token-value {
   min-width: 0;
-  flex: 1;
+  max-width: min(72ch, 100%);
+  flex: 0 1 auto;
   overflow: hidden;
   color: var(--td-text-color-secondary);
   font-family: var(--td-font-family-mono);
