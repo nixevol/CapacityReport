@@ -44,7 +44,36 @@
                 {{ tokenStatusText(token) }}
               </n-tag>
             </div>
-            <div class="api-token-mask monospace">{{ token.prefix }}...{{ token.suffix }}</div>
+            <div class="api-token-value-row">
+              <div class="api-token-value monospace">{{ tokenDisplayValue(token) }}</div>
+              <div class="api-token-value-actions">
+                <n-button
+                  circle
+                  quaternary
+                  size="tiny"
+                  :title="token.token ? (isTokenRevealed(token.id) ? '隐藏 Token' : '显示 Token') : '旧 Token 未保存完整值'"
+                  :disabled="!token.token"
+                  @click="toggleTokenVisibility(token)"
+                >
+                  <template #icon>
+                    <n-icon>
+                      <EyeOffOutline v-if="isTokenRevealed(token.id)" />
+                      <EyeOutline v-else />
+                    </n-icon>
+                  </template>
+                </n-button>
+                <n-button
+                  circle
+                  quaternary
+                  size="tiny"
+                  title="复制 Token"
+                  :disabled="!token.token"
+                  @click="copyToken(token)"
+                >
+                  <template #icon><n-icon><CopyOutline /></n-icon></template>
+                </n-button>
+              </div>
+            </div>
             <div class="api-token-meta">
               <span>到期：{{ formatExpiration(token.expires_at) }}</span>
               <span>最近使用：{{ formatDateTime(token.last_used_at) }}</span>
@@ -138,7 +167,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { useDialog, useMessage, type DropdownOption } from 'naive-ui';
-import { AddOutline, ChevronDownOutline, RefreshOutline } from '@vicons/ionicons5';
+import { AddOutline, ChevronDownOutline, CopyOutline, EyeOffOutline, EyeOutline, RefreshOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost } from '../api/client';
 import type { ApiMessage, ApiTokenListResponse, ApiTokenMutationResponse, ApiTokenRecord } from '../types';
@@ -158,6 +187,7 @@ const rawTokenVisible = ref(false);
 const rawToken = ref('');
 const editingToken = ref<ApiTokenRecord | null>(null);
 const selectedTokenIds = ref<string[]>([]);
+const visibleTokenIds = ref<string[]>([]);
 const tokenForm = reactive({
   name: '',
   permanent: false,
@@ -176,6 +206,7 @@ async function loadTokens() {
     tokens.value = result.tokens;
     const tokenIds = new Set(tokens.value.map(token => token.id));
     selectedTokenIds.value = selectedTokenIds.value.filter(id => tokenIds.has(id));
+    visibleTokenIds.value = visibleTokenIds.value.filter(id => tokenIds.has(id));
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载 Token 失败');
   } finally {
@@ -344,7 +375,6 @@ async function copyRawToken() {
 
 function tokenActionOptions(token: ApiTokenRecord): DropdownOption[] {
   return [
-    { label: '复制 Token', key: 'copy' },
     { label: '编辑', key: 'edit' },
     { label: token.enabled ? '停用' : '启用', key: 'toggle' },
     { label: '重生成', key: 'regenerate' },
@@ -354,9 +384,7 @@ function tokenActionOptions(token: ApiTokenRecord): DropdownOption[] {
 
 function handleTokenAction(token: ApiTokenRecord, rawKey: string | number) {
   const key = String(rawKey);
-  if (key === 'copy') {
-    void copyToken(token);
-  } else if (key === 'edit') {
+  if (key === 'edit') {
     openEditDialog(token);
   } else if (key === 'toggle') {
     void toggleTokenEnabled(token);
@@ -379,6 +407,29 @@ function setTokenSelected(tokenId: string, checked: boolean | string | number) {
     return;
   }
   selectedTokenIds.value = selectedTokenIds.value.filter(id => id !== tokenId);
+}
+
+function isTokenRevealed(tokenId: string): boolean {
+  return visibleTokenIds.value.includes(tokenId);
+}
+
+function toggleTokenVisibility(token: ApiTokenRecord) {
+  if (!token.token) {
+    message.warning('该 Token 是旧版本生成的，未保存完整值，请重生成后再查看');
+    return;
+  }
+  if (isTokenRevealed(token.id)) {
+    visibleTokenIds.value = visibleTokenIds.value.filter(id => id !== token.id);
+    return;
+  }
+  visibleTokenIds.value.push(token.id);
+}
+
+function tokenDisplayValue(token: ApiTokenRecord): string {
+  if (token.token && isTokenRevealed(token.id)) {
+    return token.token;
+  }
+  return `${token.prefix}...${token.suffix}`;
 }
 
 async function writeClipboard(text: string) {
@@ -504,11 +555,29 @@ function formatDateInput(date: Date): string {
   text-overflow: ellipsis;
 }
 
-.api-token-mask {
+.api-token-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 6px;
+}
+
+.api-token-value {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
   color: var(--td-text-color-secondary);
   font-family: var(--td-font-family-mono);
   font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.api-token-value-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
 }
 
 .api-token-meta {

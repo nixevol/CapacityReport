@@ -527,3 +527,9 @@
 - `frontend/src/components/ApiTokenManager.vue` now shows selectable token rows, a batch delete button, a compact per-row action dropdown, copy-token action, and enable/disable action. New token creation defaults to a specified expiration date one month after the current browser date, while permanent tokens remain available via the radio option.
 - OpenAPI and README text were updated to describe repeatable token copying, token migration through config upload/download, and batch delete.
 - Verification performed: `api_tokens` service create/list/verify/enable/disable/export/import/batch-delete test passed, HTTP endpoints for create/list/update/config download/batch-delete passed on local port `9081`, `.venv\Scripts\python.exe -m compileall app` passed, and `npm run build` passed with only the existing Vite large chunk warning.
+
+## 2026-05-25: API Token row visibility controls
+
+- `frontend/src/components/ApiTokenManager.vue` renders Token values as a compact row with right-side icon buttons: an eye button toggles masked/full Token display, and a copy button copies the complete Token directly from the row.
+- The per-row operation dropdown now keeps edit, enable/disable, regenerate, and delete actions; copying is surfaced beside the Token value for faster repeated use.
+- Build verification: `npm run build` passed with only the existing Vite large chunk warning.
