@@ -1,5 +1,5 @@
 """
-数据处理核心模块 - 性能优化版
+数据处理核心模块
 """
 import chardet
 import os
@@ -78,7 +78,7 @@ class ProcessLogger:
 
 
 class DataProcessor:
-    """数据处理器 - 高性能版"""
+    """数据处理器"""
     
     # 批量插入大小（根据实际测试，5000 是比较好的平衡点）
     BATCH_SIZE = 5000
@@ -414,7 +414,7 @@ class DataProcessor:
     def _process_csv_file_fast(self, csv_file: Path, table_name: str, 
                                 conn=None, table_created: bool = False) -> Tuple[int, bool]:
         """
-        高性能处理单个 CSV 文件
+        处理单个 CSV 文件
         使用 LOAD DATA LOCAL INFILE，比 executemany 快 10-50 倍
         
         Args:
@@ -776,7 +776,7 @@ class DataProcessor:
         return data_dirs
     
     def _process_csv_files(self):
-        """处理所有 CSV 文件（高性能版 - 使用 LOAD DATA INFILE + 连接复用）"""
+        """处理所有 CSV 文件（使用 LOAD DATA INFILE + 连接复用）"""
         self.logger.info("正在处理 CSV 文件并上传到数据库...")
         
         # 查找数据目录

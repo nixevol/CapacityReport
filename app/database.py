@@ -1,5 +1,5 @@
 """
-数据库连接与操作模块 - 性能优化版
+数据库连接与操作模块
 """
 import pymysql
 from contextlib import contextmanager
@@ -9,7 +9,7 @@ from app.config import AppConfig
 
 
 class DatabaseManager:
-    """数据库管理器 - 高性能版"""
+    """数据库管理器"""
     
     def __init__(self, config: AppConfig):
         self.config = config
