@@ -105,9 +105,10 @@ class AutoScheduler:
             self._thread.join(timeout=5)
 
     def get_status(self) -> dict[str, Any]:
-        config = state.current_config().remote_data.normalized()
+        app_config = state.current_config()
+        config = app_config.remote_data.normalized()
         scheduler = config.auto_scheduler.normalized()
-        rj_config = state.current_config().rj_data.normalized()
+        rj_config = app_config.rj_data.normalized()
         target_days = required_week_days(scheduler.week_offset)
         ready_flag = self._read_ready_flag()
 
@@ -152,7 +153,8 @@ class AutoScheduler:
 
     def _check_and_run_locked(self, manual: bool) -> dict[str, Any]:
         now = datetime.now()
-        remote_config = state.current_config().remote_data.normalized()
+        app_config = state.current_config()
+        remote_config = app_config.remote_data.normalized()
         scheduler = remote_config.auto_scheduler.normalized()
         self._last_check_at = now
 
@@ -178,7 +180,8 @@ class AutoScheduler:
 
         # 检查现有7天目录（4G/5G数据）
         target_days = required_week_days(scheduler.week_offset)
-        directory_status = self._check_remote_ready(remote_config, scheduler, target_days)
+        downloader = RemoteDataDownloader(remote_config)
+        directory_status = self._check_remote_ready(downloader, scheduler, target_days)
         self._set_directory_status(directory_status)
 
         error_count = sum(1 for item in directory_status.values() if item.error)
@@ -193,8 +196,8 @@ class AutoScheduler:
         skipped_count = len(directory_status) - len(active_status)
         daily_ready = bool(active_status) and all(item.ready for item in active_status)
 
-        # 检查RJ周数据目录
-        rj_weekly_status = self._check_rj_weekly_ready(remote_config, scheduler.week_offset)
+        # 检查RJ周数据目录（复用同一个 downloader）
+        rj_weekly_status = self._check_rj_weekly_ready(downloader, scheduler.week_offset)
         rj_weekly_ready = True  # 默认就绪（如果没有配置RJ目录）
         rj_status_text = ""
 
@@ -204,9 +207,9 @@ class AutoScheduler:
             rj_weekly_ready = rj_ready_count == rj_total
 
             # 保存RJ状态到目录状态中
+            rj_status_dict = {f"rj_weekly:{name}": status.to_dict() for name, status in rj_weekly_status.items()}
             with self._status_lock:
-                for name, status in rj_weekly_status.items():
-                    self._directory_status[f"rj_weekly:{name}"] = status.to_dict()
+                self._directory_status.update(rj_status_dict)
 
             if not rj_weekly_ready:
                 rj_status_text = f"，RJ周数据 {rj_ready_count}/{rj_total} 个目录就绪"
@@ -239,11 +242,10 @@ class AutoScheduler:
 
     def _check_remote_ready(
         self,
-        remote_config: RemoteDataConfig,
+        downloader: RemoteDataDownloader,
         scheduler: AutoSchedulerConfig,
         target_days: list[date],
     ) -> dict[str, DirectoryReadyStatus]:
-        downloader = RemoteDataDownloader(remote_config)
         expected_directories = scheduler.expected_directories
         if expected_directories:
             return {
@@ -343,7 +345,7 @@ class AutoScheduler:
 
     def _check_rj_weekly_ready(
         self,
-        remote_config: RemoteDataConfig,
+        downloader: RemoteDataDownloader,
         week_offset: int,
     ) -> dict[str, RJWeeklyDirectoryStatus]:
         """检查RJ周数据目录是否就绪"""
@@ -351,7 +353,6 @@ class AutoScheduler:
         if not rj_config.enabled:
             return {}
 
-        downloader = RemoteDataDownloader(remote_config)
         target_week_end = self._calculate_week_end_date(week_offset)
         result: dict[str, RJWeeklyDirectoryStatus] = {}
 

@@ -118,14 +118,36 @@ class DataProcessor:
         self._explicit_type_fields: set[str] = set()
         self._generated_csv_files: set[Path] = set()
         self._generated_csv_lock = Lock()
-        
+
         # 预编译字段映射，避免重复查找
         self._field_map, self._type_map = self._build_field_map()
         self._apply_sql_script_type_hints()
-        
+
+        # 预编译RJ字段映射
+        self._rj_field_maps: Dict[str, Tuple[Dict[str, str], Dict[str, str]]] = {}
+        self._build_rj_field_maps()
+
         # LOAD DATA INFILE 支持状态（在首次使用时检测）
         self._load_data_supported: Optional[bool] = None
         self._load_data_checked = False
+
+    def _build_rj_field_maps(self) -> None:
+        """预构建RJ表的字段映射"""
+        rj_config = self.config.rj_data.normalized()
+        if not rj_config.enabled:
+            return
+
+        for table_name, fields in rj_config.table_field_mappings.items():
+            field_map = {}
+            type_map = {}
+            for field_def in fields:
+                source = field_def.get("Source")
+                target = field_def.get("Target")
+                field_type = field_def.get("Type", "string")
+                if source and target:
+                    field_map[source] = target
+                    type_map[target] = field_type
+            self._rj_field_maps[table_name] = (field_map, type_map)
     
     def _build_field_map(self) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
@@ -164,20 +186,9 @@ class DataProcessor:
             field_map: {源字段名: 目标字段名}
             type_map: {目标字段名: 字段类型}
         """
-        # 检查是否是RJ表
-        rj_config = self.config.rj_data.normalized()
-        if rj_config.enabled and table_name in rj_config.table_field_mappings:
-            # 使用RJ专用映射
-            field_map = {}
-            type_map = {}
-            for field_def in rj_config.table_field_mappings[table_name]:
-                source = field_def.get("Source")
-                target = field_def.get("Target")
-                field_type = field_def.get("Type", "string")
-                if source and target:
-                    field_map[source] = target
-                    type_map[target] = field_type
-            return field_map, type_map
+        # 检查是否是RJ表（使用预构建的缓存）
+        if table_name in self._rj_field_maps:
+            return self._rj_field_maps[table_name]
 
         # 使用全局映射
         return self._field_map, self._type_map
@@ -864,17 +875,32 @@ class DataProcessor:
         """查找RJ数据目录"""
         self.logger.info("查找RJ数据目录...")
 
-        # 遍历工作目录查找RJ目录
-        for rj_dir in self.work_dir.rglob('*'):
-            if not rj_dir.is_dir():
-                continue
-            # 检查是否是RJ相关的目录名
-            dir_name = rj_dir.name
-            if dir_name in self.RJ_DIR_TO_TABLE:
-                table_name = self.RJ_DIR_TO_TABLE[dir_name]
-                if table_name not in data_dirs:
-                    data_dirs[table_name] = rj_dir
-                    self.logger.info(f"发现RJ数据目录: {rj_dir.relative_to(self.work_dir)} -> 表: {table_name}")
+        # RJ目录结构: RJ/2.6G/2.6RJGD, RJ/2.6G/2.6RJYD 等
+        # 只搜索工作目录下的特定路径，避免全量递归
+        rj_config = self.config.rj_data.normalized()
+        for weekly_dir in rj_config.weekly_directories:
+            # 构建本地路径: work_dir / RJ/2.6G/2.6RJGD
+            rj_path = self.work_dir / weekly_dir
+            if rj_path.exists() and rj_path.is_dir():
+                dir_name = rj_path.name
+                if dir_name in self.RJ_DIR_TO_TABLE:
+                    table_name = self.RJ_DIR_TO_TABLE[dir_name]
+                    if table_name not in data_dirs:
+                        data_dirs[table_name] = rj_path
+                        self.logger.info(f"发现RJ数据目录: {rj_path.relative_to(self.work_dir)} -> 表: {table_name}")
+
+        # 兜底: 如果配置的路径不存在，尝试从工作目录中查找
+        if not any(k in data_dirs for k in self.RJ_DIR_TO_TABLE.values()):
+            self.logger.info("配置的RJ路径不存在，尝试从工作目录中查找...")
+            for rj_dir in self.work_dir.rglob('*'):
+                if not rj_dir.is_dir():
+                    continue
+                dir_name = rj_dir.name
+                if dir_name in self.RJ_DIR_TO_TABLE:
+                    table_name = self.RJ_DIR_TO_TABLE[dir_name]
+                    if table_name not in data_dirs:
+                        data_dirs[table_name] = rj_dir
+                        self.logger.info(f"发现RJ数据目录: {rj_dir.relative_to(self.work_dir)} -> 表: {table_name}")
     
     def _process_csv_files(self):
         """处理所有 CSV 文件（使用 LOAD DATA INFILE + 连接复用）"""
