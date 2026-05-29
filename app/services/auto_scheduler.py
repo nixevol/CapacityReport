@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
@@ -20,6 +21,31 @@ READY_FLAG = READY_DIR / "ready.flag"
 DISABLED_CHECK_SECONDS = 60
 STARTUP_CHECK_SECONDS = 5
 FAILURE_RESULTS = {"scan_failed", "trigger_failed", "source_cleanup_failed", "failed", "invalid_flag"}
+
+# RJ周文件名模式: CapacityReportData2.6RJ_GD_YYYYMMDDHHMM_YYYYMMDDHHMM.zip
+RJ_WEEKLY_FILE_PATTERN = re.compile(
+    r"CapacityReportData2\.6RJ_(?:GD|YD)_(\d{12})_(\d{12})\.zip$"
+)
+
+
+@dataclass(frozen=True)
+class RJWeeklyDirectoryStatus:
+    """RJ周数据目录就绪状态"""
+    directory: str
+    ready: bool
+    found: bool = False
+    file_name: str | None = None
+    file_count: int = 0
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "found": self.found,
+            "file_name": self.file_name,
+            "file_count": self.file_count,
+            "error": self.error,
+        }
 
 
 @dataclass(frozen=True)
@@ -81,6 +107,7 @@ class AutoScheduler:
     def get_status(self) -> dict[str, Any]:
         config = state.current_config().remote_data.normalized()
         scheduler = config.auto_scheduler.normalized()
+        rj_config = state.current_config().rj_data.normalized()
         target_days = required_week_days(scheduler.week_offset)
         ready_flag = self._read_ready_flag()
 
@@ -92,6 +119,8 @@ class AutoScheduler:
                 "expected_directories": scheduler.expected_directories,
                 "week_offset": scheduler.week_offset,
                 "auto_delete_source": config.auto_delete_source,
+                "rj_data_enabled": rj_config.enabled,
+                "rj_weekly_directories": rj_config.weekly_directories,
                 "next_check_at": self._format_dt(self._next_check_at),
                 "last_check_at": self._format_dt(self._last_check_at),
                 "last_result": self._last_result,
@@ -147,6 +176,7 @@ class AutoScheduler:
             target_dates = self._target_dates_from_flag(ready_flag, scheduler)
             return self._trigger_processing(target_dates, ready_flag, manual)
 
+        # 检查现有7天目录（4G/5G数据）
         target_days = required_week_days(scheduler.week_offset)
         directory_status = self._check_remote_ready(remote_config, scheduler, target_days)
         self._set_directory_status(directory_status)
@@ -161,13 +191,34 @@ class AutoScheduler:
 
         active_status = [item for item in directory_status.values() if not item.skipped]
         skipped_count = len(directory_status) - len(active_status)
-        ready = bool(active_status) and all(item.ready for item in active_status)
-        if ready:
-            self._mark_ready(target_days, directory_status)
+        daily_ready = bool(active_status) and all(item.ready for item in active_status)
+
+        # 检查RJ周数据目录
+        rj_weekly_status = self._check_rj_weekly_ready(remote_config, scheduler.week_offset)
+        rj_weekly_ready = True  # 默认就绪（如果没有配置RJ目录）
+        rj_status_text = ""
+
+        if rj_weekly_status:
+            rj_ready_count = sum(1 for s in rj_weekly_status.values() if s.ready)
+            rj_total = len(rj_weekly_status)
+            rj_weekly_ready = rj_ready_count == rj_total
+
+            # 保存RJ状态到目录状态中
+            with self._status_lock:
+                for name, status in rj_weekly_status.items():
+                    self._directory_status[f"rj_weekly:{name}"] = status.to_dict()
+
+            if not rj_weekly_ready:
+                rj_status_text = f"，RJ周数据 {rj_ready_count}/{rj_total} 个目录就绪"
+
+        # 两个条件都满足才触发
+        if daily_ready and rj_weekly_ready:
+            self._mark_ready(target_days, directory_status, rj_weekly_status)
             skipped_text = f"，已跳过 {skipped_count} 个停推目录" if skipped_count else ""
+            rj_text = "，RJ周数据已就绪" if rj_weekly_status else ""
             return self._finish_check(
                 "marked_ready",
-                f"远程数据已满足目标周 7 天{skipped_text}，已写入就绪标识，下次检查将自动处理",
+                f"远程数据已满足目标周 7 天{skipped_text}{rj_text}，已写入就绪标识，下次检查将自动处理",
                 manual,
             )
 
@@ -182,7 +233,7 @@ class AutoScheduler:
         skipped_text = f"，跳过 {skipped_count} 个停推目录" if skipped_count else ""
         return self._finish_check(
             "waiting",
-            f"远程数据未就绪，{ready_count}/{len(active_status)} 个有效目录满足目标周 7 天{skipped_text}",
+            f"远程数据未就绪，{ready_count}/{len(active_status)} 个有效目录满足目标周 7 天{skipped_text}{rj_status_text}",
             manual,
         )
 
@@ -290,6 +341,83 @@ class AutoScheduler:
             file_count=len(files),
         )
 
+    def _check_rj_weekly_ready(
+        self,
+        remote_config: RemoteDataConfig,
+        week_offset: int,
+    ) -> dict[str, RJWeeklyDirectoryStatus]:
+        """检查RJ周数据目录是否就绪"""
+        rj_config = state.current_config().rj_data.normalized()
+        if not rj_config.enabled:
+            return {}
+
+        downloader = RemoteDataDownloader(remote_config)
+        target_week_end = self._calculate_week_end_date(week_offset)
+        result: dict[str, RJWeeklyDirectoryStatus] = {}
+
+        for directory in rj_config.weekly_directories:
+            result[directory] = self._check_single_rj_directory(
+                downloader, directory, target_week_end
+            )
+
+        return result
+
+    def _calculate_week_end_date(self, week_offset: int) -> date:
+        """计算目标周的结束日期（周日）"""
+        today = date.today()
+        # 找到本周的周日
+        days_since_sunday = today.weekday() + 1  # weekday(): 0=周一, 6=周日
+        if days_since_sunday == 7:
+            days_since_sunday = 0
+        this_sunday = today - timedelta(days=days_since_sunday)
+        # 根据偏移计算目标周的周日
+        target_sunday = this_sunday + timedelta(weeks=week_offset)
+        return target_sunday
+
+    def _check_single_rj_directory(
+        self,
+        downloader: RemoteDataDownloader,
+        directory: str,
+        target_week_end: date,
+    ) -> RJWeeklyDirectoryStatus:
+        """检查单个RJ目录是否包含目标周的文件"""
+        files = self._safe_list_remote_zip_files(downloader, directory)
+        if files is None:
+            return RJWeeklyDirectoryStatus(
+                directory=directory,
+                ready=False,
+                error="远程目录不存在或无法访问",
+            )
+
+        if not files:
+            return RJWeeklyDirectoryStatus(
+                directory=directory,
+                ready=False,
+                file_count=0,
+            )
+
+        # 查找匹配目标周的文件
+        target_end_str = target_week_end.strftime("%Y%m%d") + "0000"
+        for remote_file in files:
+            match = RJ_WEEKLY_FILE_PATTERN.search(remote_file.name)
+            if match:
+                file_end_date = match.group(2)
+                if file_end_date == target_end_str:
+                    return RJWeeklyDirectoryStatus(
+                        directory=directory,
+                        ready=True,
+                        found=True,
+                        file_name=remote_file.name,
+                        file_count=len(files),
+                    )
+
+        return RJWeeklyDirectoryStatus(
+            directory=directory,
+            ready=False,
+            found=False,
+            file_count=len(files),
+        )
+
     def _trigger_processing(
         self,
         target_dates: list[date],
@@ -328,6 +456,7 @@ class AutoScheduler:
         self,
         target_days: list[date],
         directory_status: dict[str, DirectoryReadyStatus],
+        rj_weekly_status: dict[str, RJWeeklyDirectoryStatus] | None = None,
     ) -> None:
         READY_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -340,6 +469,11 @@ class AutoScheduler:
                 for name, item in directory_status.items()
             },
         }
+        if rj_weekly_status:
+            payload["rj_weekly_directories"] = {
+                name: item.to_dict()
+                for name, item in rj_weekly_status.items()
+            }
         READY_FLAG.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _clear_ready_flag(self) -> None:

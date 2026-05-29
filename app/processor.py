@@ -152,6 +152,36 @@ class DataProcessor:
         
         return field_map, type_map
 
+    def _get_field_map_for_table(self, table_name: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """
+        获取指定表的字段映射和类型映射
+
+        Args:
+            table_name: 目标表名
+
+        Returns:
+            (field_map, type_map)
+            field_map: {源字段名: 目标字段名}
+            type_map: {目标字段名: 字段类型}
+        """
+        # 检查是否是RJ表
+        rj_config = self.config.rj_data.normalized()
+        if rj_config.enabled and table_name in rj_config.table_field_mappings:
+            # 使用RJ专用映射
+            field_map = {}
+            type_map = {}
+            for field_def in rj_config.table_field_mappings[table_name]:
+                source = field_def.get("Source")
+                target = field_def.get("Target")
+                field_type = field_def.get("Type", "string")
+                if source and target:
+                    field_map[source] = target
+                    type_map[target] = field_type
+            return field_map, type_map
+
+        # 使用全局映射
+        return self._field_map, self._type_map
+
     def _apply_sql_script_type_hints(self) -> None:
         """从 ReportScript.sql 的 ALTER 语句补全缺失的数值字段类型。"""
         if not SQL_SCRIPT.exists():
@@ -449,84 +479,87 @@ class DataProcessor:
             return 'gbk'
         return 'utf-8'
     
-    def _process_csv_file_fast(self, csv_file: Path, table_name: str, 
+    def _process_csv_file_fast(self, csv_file: Path, table_name: str,
                                 conn=None, table_created: bool = False) -> Tuple[int, bool]:
         """
         处理单个 CSV 文件
         使用 LOAD DATA LOCAL INFILE，比 executemany 快 10-50 倍
-        
+
         Args:
             csv_file: CSV 文件路径
             table_name: 目标表名
             conn: 数据库连接（复用）
             table_created: 表是否已创建
-            
+
         Returns:
             (导入行数, 表是否已创建)
         """
         encoding = self._detect_encoding(csv_file)
         rel_path = csv_file.relative_to(self.work_dir)
         self.logger.info(f"处理 CSV: {rel_path} (编码: {encoding})")
-        
+
         # 读取 CSV，使用优化参数
         df = pd.read_csv(
-            csv_file, 
-            encoding=encoding, 
-            thousands=',', 
+            csv_file,
+            encoding=encoding,
+            thousands=',',
             low_memory=True,        # 低内存模式
             dtype=str,              # 全部作为字符串读取，避免类型推断开销
             na_values=[''],         # 只把空字符串当作 NA
             keep_default_na=False   # 不使用默认的 NA 值
         )
-        
+
+        # 获取字段映射（RJ表使用专用映射，其他表使用全局映射）
+        field_map, type_map = self._get_field_map_for_table(table_name)
+
         # 快速字段匹配（使用预编译的映射表）
         col_mapping = {}
         for col in df.columns:
-            if col in self._field_map:
-                col_mapping[col] = self._field_map[col]
-        
-        if len(col_mapping) <= 3:
+            if col in field_map:
+                col_mapping[col] = field_map[col]
+
+        if len(col_mapping) < 1:
             if 'kpis' in str(csv_file).lower():
                 self.logger.warning(f"跳过非数据文件: {rel_path}")
                 return 0, table_created
             raise ValueError(f"字段匹配不足: {rel_path}")
-        
+
         # 选择需要的列并重命名
         source_cols = list(col_mapping.keys())
         target_cols = list(col_mapping.values())
-        
+
         # 创建结果 DataFrame，使用目标列名
         df_result = df[source_cols].copy()
         df_result.columns = target_cols
-        
+
         # 替换 NA 为默认值
         df_result = df_result.fillna('')
-        
+
         # 构建目标字段的类型映射
-        column_types = {col: self._type_map.get(col, 'string') for col in target_cols}
-        
+        column_types = {col: type_map.get(col, 'string') for col in target_cols}
+
         # 根据类型处理每列数据
         for col in target_cols:
             col_type = column_types.get(col, 'string')
-            
+
             if col_type == 'datetime':
                 # 日期时间类型处理
                 df_result[col] = self._convert_datetime_column(df_result[col])
-            
+
             elif col_type == 'int':
                 # 整数类型处理
                 df_result[col] = self._convert_int_column(df_result[col])
-            
+
             elif col_type == 'float':
                 # 浮点数类型处理
                 df_result[col] = self._convert_float_column(df_result[col])
-            
+
             elif col_type == 'text':
                 # 长文本类型，截断到 65535 字符
                 mask = df_result[col].str.len() > 65535
                 if mask.any():
                     df_result.loc[mask, col] = df_result.loc[mask, col].str[:65535]
-            
+
             else:  # string 或其他
                 # 字符串类型：去除百分号、截断长度
                 df_result[col] = df_result[col].str.replace('%', '', regex=False)
@@ -780,29 +813,43 @@ class DataProcessor:
             .str.replace(' ', '', regex=False)
         )
     
+    # RJ目录名到表名的映射
+    RJ_DIR_TO_TABLE = {
+        "2.6RJGD": "2_6GRJGD",
+        "2.6RJYD": "2_6GRJYD",
+        "700RJGD": "700MRJGD",
+        "700RJYD": "700MRJYD",
+    }
+
     def _find_data_directories(self) -> Dict[str, Path]:
         """
         查找包含数据文件的目录，返回 {表名: 目录路径}
+        支持 4G/5G 和 RJ 数据目录
         """
         data_dirs = {}
         target_names = {'4G', '5G', '4g', '5g'}
-        
+
         self.logger.info(f"开始查找数据目录，工作目录: {self.work_dir}")
-        
+
         # 递归查找所有名为 4G 或 5G 的目录
         found_dirs = []
         for subdir in self.work_dir.rglob('*'):
             if subdir.is_dir() and subdir.name in target_names:
                 found_dirs.append(subdir)
-        
+
         self.logger.info(f"找到 {len(found_dirs)} 个候选目录")
-        
+
         for subdir in found_dirs:
             table_name = f"{subdir.name.upper()}_UD"
             if table_name not in data_dirs:
                 data_dirs[table_name] = subdir
                 self.logger.info(f"发现数据目录: {subdir.relative_to(self.work_dir)} -> 表: {table_name}")
-        
+
+        # 查找 RJ 数据目录
+        rj_config = self.config.rj_data.normalized()
+        if rj_config.enabled:
+            self._find_rj_data_directories(data_dirs)
+
         if not data_dirs:
             self.logger.warning("未找到 4G/5G 目录，使用直接子目录")
             for subdir in self.work_dir.iterdir():
@@ -810,8 +857,24 @@ class DataProcessor:
                     table_name = f"{subdir.name}_UD"
                     data_dirs[table_name] = subdir
                     self.logger.info(f"使用直接子目录: {subdir.relative_to(self.work_dir)} -> 表: {table_name}")
-        
+
         return data_dirs
+
+    def _find_rj_data_directories(self, data_dirs: Dict[str, Path]) -> None:
+        """查找RJ数据目录"""
+        self.logger.info("查找RJ数据目录...")
+
+        # 遍历工作目录查找RJ目录
+        for rj_dir in self.work_dir.rglob('*'):
+            if not rj_dir.is_dir():
+                continue
+            # 检查是否是RJ相关的目录名
+            dir_name = rj_dir.name
+            if dir_name in self.RJ_DIR_TO_TABLE:
+                table_name = self.RJ_DIR_TO_TABLE[dir_name]
+                if table_name not in data_dirs:
+                    data_dirs[table_name] = rj_dir
+                    self.logger.info(f"发现RJ数据目录: {rj_dir.relative_to(self.work_dir)} -> 表: {table_name}")
     
     def _process_csv_files(self):
         """处理所有 CSV 文件（使用 LOAD DATA INFILE + 连接复用）"""

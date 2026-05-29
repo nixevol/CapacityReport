@@ -46,6 +46,7 @@ CapacityReportData/
 auth.ini
 license.dat
 api_tokens.json
+.mcp.json
 
 # Logs
 *.log

@@ -168,6 +168,57 @@ class RemoteDataConfig:
 
 
 @dataclass
+class RJDataConfig:
+    """RJ数据配置 - 周数据处理"""
+    enabled: bool = False
+    weekly_directories: List[str] = field(default_factory=list)
+    # 字段映射: {表名: [{Source, Target, Type}, ...]}
+    table_field_mappings: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+
+    def normalized(self) -> "RJDataConfig":
+        directories = []
+        seen = set()
+        for d in self.weekly_directories or []:
+            normalized = str(d).replace("\\", "/").strip().strip("/")
+            if normalized and normalized not in seen:
+                directories.append(normalized)
+                seen.add(normalized)
+
+        # 标准化字段映射
+        mappings = {}
+        for table_name, fields in (self.table_field_mappings or {}).items():
+            if isinstance(fields, list):
+                mappings[table_name] = [
+                    {k: v for k, v in f.items() if k in ("Source", "Target", "Type")}
+                    for f in fields
+                    if isinstance(f, dict) and "Source" in f and "Target" in f
+                ]
+
+        return RJDataConfig(
+            enabled=bool(self.enabled),
+            weekly_directories=directories,
+            table_field_mappings=mappings,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        normalized = self.normalized()
+        return {
+            "enabled": normalized.enabled,
+            "weekly_directories": normalized.weekly_directories,
+            "table_field_mappings": normalized.table_field_mappings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "RJDataConfig":
+        data = data or {}
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            weekly_directories=data.get("weekly_directories", []) if isinstance(data.get("weekly_directories"), list) else [],
+            table_field_mappings=data.get("table_field_mappings", {}) if isinstance(data.get("table_field_mappings"), dict) else {},
+        ).normalized()
+
+
+@dataclass
 class HistoryRetentionConfig:
     enabled: bool = False
     keep_count: int = 20
@@ -205,6 +256,7 @@ class AppConfig:
     mysql: MySQLConfig = field(default_factory=MySQLConfig)
     remote_data: RemoteDataConfig = field(default_factory=RemoteDataConfig)
     history_retention: HistoryRetentionConfig = field(default_factory=HistoryRetentionConfig)
+    rj_data: RJDataConfig = field(default_factory=RJDataConfig)
     sheet_filter: List[str] = field(default_factory=list)
     extract_fields: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -213,10 +265,10 @@ class AppConfig:
         """从 Configure.json 加载配置"""
         if not CONFIG_FILE.exists():
             return cls()
-        
+
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         mysql_data = data.get("MySQL_DBInfo", {})
         mysql_config = MySQLConfig(
             host=mysql_data.get("host", "localhost"),
@@ -227,12 +279,14 @@ class AppConfig:
         )
         remote_config = RemoteDataConfig.from_dict(data.get("RemoteData"))
         history_retention = HistoryRetentionConfig.from_dict(data.get("HistoryRetention"))
-        
+        rj_data = RJDataConfig.from_dict(data.get("RJData"))
+
         return cls(
             update=data.get("Update", ""),
             mysql=mysql_config,
             remote_data=remote_config,
             history_retention=history_retention,
+            rj_data=rj_data,
             sheet_filter=data.get("SheetFilter", []),
             extract_fields=data.get("ExtractField", [])
         )
@@ -258,6 +312,7 @@ class AppConfig:
             },
             "RemoteData": self.remote_data.normalized().to_dict(include_password=True),
             "HistoryRetention": self.history_retention.normalized().to_dict(),
+            "RJData": self.rj_data.normalized().to_dict(),
             "SheetFilter": self.sheet_filter,
             "ExtractField": self.extract_fields
         }
@@ -274,6 +329,7 @@ class AppConfig:
             },
             "remote_data": self.remote_data.normalized().to_dict(),
             "history_retention": self.history_retention.normalized().to_dict(),
+            "rj_data": self.rj_data.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
         }
@@ -291,6 +347,7 @@ class AppConfig:
             },
             "remote_data": self.remote_data.normalized().to_dict(include_password=True),
             "history_retention": self.history_retention.normalized().to_dict(),
+            "rj_data": self.rj_data.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
         }

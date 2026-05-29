@@ -1,11 +1,58 @@
 {
-  "Update": "2026/05/19 17:08:10",
+  "Update": "2026/05/25 17:57:25",
   "MySQL_DBInfo": {
     "host": "127.0.0.1",
     "port": 3306,
     "user": "root",
     "passwd": "123456",
     "dbname": "CapacityReport"
+  },
+  "RemoteData": {
+    "enabled": true,
+    "protocol": "sftp",
+    "host": "127.0.0.1",
+    "port": 2022,
+    "user": "nixevol",
+    "remote_dir": "/CapacityReportData",
+    "passive": true,
+    "timeout": 30,
+    "auto_delete_source": true,
+    "auto_scheduler": {
+      "enabled": true,
+      "check_interval_hours": 1,
+      "expected_directories": [],
+      "week_offset": 0
+    },
+    "passwd": "242520"
+  },
+  "HistoryRetention": {
+    "enabled": true,
+    "keep_count": 1
+  },
+  "RJData": {
+    "enabled": true,
+    "weekly_directories": [
+      "RJ/2.6G/2.6RJGD",
+      "RJ/2.6G/2.6RJYD"
+    ],
+    "table_field_mappings": {
+      "2_6GRJGD": [
+        {"Source": "开始时间", "Target": "开始时间", "Type": "datetime"},
+        {"Source": "结束时间", "Target": "结束时间", "Type": "datetime"},
+        {"Source": "gNBId", "Target": "gNBId", "Type": "string"},
+        {"Source": "cellId", "Target": "cellId", "Type": "string"},
+        {"Source": "gNBplmn", "Target": "gNBplmn", "Type": "string"},
+        {"Source": "5G上下行总流量（上行PDCP PDU数据量+下行PDCP成功发送数据量）-GD(GB)", "Target": "上下行总流量_GB", "Type": "float"}
+      ],
+      "2_6GRJYD": [
+        {"Source": "开始时间", "Target": "开始时间", "Type": "datetime"},
+        {"Source": "结束时间", "Target": "结束时间", "Type": "datetime"},
+        {"Source": "gNBId", "Target": "gNBId", "Type": "string"},
+        {"Source": "cellId", "Target": "cellId", "Type": "string"},
+        {"Source": "gNBplmn", "Target": "gNBplmn", "Type": "string"},
+        {"Source": "5G上下行总流量（上行PDCP PDU数据量+下行PDCP成功发送数据量）-YD(GB)", "Target": "上下行总流量_GB", "Type": "float"}
+      ]
+    }
   },
   "SheetFilter": [
     "指标(计数器)",
@@ -266,21 +313,5 @@
       ],
       "Type": "float"
     }
-  ],
-  "RemoteData": {
-    "enabled": true,
-    "protocol": "sftp",
-    "host": "127.0.0.1",
-    "port": 2022,
-    "user": "nixevol",
-    "remote_dir": "/CapacityReportData",
-    "passive": true,
-    "timeout": 30,
-    "auto_delete_source": true,
-    "passwd": "242520"
-  },
-  "HistoryRetention": {
-    "enabled": true,
-    "keep_count": 1
-  }
+  ]
 }

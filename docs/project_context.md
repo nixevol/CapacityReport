@@ -1,5 +1,17 @@
 # 项目上下文记录
 
+## 2026-05-29：新增 RJ 周数据处理功能
+
+- 新增 `RJData` 配置块到 `app/config.py`，支持 `enabled`、`weekly_directories` 和 `table_field_mappings` 配置项，用于管理 RJ 周数据目录和字段映射。
+- `app/services/auto_scheduler.py` 新增 `RJWeeklyDirectoryStatus` 数据类和 `_check_rj_weekly_ready()` 方法，支持检查 RJ 周数据目录是否包含目标周的文件。
+- 自动调度逻辑改为：现有 7 天目录检查 **且** RJ 周数据检查都满足时才触发处理，两个条件是 AND 关系。
+- `app/processor.py` 新增 `_get_field_map_for_table()` 方法和 `_find_rj_data_directories()` 方法，支持 RJ 表使用专用字段映射。
+- RJ 数据目录结构：`/CapacityReportData/RJ/2.6G/2.6RJGD/` 和 `RJ/2.6G/2.6RJYD/`，每个目录每周一个 ZIP 文件。
+- 目标表名映射：`2.6RJGD` -> `2_6GRJGD`，`2.6RJYD` -> `2_6GRJYD`。
+- 字段映射配置：`开始时间`、`结束时间`、`gNBId`、`cellId`、`gNBplmn`、`上下行总流量_GB`。
+- `Configure.json` 新增 `RJData` 配置块，包含启用状态、周数据目录列表和表字段映射。
+- 已验证：`.venv\Scripts\python.exe -m compileall app` 通过；GD 和 YD 数据字段映射测试成功，6 个字段全部匹配。
+
 ## 2026-05-25：新增远程自动调度和每目录 7 天处理窗口
 
 - 新增 `app/utils/file_dates.py`，统一解析文件名中的第一个 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳，并提供按目录筛选最近 7 个自然日文件的工具；本地手动上传和远程下载后的 ZIP、Excel、CSV 处理都会按所在目录只保留最近 7 天文件，未携带日期且同目录没有任何可识别日期时保留兼容。
