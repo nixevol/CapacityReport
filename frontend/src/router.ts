@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 
-import FileWorkflow from './components/FileWorkflow.vue';
-
+const FileWorkflow = () => import('./components/FileWorkflow.vue');
 const HistoryPanel = () => import('./components/HistoryPanel.vue');
 const DatabasePanel = () => import('./components/DatabasePanel.vue');
 const SettingsPanel = () => import('./components/SettingsPanel.vue');

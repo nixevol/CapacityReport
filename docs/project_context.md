@@ -593,3 +593,9 @@
 - `frontend/src/components/ApiDocs.vue` no longer registers a page-header `copy sample` action, avoiding duplicate `复制传参示例` buttons on the API documentation page.
 - The API documentation card still keeps its local toolbar actions: `复制传参示例` and `OpenAPI JSON`.
 - Verification performed: `npm run build` passed, and generated frontend build output was removed after verification.
+
+## 2026-06-01: Frontend entry chunk reduction
+
+- `frontend/src/router.ts` now lazy-loads `FileWorkflow.vue`, matching the other main pages and keeping the data processing page out of the base entry chunk until the route is opened.
+- `frontend/src/AppShell.vue` now lazy-loads `LoginView.vue` and the hidden license activation dialog; the dialog UI and activation API flow moved to `frontend/src/components/LicenseActivationModal.vue`.
+- Build verification: `npm run build` passed. The base `index` chunk dropped from about `572 kB` to about `461 kB`; the remaining large chunks are still `ApiDocs` (`swagger-ui-dist`) and `ScriptPanel` (`monaco-editor`).

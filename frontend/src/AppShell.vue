@@ -112,35 +112,11 @@
     </n-layout>
   </n-layout>
 
-  <n-modal
-    v-model:show="licenseModalVisible"
-    preset="card"
-    title="授权延期"
-    :mask-closable="!activationLoading"
-    :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }"
-  >
-    <div class="license-dialog-body">
-      <p class="license-dialog-text">{{ licenseMessage }}</p>
-      <div class="license-key-label">key: {{ activationKeyLabel }}</div>
-      <n-input
-        v-model:value="activationCode"
-        type="textarea"
-        :autosize="{ minRows: 3, maxRows: 5 }"
-        placeholder="请输入激活码"
-        :disabled="activationLoading"
-      />
-    </div>
-    <template #footer>
-      <div class="license-dialog-footer">
-        <n-button :disabled="activationLoading" @click="licenseModalVisible = false">取消</n-button>
-        <n-button type="primary" :loading="activationLoading" @click="submitActivation">激活</n-button>
-      </div>
-    </template>
-  </n-modal>
+  <LicenseActivationModal v-if="licenseModalVisible" v-model:show="licenseModalVisible" />
 </template>
 
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
+import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { useMessage, type DropdownOption, type MenuOption, NIcon } from 'naive-ui';
 import {
@@ -156,12 +132,13 @@ import {
   SunnyOutline
 } from '@vicons/ionicons5';
 
-import { apiGet, apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
-import type { LicenseStatus, LoginResponse } from './types';
-import LoginView from './components/LoginView.vue';
+import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
+import type { LoginResponse } from './types';
 import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
 import { themeName, toggleAppTheme } from './composables/theme';
 
+const LoginView = defineAsyncComponent(() => import('./components/LoginView.vue'));
+const LicenseActivationModal = defineAsyncComponent(() => import('./components/LicenseActivationModal.vue'));
 const message = useMessage();
 const route = useRoute();
 const router = useRouter();
@@ -169,10 +146,6 @@ const token = ref(getToken());
 const loginLoading = ref(false);
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
 const licenseModalVisible = ref(false);
-const activationCode = ref('');
-const activationLoading = ref(false);
-const activationKeyLabel = ref('2026/06/20');
-const licenseMessage = ref('输入激活码可将授权到期日期延长 30 天。');
 const brandClickCount = ref(0);
 const menuKeys = ['workflow', 'history', 'database', 'script', 'api-center', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
@@ -263,46 +236,13 @@ function handleBrandMarkClick() {
 
   if (brandClickCount.value >= 8) {
     brandClickCount.value = 0;
-    void openLicenseModal();
+    licenseModalVisible.value = true;
     return;
   }
 
   brandClickResetTimer = window.setTimeout(() => {
     brandClickCount.value = 0;
   }, 2000);
-}
-
-async function openLicenseModal() {
-  try {
-    const status = await apiGet<LicenseStatus>('/api/license/status');
-    activationKeyLabel.value = status.key_label;
-    licenseMessage.value = `当前授权到期日期：${status.expires_on}。输入激活码可延长 30 天。`;
-    activationCode.value = '';
-    licenseModalVisible.value = true;
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '获取授权状态失败');
-  }
-}
-
-async function submitActivation() {
-  const code = activationCode.value.trim();
-  if (!code) {
-    message.warning('请输入激活码');
-    return;
-  }
-
-  activationLoading.value = true;
-  try {
-    const result = await apiPost<LicenseStatus>('/api/license/activate', { code });
-    activationKeyLabel.value = result.key_label;
-    licenseMessage.value = `当前授权到期日期：${result.expires_on}。输入激活码可继续延长 30 天。`;
-    activationCode.value = '';
-    message.success(`激活成功，到期日期: ${result.expires_on}`);
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '激活失败');
-  } finally {
-    activationLoading.value = false;
-  }
 }
 
 function isMenuKey(value: unknown): value is MenuKey {
