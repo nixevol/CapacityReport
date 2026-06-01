@@ -638,3 +638,9 @@
 - `app/utils/files.py` now provides `remove_file_safely()` for best-effort temporary file cleanup.
 - Database table export and history archive download routes now reuse this helper instead of carrying duplicate private `_remove_file()` functions.
 - Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
+
+## 2026-06-01: Clipboard helper cleanup
+
+- `frontend/src/composables/clipboard.ts` centralizes browser clipboard writes with the existing hidden-textarea fallback.
+- API documentation, API Token management, and history detail log copying now reuse `writeClipboardText()` instead of each component carrying its own clipboard fallback.
+- Verification performed: `npm run build`, `.venv\Scripts\python.exe -m compileall app`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.

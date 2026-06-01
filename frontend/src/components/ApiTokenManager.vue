@@ -171,6 +171,7 @@ import { useDialog, useMessage, type DropdownOption } from 'naive-ui';
 import { AddOutline, ChevronDownOutline, CopyOutline, EyeOffOutline, EyeOutline, RefreshOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost } from '../api/client';
+import { writeClipboardText } from '../composables/clipboard';
 import type { ApiMessage, ApiTokenListResponse, ApiTokenMutationResponse, ApiTokenRecord } from '../types';
 
 defineProps<{
@@ -365,12 +366,12 @@ async function copyToken(token: ApiTokenRecord) {
     message.warning('该 Token 是旧版本生成的，未保存完整值，请重生成后再复制');
     return;
   }
-  await writeClipboard(token.token);
+  await writeClipboardText(token.token);
   message.success('Token 已复制');
 }
 
 async function copyRawToken() {
-  await writeClipboard(rawToken.value);
+  await writeClipboardText(rawToken.value);
   message.success('Token 已复制');
 }
 
@@ -431,25 +432,6 @@ function tokenDisplayValue(token: ApiTokenRecord): string {
     return token.token;
   }
   return `${token.prefix}...${token.suffix}`;
-}
-
-async function writeClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.top = '-1000px';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
-  }
 }
 
 function tokenStatusText(token: ApiTokenRecord): string {

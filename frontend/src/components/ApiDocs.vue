@@ -26,6 +26,7 @@ import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle.js';
 import 'swagger-ui-dist/swagger-ui.css';
 
 import { apiUrl, getApiBaseUrl, getToken } from '../api/client';
+import { writeClipboardText } from '../composables/clipboard';
 
 type SwaggerSystem = {
   getSystem?: () => {
@@ -92,27 +93,8 @@ function initSwagger() {
 }
 
 async function copyHeaderSample() {
-  await writeClipboard('Authorization: Bearer <token>\nX-API-Token: <token>');
+  await writeClipboardText('Authorization: Bearer <token>\nX-API-Token: <token>');
   message.success('传参示例已复制');
-}
-
-async function writeClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.top = '-1000px';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
-  }
 }
 </script>
 

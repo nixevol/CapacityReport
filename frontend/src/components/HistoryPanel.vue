@@ -186,6 +186,7 @@ import {
 
 import { apiGet, apiPost, download as downloadFile } from '../api/client';
 import type { CacheSize, HistoryDetail, HistoryFileEntry, HistoryFilesResponse, HistoryRecord } from '../types';
+import { writeClipboardText } from '../composables/clipboard';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { toColoredLogLines } from '../composables/logLines';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
@@ -398,30 +399,6 @@ async function copyDetailLogs() {
     message.success('日志已复制');
   } catch {
     message.error('复制日志失败');
-  }
-}
-
-async function writeClipboardText(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'fixed';
-  textarea.style.top = '-1000px';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-
-  try {
-    if (!document.execCommand('copy')) {
-      throw new Error('copy failed');
-    }
-  } finally {
-    document.body.removeChild(textarea);
   }
 }
 
