@@ -644,3 +644,9 @@
 - `frontend/src/composables/clipboard.ts` centralizes browser clipboard writes with the existing hidden-textarea fallback.
 - API documentation, API Token management, and history detail log copying now reuse `writeClipboardText()` instead of each component carrying its own clipboard fallback.
 - Verification performed: `npm run build`, `.venv\Scripts\python.exe -m compileall app`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
+
+## 2026-06-01: Final cleanup pass
+
+- A follow-up static import scan removed the leftover unused `Path` import from `app/api/routers/database.py`.
+- Final verification included `.venv\Scripts\python.exe -m compileall app`, `npm run build`, a lightweight Python AST unused-import scan, `.venv\Scripts\python.exe -m pip check`, and `npm audit --omit dev`.
+- Remaining scan hits are intentional runtime/cleanup console messages or behaviorally different format helpers; no further low-risk cleanup item was found in the final pass.
