@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 
 import FileWorkflow from './components/FileWorkflow.vue';
-import HistoryPanel from './components/HistoryPanel.vue';
-import DatabasePanel from './components/DatabasePanel.vue';
-import SettingsPanel from './components/SettingsPanel.vue';
 
+const HistoryPanel = () => import('./components/HistoryPanel.vue');
+const DatabasePanel = () => import('./components/DatabasePanel.vue');
+const SettingsPanel = () => import('./components/SettingsPanel.vue');
 const ScriptPanel = () => import('./components/ScriptPanel.vue');
 const ApiDocs = () => import('./components/ApiDocs.vue');
 

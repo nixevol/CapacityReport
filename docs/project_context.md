@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-06-01：前端非首页路由懒加载
+
+- `frontend/src/router.ts` 保留首屏 `FileWorkflow` 同步加载，将 `HistoryPanel`、`DatabasePanel`、`SettingsPanel` 改为动态导入，和已有的 `ScriptPanel`、`ApiDocs` 保持一致。
+- 已验证 `npm run build` 通过：主入口 JS 从约 1556KB 降到约 1497KB，非首页页面拆成独立小 chunk；`ScriptPanel` 和 `ApiDocs` 仍是独立懒加载重 chunk。
+- 当前剩余大 chunk 主要来自 Monaco Editor、Swagger UI 和主包中的 Naive UI/Vue 生态；Monaco/Swagger 已经不影响首屏，若继续压主入口体积，下一步应评估 Naive UI 按需引入。
+
 ## 2026-06-01：完善 RJ 自动调度日/周粒度识别
 
 - `app/utils/file_dates.py` 新增文件日期范围解析：`XXX_YYYYMMDDHHMM` 视为单日文件，`XXX_YYYYMMDDHHMM_YYYYMMDDHHMM` 按起止时间展开自然日，结束时间为零点时按右开区间处理。
