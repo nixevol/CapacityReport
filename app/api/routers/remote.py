@@ -6,9 +6,14 @@ from typing import Any, Callable, Iterable
 from fastapi import APIRouter, Body, HTTPException
 
 from app import state
+from app.api.routers.task_runtime import (
+    apply_history_retention_safely,
+    log_license_check,
+    set_task_stage,
+)
 from app.config import AppConfig, CACHE_DIR, RemoteDataConfig
 from app.processor import DataProcessor, ProcessLogger
-from app.services.license import LicenseError, LicenseInfo, check_processing_allowed
+from app.services.license import LicenseError, check_processing_allowed
 from app.services.remote_download import RemoteDataDownloader
 
 
@@ -67,12 +72,12 @@ def start_remote_processing_job(
 
     def log_callback(message: str) -> None:
         logs.append(message)
-        _set_task_stage(task_id, current_stage, logs)
+        set_task_stage(task_id, current_stage, logs)
 
     def stage_callback(stage: str) -> None:
         nonlocal current_stage
         current_stage = stage
-        _set_task_stage(task_id, current_stage, logs)
+        set_task_stage(task_id, current_stage, logs)
 
     logger = ProcessLogger(
         log_file=work_dir / "log.txt",
@@ -106,16 +111,6 @@ def start_remote_processing_job(
     }
 
 
-def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "processing") -> None:
-    state.processing_tasks[task_id] = {
-        "logs": logs.copy(),
-        "status": status,
-        "stage": stage,
-    }
-    if state.global_task_lock["task_id"] == task_id:
-        state.global_task_lock["stage"] = stage
-
-
 def _run_remote_processing(
     task_id: str,
     work_dir: Path,
@@ -144,7 +139,7 @@ def _run_remote_processing(
 
         state.history_manager.update(task_id, file_count=download_result.file_count)
         logger.set_stage("license")
-        _log_license_check(logger, check_processing_allowed(work_dir))
+        log_license_check(logger, check_processing_allowed(work_dir))
 
         processor = DataProcessor(app_config, work_dir, logger)
         result = processor.process()
@@ -189,10 +184,7 @@ def _run_remote_processing(
             "error_detail": error_detail,
         }
     finally:
-        try:
-            state.apply_history_retention()
-        except Exception as exc:
-            print(f"自动清理处理历史失败: {exc}")
+        apply_history_retention_safely()
         state.reset_task_lock()
         if on_finish:
             on_finish(task_id, final_status)
@@ -205,15 +197,3 @@ def _format_bytes(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} TB"
-
-
-def _log_license_check(logger: ProcessLogger, info: LicenseInfo) -> None:
-    if info.current_date:
-        logger.info(
-            f"授权校验通过，数据日期: {info.current_date.isoformat()}，"
-            f"到期日期: {info.expires_on.isoformat()}"
-        )
-    elif info.zip_count:
-        logger.warning("未从 ZIP 文件名识别到日期，已跳过授权日期比对")
-    else:
-        logger.warning("未找到 ZIP 文件，已跳过授权日期比对")

@@ -6,9 +6,14 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException
 
 from app import state
+from app.api.routers.task_runtime import (
+    apply_history_retention_safely,
+    log_license_check,
+    set_task_stage,
+)
 from app.config import AppConfig
 from app.processor import DataProcessor, ProcessLogger
-from app.services.license import LicenseError, LicenseInfo, check_processing_allowed
+from app.services.license import LicenseError, check_processing_allowed
 
 
 router = APIRouter(tags=["tasks"])
@@ -94,12 +99,12 @@ async def start_processing(task_id: str = Body(..., embed=True)):
 
     def log_callback(message: str) -> None:
         logs.append(message)
-        _set_task_stage(task_id, current_stage, logs)
+        set_task_stage(task_id, current_stage, logs)
 
     def stage_callback(stage: str) -> None:
         nonlocal current_stage
         current_stage = stage
-        _set_task_stage(task_id, current_stage, logs)
+        set_task_stage(task_id, current_stage, logs)
 
     logger = ProcessLogger(
         log_file=work_dir / "log.txt",
@@ -161,20 +166,10 @@ def _task_finished(task_id: str) -> bool:
     return bool(task_info and task_info.get("status") in {"completed", "failed"})
 
 
-def _set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "processing") -> None:
-    state.processing_tasks[task_id] = {
-        "logs": logs.copy(),
-        "status": status,
-        "stage": stage,
-    }
-    if state.global_task_lock["task_id"] == task_id:
-        state.global_task_lock["stage"] = stage
-
-
 def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_config: AppConfig) -> None:
     try:
         logger.set_stage("license")
-        _log_license_check(logger, check_processing_allowed(work_dir))
+        log_license_check(logger, check_processing_allowed(work_dir))
 
         processor = DataProcessor(app_config, work_dir, logger)
         result = processor.process()
@@ -205,20 +200,5 @@ def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_con
             "error_detail": error_detail,
         }
     finally:
-        try:
-            state.apply_history_retention()
-        except Exception as exc:
-            print(f"自动清理处理历史失败: {exc}")
+        apply_history_retention_safely()
         state.reset_task_lock()
-
-
-def _log_license_check(logger: ProcessLogger, info: LicenseInfo) -> None:
-    if info.current_date:
-        logger.info(
-            f"授权校验通过，数据日期: {info.current_date.isoformat()}，"
-            f"到期日期: {info.expires_on.isoformat()}"
-        )
-    elif info.zip_count:
-        logger.warning("未从 ZIP 文件名识别到日期，已跳过授权日期比对")
-    else:
-        logger.warning("未找到 ZIP 文件，已跳过授权日期比对")

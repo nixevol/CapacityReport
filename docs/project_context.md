@@ -626,3 +626,9 @@
 - `自动调度` is now a separate settings tab. Scheduler controls are disabled unless `启用远程自动化` is on, and turning off remote automation automatically turns off scheduler enablement in the current form state and saved payload.
 - `debug.bat` starts the Python backend on `127.0.0.1:9081` and the Vite frontend on `127.0.0.1:5173` for source-level debugging without requiring `frontend/dist`.
 - Verification performed: `cmd /c debug.bat` started the debug backend/frontend, `cd frontend && npm run build` passed, and browser inspection confirmed the remote connection fields align in one row with no horizontal overflow. Debug processes and `frontend/dist/` were removed after verification.
+
+## 2026-06-01: Task runtime cleanup
+
+- `app/api/routers/task_runtime.py` centralizes shared task-stage updates, processing license log output, and safe history-retention cleanup for manual processing and remote processing routes.
+- `app/api/routers/tasks.py` and `app/api/routers/remote.py` now reuse the shared helpers instead of carrying duplicate `_set_task_stage` and `_log_license_check` implementations.
+- Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
