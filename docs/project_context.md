@@ -587,3 +587,9 @@
 - The per-row operation dropdown now keeps edit, enable/disable, regenerate, and delete actions; copying is surfaced beside the Token value for faster repeated use.
 - Build verification: `npm run build` passed with only the existing Vite large chunk warning.
 - Follow-up UI adjustment: the eye/copy buttons now sit immediately after the Token text instead of being pushed to the far right, and Token rows show `created_at` in the metadata area.
+
+## 2026-06-01: API documentation toolbar cleanup
+
+- `frontend/src/components/ApiDocs.vue` no longer registers a page-header `copy sample` action, avoiding duplicate `复制传参示例` buttons on the API documentation page.
+- The API documentation card still keeps its local toolbar actions: `复制传参示例` and `OpenAPI JSON`.
+- Verification performed: `npm run build` passed, and generated frontend build output was removed after verification.

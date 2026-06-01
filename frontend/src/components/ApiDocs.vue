@@ -20,13 +20,12 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { nextTick, onMounted, ref } from 'vue';
 import { useMessage } from 'naive-ui';
 import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle.js';
 import 'swagger-ui-dist/swagger-ui.css';
 
 import { apiUrl, getApiBaseUrl, getToken } from '../api/client';
-import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type SwaggerSystem = {
   getSystem?: () => {
@@ -47,17 +46,8 @@ const openApiUrl = apiUrl('/api/openapi.json');
 let swaggerUi: SwaggerSystem | undefined;
 
 onMounted(async () => {
-  setPageHeader({
-    actions: [
-      { key: 'copy-api-token-header', label: '复制传参示例', onClick: copyHeaderSample }
-    ]
-  });
   await nextTick();
   initSwagger();
-});
-
-onBeforeUnmount(() => {
-  resetPageHeader();
 });
 
 function initSwagger() {
