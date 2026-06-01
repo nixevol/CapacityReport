@@ -619,3 +619,10 @@
 - Database-related settings now stay together with `数据库配置` and `处理历史保留`; remote automation settings now own the FTP/SFTP fields, auto-delete toggle, scheduler configuration, and scheduler status panel.
 - `frontend/src/styles.css` now uses dedicated layout classes for the database and remote settings panes, with independent scrolling and responsive single-column stacking on narrower screens.
 - Verification performed: `cd frontend && npm run build` passed. Browser inspection on `http://127.0.0.1:9081/settings` confirmed the two new tabs render correctly, the remote panel shows its own configuration and scheduler cards, and horizontal overflow remained at `0`.
+
+## 2026-06-01: Settings remote scheduler refinement
+
+- `frontend/src/components/SettingsPanel.vue` keeps `远程数据源` focused on FTP/SFTP connection fields. Protocol, host, port, timeout, and FTP passive mode render on one row when width allows; remote automation and delete-source toggles now sit below `远程目录`.
+- `自动调度` is now a separate settings tab. Scheduler controls are disabled unless `启用远程自动化` is on, and turning off remote automation automatically turns off scheduler enablement in the current form state and saved payload.
+- `debug.bat` starts the Python backend on `127.0.0.1:9081` and the Vite frontend on `127.0.0.1:5173` for source-level debugging without requiring `frontend/dist`.
+- Verification performed: `cmd /c debug.bat` started the debug backend/frontend, `cd frontend && npm run build` passed, and browser inspection confirmed the remote connection fields align in one row with no horizontal overflow. Debug processes and `frontend/dist/` were removed after verification.

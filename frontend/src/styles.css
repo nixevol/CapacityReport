@@ -1383,14 +1383,17 @@ select {
 }
 
 .settings-database-panel,
-.settings-remote-grid,
+.settings-remote-panel,
+.settings-scheduler-panel,
 .settings-rules-grid {
   display: grid;
   align-items: start;
   gap: 18px;
 }
 
-.settings-database-panel {
+.settings-database-panel,
+.settings-remote-panel,
+.settings-scheduler-panel {
   grid-template-columns: minmax(420px, 680px);
   height: 100%;
   min-height: 0;
@@ -1401,45 +1404,66 @@ select {
   scrollbar-width: thin;
 }
 
-.settings-database-stack,
-.settings-remote-stack {
+.settings-database-stack {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 18px;
 }
 
-.settings-remote-grid {
-  grid-template-columns: minmax(380px, 0.9fr) minmax(360px, 1.1fr);
-  height: 100%;
-  min-height: 0;
-  padding-right: 6px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-color: var(--td-scrollbar-color) transparent;
-  scrollbar-width: thin;
-}
-
 .settings-database-panel::-webkit-scrollbar,
-.settings-remote-grid::-webkit-scrollbar {
+.settings-remote-panel::-webkit-scrollbar,
+.settings-scheduler-panel::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 .settings-database-panel::-webkit-scrollbar-thumb,
-.settings-remote-grid::-webkit-scrollbar-thumb {
+.settings-remote-panel::-webkit-scrollbar-thumb,
+.settings-scheduler-panel::-webkit-scrollbar-thumb {
   background: var(--td-scrollbar-color);
   border-radius: 8px;
 }
 
 .settings-database-panel::-webkit-scrollbar-track,
-.settings-remote-grid::-webkit-scrollbar-track {
+.settings-remote-panel::-webkit-scrollbar-track,
+.settings-scheduler-panel::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .settings-remote-card,
 .settings-scheduler-card {
   min-width: 0;
+}
+
+.settings-remote-panel {
+  grid-template-columns: minmax(720px, 1fr);
+}
+
+.settings-scheduler-panel {
+  grid-template-columns: minmax(420px, 760px);
+}
+
+.remote-connection-row {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.8fr) minmax(220px, 1.8fr) minmax(110px, 0.8fr) minmax(120px, 0.8fr) minmax(116px, 0.7fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.remote-passive-field .n-form-item-blank {
+  align-items: center;
+  min-height: 34px;
+}
+
+.remote-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 56px;
+}
+
+.remote-toggle-row .n-form-item {
+  margin-bottom: 0;
 }
 
 .settings-rules-grid {
@@ -1935,9 +1959,14 @@ select {
 /* ==================== Responsive ==================== */
 @media (max-width: 1200px) {
   .settings-database-panel,
-  .settings-remote-grid,
+  .settings-remote-panel,
+  .settings-scheduler-panel,
   .settings-rules-grid {
     grid-template-columns: 1fr;
+  }
+
+  .remote-connection-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-rules-grid {
@@ -2030,5 +2059,15 @@ select {
   .scheduler-status-grid,
   .scheduler-directory-list {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .remote-connection-row {
+    grid-template-columns: 1fr;
+  }
+
+  .remote-toggle-row {
+    gap: 12px 24px;
   }
 }
