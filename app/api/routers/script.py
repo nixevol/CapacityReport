@@ -7,6 +7,7 @@ from threading import Thread
 from fastapi import APIRouter, Body, HTTPException
 
 from app import state
+from app.api.routers.task_runtime import set_task_stage
 from app.config import AppConfig, CACHE_DIR, SQL_SCRIPT
 from app.processor import DataProcessor, ProcessLogger
 
@@ -55,10 +56,10 @@ async def execute_script():
 
     def log_callback(message: str) -> None:
         logs.append(message)
-        state.processing_tasks[task_id] = {"logs": logs.copy(), "status": "processing"}
+        set_task_stage(task_id, "processing", logs)
 
     logger = ProcessLogger(log_file=None, callback=log_callback)
-    state.processing_tasks[task_id] = {"logs": [], "status": "processing"}
+    set_task_stage(task_id, "processing", logs)
     app_config = state.current_config()
 
     thread = Thread(target=_run_script, args=(task_id, logger, logs, app_config), daemon=True)
@@ -89,10 +90,10 @@ def _run_script(task_id: str, logger: ProcessLogger, logs: list[str], app_config
         processor = DataProcessor(app_config, temp_work_dir, logger)
         processor._execute_sql_script()
         logger.success("SQL 脚本执行完成")
-        state.processing_tasks[task_id] = {"logs": logs.copy(), "status": "completed"}
+        set_task_stage(task_id, "completed", logs, status="completed")
     except Exception as exc:
         logger.error(f"SQL 脚本执行失败: {exc}")
-        state.processing_tasks[task_id] = {"logs": logs.copy(), "status": "failed"}
+        set_task_stage(task_id, "failed", logs, status="failed")
     finally:
         if temp_work_dir and temp_work_dir.exists():
             shutil.rmtree(temp_work_dir, ignore_errors=True)

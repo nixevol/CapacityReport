@@ -650,3 +650,9 @@
 - A follow-up static import scan removed the leftover unused `Path` import from `app/api/routers/database.py`.
 - Final verification included `.venv\Scripts\python.exe -m compileall app`, `npm run build`, a lightweight Python AST unused-import scan, `.venv\Scripts\python.exe -m pip check`, and `npm audit --omit dev`.
 - Remaining scan hits are intentional runtime/cleanup console messages or behaviorally different format helpers; no further low-risk cleanup item was found in the final pass.
+
+## 2026-06-01: Script task status cleanup
+
+- `app/api/routers/script.py` now reuses the shared `set_task_stage()` helper for manual SQL script task status updates.
+- Script execution status entries now include the same `stage` field shape used by processing and remote tasks while preserving the existing status values.
+- Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
