@@ -69,11 +69,13 @@ api_tokens.json
 *.csv
 
 # IDE and OS
+.claude/
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+nul
 .DS_Store
 Thumbs.db
 desktop.ini

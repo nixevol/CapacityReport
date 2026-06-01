@@ -21,25 +21,22 @@
 
 | 格式 | 示例 | 数据日期 |
 |------|------|----------|
-| `XXX_YYYYMMDDHHMM_YYYYMMDDHHMM` | `CapacityReportData2.6_202605110000_202605120000.zip` | 第一个时间戳 `202605110000` → 2026-05-11 |
-| `XXX_YYYYMMDDHHMM` | `CapacityReportData2.6_202605110000.zip` | 时间戳 `202605110000` → 2026-05-11 |
+| `XXX_YYYYMMDDHHMM_YYYYMMDDHHMM` | `CapacityReportData2.6_202605110000_202605120000.zip` | 覆盖起止时间范围，结束零点按右开区间处理 → 2026-05-11 |
+| `XXX_YYYYMMDDHHMM` | `CapacityReportData2.6_202605110000.zip` | 视为单日文件 → 2026-05-11 |
 
 ### 2.2 解析逻辑
 
-复用项目已有的正则 `_ZIP_DATE_RE = re.compile(r"(?<!\d)(20\d{10}(?:\d{2})?)(?!\d)")`，取第一个匹配项作为数据日期。
+复用项目已有的正则 `_ZIP_DATE_RE = re.compile(r"(?<!\d)(20\d{10}(?:\d{2})?)(?!\d)")`，优先解析文件覆盖的自然日范围。
 
 ```python
-def extract_file_date(filename: str) -> date | None:
-    """从文件名提取数据日期（取第一个匹配的时间戳）"""
-    match = _ZIP_DATE_RE.search(filename)
-    if not match:
+def parse_file_date_range(filename: str) -> FileDateRange | None:
+    """从文件名提取数据覆盖范围。"""
+    values = _ZIP_DATE_RE.findall(filename)
+    if not values:
         return None
-    timestamp = match.group(1)  # 12位: YYYYMMDDHHMM 或 14位: YYYYMMDDHHMMSS
-    fmt = "%Y%m%d%H%M%S" if len(timestamp) == 14 else "%Y%m%d%H%M"
-    try:
-        return datetime.strptime(timestamp, fmt).date()
-    except ValueError:
-        return None
+    start = parse_timestamp(values[0])
+    end = parse_timestamp(values[1]) if len(values) > 1 else start + timedelta(days=1)
+    return FileDateRange(start=start.date(), end_exclusive=normalize_end(end))
 ```
 
 ---
@@ -130,9 +127,11 @@ def get_target_week_range(week_offset: int = 0) -> tuple[date, date]:
 
 **关键**：
 1. 不依赖系统日期，而是从文件名中提取日期
-2. 文件名只取**第一个**时间戳作为数据日期
-3. 例如文件 `CapacityReportData2.6_202605120000_202605130000.zip` → 数据日期为 2026-05-12
+2. 文件名带两个时间戳时按覆盖范围判断；只有一个时间戳时视为单日文件
+3. 例如文件 `CapacityReportData2.6_202605120000_202605130000.zip` → 覆盖 2026-05-12
 4. 如果某个日期没有对应的 ZIP 文件，该目录判定为未就绪
+
+RJ 目录会额外按最新文件自动判断粒度：最新文件为单日时要求 7 个目标日都齐全；最新文件为多日/周文件时要求存在一个 ZIP 覆盖完整目标自然周。
 
 ### 3.4 标识文件
 

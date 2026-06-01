@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, HTTPException, UploadFile, File
 from fastapi.responses import Response
 
 from app import state
-from app.config import HistoryRetentionConfig, RemoteDataConfig
+from app.config import HistoryRetentionConfig, RJDataConfig, RemoteDataConfig
 from app.services.api_tokens import export_tokens, import_tokens
 
 
@@ -132,3 +132,7 @@ def _apply_config_data(data: dict[str, Any]) -> None:
     history_retention = data.get("HistoryRetention")
     if isinstance(history_retention, dict):
         state.config.history_retention = HistoryRetentionConfig.from_dict(history_retention)
+
+    rj_data = data.get("RJData")
+    if isinstance(rj_data, dict):
+        state.config.rj_data = RJDataConfig.from_dict(rj_data)

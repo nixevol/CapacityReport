@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
@@ -11,9 +10,9 @@ from typing import Any
 from fastapi import HTTPException
 
 from app import state
-from app.config import CACHE_DIR, AutoSchedulerConfig, RemoteDataConfig
+from app.config import CACHE_DIR, AutoSchedulerConfig
 from app.services.remote_download import RemoteDataDownloader, RemoteFileInfo
-from app.utils.file_dates import extract_file_date, required_week_days
+from app.utils.file_dates import parse_file_date_range, required_week_days
 
 
 READY_DIR = CACHE_DIR / "auto_scheduler"
@@ -22,29 +21,36 @@ DISABLED_CHECK_SECONDS = 60
 STARTUP_CHECK_SECONDS = 5
 FAILURE_RESULTS = {"scan_failed", "trigger_failed", "source_cleanup_failed", "failed", "invalid_flag"}
 
-# RJ周文件名模式: CapacityReportData2.6RJ_GD_YYYYMMDDHHMM_YYYYMMDDHHMM.zip
-RJ_WEEKLY_FILE_PATTERN = re.compile(
-    r"CapacityReportData2\.6RJ_(?:GD|YD)_(\d{12})_(\d{12})\.zip$"
-)
-
 
 @dataclass(frozen=True)
-class RJWeeklyDirectoryStatus:
-    """RJ周数据目录就绪状态"""
+class RJDirectoryReadyStatus:
+    """RJ 数据目录就绪状态，按最新文件自动识别日粒度或周粒度。"""
     directory: str
     ready: bool
-    found: bool = False
+    granularity: str | None = None
+    found_days: list[date] | None = None
+    missing_days: list[date] | None = None
     file_name: str | None = None
     file_count: int = 0
     error: str | None = None
+    skipped: bool = False
+    skip_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        found_days = self.found_days or []
+        missing_days = self.missing_days or []
         return {
             "ready": self.ready,
-            "found": self.found,
+            "granularity": self.granularity,
+            "found_days": [item.isoformat() for item in found_days],
+            "missing_days": [item.isoformat() for item in missing_days],
+            "found_count": len(found_days),
+            "required_count": len(found_days) + len(missing_days),
             "file_name": self.file_name,
             "file_count": self.file_count,
             "error": self.error,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
         }
 
 
@@ -121,6 +127,7 @@ class AutoScheduler:
                 "week_offset": scheduler.week_offset,
                 "auto_delete_source": config.auto_delete_source,
                 "rj_data_enabled": rj_config.enabled,
+                "rj_directories": rj_config.weekly_directories,
                 "rj_weekly_directories": rj_config.weekly_directories,
                 "next_check_at": self._format_dt(self._next_check_at),
                 "last_check_at": self._format_dt(self._last_check_at),
@@ -178,14 +185,22 @@ class AutoScheduler:
             target_dates = self._target_dates_from_flag(ready_flag, scheduler)
             return self._trigger_processing(target_dates, ready_flag, manual)
 
-        # 检查现有7天目录（4G/5G数据）
         target_days = required_week_days(scheduler.week_offset)
         downloader = RemoteDataDownloader(remote_config)
-        directory_status = self._check_remote_ready(downloader, scheduler, target_days)
-        self._set_directory_status(directory_status)
+        rj_config = app_config.rj_data.normalized()
+        rj_directories = set(rj_config.weekly_directories) if rj_config.enabled else set()
+
+        # 检查现有7天目录（4G/5G数据），RJ 目录单独按粒度判断，避免被普通7天规则误拦。
+        directory_status = self._check_remote_ready(
+            downloader,
+            scheduler,
+            target_days,
+            excluded_directories=rj_directories,
+        )
 
         error_count = sum(1 for item in directory_status.values() if item.error)
         if error_count:
+            self._set_combined_directory_status(directory_status, {})
             return self._finish_check(
                 "scan_failed",
                 f"远程目录扫描失败，{error_count}/{len(directory_status)} 个目录无法访问或扫描失败",
@@ -196,29 +211,32 @@ class AutoScheduler:
         skipped_count = len(directory_status) - len(active_status)
         daily_ready = bool(active_status) and all(item.ready for item in active_status)
 
-        # 检查RJ周数据目录（复用同一个 downloader）
-        rj_weekly_status = self._check_rj_weekly_ready(downloader, scheduler.week_offset)
-        rj_weekly_ready = True  # 默认就绪（如果没有配置RJ目录）
+        # 检查 RJ 数据目录，按最新文件自动判断日粒度或周粒度。
+        rj_status = self._check_rj_ready(downloader, target_days)
+        rj_error_count = sum(1 for item in rj_status.values() if item.error)
+        self._set_combined_directory_status(directory_status, rj_status)
+        if rj_error_count:
+            return self._finish_check(
+                "scan_failed",
+                f"RJ 远程目录扫描失败，{rj_error_count}/{len(rj_status)} 个目录无法访问或扫描失败",
+                manual,
+            )
+
+        active_rj_status = [item for item in rj_status.values() if not item.skipped]
+        rj_ready = all(item.ready for item in active_rj_status)
         rj_status_text = ""
 
-        if rj_weekly_status:
-            rj_ready_count = sum(1 for s in rj_weekly_status.values() if s.ready)
-            rj_total = len(rj_weekly_status)
-            rj_weekly_ready = rj_ready_count == rj_total
-
-            # 保存RJ状态到目录状态中
-            rj_status_dict = {f"rj_weekly:{name}": status.to_dict() for name, status in rj_weekly_status.items()}
-            with self._status_lock:
-                self._directory_status.update(rj_status_dict)
-
-            if not rj_weekly_ready:
-                rj_status_text = f"，RJ周数据 {rj_ready_count}/{rj_total} 个目录就绪"
+        if active_rj_status:
+            rj_ready_count = sum(1 for item in active_rj_status if item.ready)
+            rj_total = len(active_rj_status)
+            if not rj_ready:
+                rj_status_text = f"，RJ 数据 {rj_ready_count}/{rj_total} 个有效目录就绪"
 
         # 两个条件都满足才触发
-        if daily_ready and rj_weekly_ready:
-            self._mark_ready(target_days, directory_status, rj_weekly_status)
+        if daily_ready and rj_ready:
+            self._mark_ready(target_days, directory_status, rj_status)
             skipped_text = f"，已跳过 {skipped_count} 个停推目录" if skipped_count else ""
-            rj_text = "，RJ周数据已就绪" if rj_weekly_status else ""
+            rj_text = "，RJ 数据已就绪" if active_rj_status else ""
             return self._finish_check(
                 "marked_ready",
                 f"远程数据已满足目标周 7 天{skipped_text}{rj_text}，已写入就绪标识，下次检查将自动处理",
@@ -229,6 +247,13 @@ class AutoScheduler:
             return self._finish_check(
                 "waiting",
                 f"远程数据未就绪，{len(directory_status)} 个目录均为空，已视为停推但不会触发处理",
+                manual,
+            )
+
+        if not active_status:
+            return self._finish_check(
+                "waiting",
+                f"远程普通日数据未发现有效目录，无法触发处理{rj_status_text}",
                 manual,
             )
 
@@ -245,7 +270,9 @@ class AutoScheduler:
         downloader: RemoteDataDownloader,
         scheduler: AutoSchedulerConfig,
         target_days: list[date],
+        excluded_directories: set[str] | None = None,
     ) -> dict[str, DirectoryReadyStatus]:
+        excluded = {self._normalize_directory_name(item) for item in (excluded_directories or set())}
         expected_directories = scheduler.expected_directories
         if expected_directories:
             return {
@@ -255,6 +282,7 @@ class AutoScheduler:
                     target_days,
                 )
                 for directory in expected_directories
+                if not self._is_excluded_directory(directory, excluded)
             }
 
         files = self._safe_list_remote_zip_files(downloader, None)
@@ -270,11 +298,7 @@ class AutoScheduler:
                 )
             }
 
-        grouped: dict[str, list[RemoteFileInfo]] = defaultdict(list)
-        for remote_file in files:
-            grouped[remote_file.parent or "."].append(remote_file)
-
-        if not grouped:
+        if not files:
             return {
                 ".": DirectoryReadyStatus(
                     directory=".",
@@ -285,6 +309,16 @@ class AutoScheduler:
                     error="远程目录未找到 ZIP 文件",
                 )
             }
+
+        grouped: dict[str, list[RemoteFileInfo]] = defaultdict(list)
+        for remote_file in files:
+            parent = remote_file.parent or "."
+            if self._is_excluded_directory(parent, excluded):
+                continue
+            grouped[parent].append(remote_file)
+
+        if not grouped:
+            return {}
 
         return {
             directory: self._directory_ready_status(directory, directory_files, target_days)
@@ -330,9 +364,11 @@ class AutoScheduler:
 
         required = set(target_days)
         found = {
-            file_date
+            target_day
             for remote_file in files
-            if (file_date := extract_file_date(remote_file.name)) in required
+            if (date_range := parse_file_date_range(remote_file.name))
+            for target_day in date_range.covered_days()
+            if target_day in required
         }
         missing = [item for item in target_days if item not in found]
         return DirectoryReadyStatus(
@@ -343,79 +379,108 @@ class AutoScheduler:
             file_count=len(files),
         )
 
-    def _check_rj_weekly_ready(
+    def _check_rj_ready(
         self,
         downloader: RemoteDataDownloader,
-        week_offset: int,
-    ) -> dict[str, RJWeeklyDirectoryStatus]:
-        """检查RJ周数据目录是否就绪"""
+        target_days: list[date],
+    ) -> dict[str, RJDirectoryReadyStatus]:
+        """检查 RJ 数据目录是否就绪，自动识别目录最新文件是日粒度还是周粒度。"""
         rj_config = state.current_config().rj_data.normalized()
         if not rj_config.enabled:
             return {}
 
-        target_week_end = self._calculate_week_end_date(week_offset)
-        result: dict[str, RJWeeklyDirectoryStatus] = {}
+        result: dict[str, RJDirectoryReadyStatus] = {}
 
         for directory in rj_config.weekly_directories:
-            result[directory] = self._check_single_rj_directory(
-                downloader, directory, target_week_end
-            )
+            result[directory] = self._check_single_rj_directory(downloader, directory, target_days)
 
         return result
-
-    def _calculate_week_end_date(self, week_offset: int) -> date:
-        """计算目标周的结束日期（周日）"""
-        today = date.today()
-        # 找到本周的周日
-        days_since_sunday = today.weekday() + 1  # weekday(): 0=周一, 6=周日
-        if days_since_sunday == 7:
-            days_since_sunday = 0
-        this_sunday = today - timedelta(days=days_since_sunday)
-        # 根据偏移计算目标周的周日
-        target_sunday = this_sunday + timedelta(weeks=week_offset)
-        return target_sunday
 
     def _check_single_rj_directory(
         self,
         downloader: RemoteDataDownloader,
         directory: str,
-        target_week_end: date,
-    ) -> RJWeeklyDirectoryStatus:
-        """检查单个RJ目录是否包含目标周的文件"""
+        target_days: list[date],
+    ) -> RJDirectoryReadyStatus:
+        """检查单个 RJ 目录是否包含目标周数据。"""
         files = self._safe_list_remote_zip_files(downloader, directory)
         if files is None:
-            return RJWeeklyDirectoryStatus(
+            return RJDirectoryReadyStatus(
                 directory=directory,
                 ready=False,
                 error="远程目录不存在或无法访问",
             )
 
         if not files:
-            return RJWeeklyDirectoryStatus(
+            return RJDirectoryReadyStatus(
                 directory=directory,
-                ready=False,
+                ready=True,
                 file_count=0,
+                skipped=True,
+                skip_reason="目录为空，视为已停推并跳过",
             )
 
-        # 查找匹配目标周的文件
-        target_end_str = target_week_end.strftime("%Y%m%d") + "0000"
-        for remote_file in files:
-            match = RJ_WEEKLY_FILE_PATTERN.search(remote_file.name)
-            if match:
-                file_end_date = match.group(2)
-                if file_end_date == target_end_str:
-                    return RJWeeklyDirectoryStatus(
-                        directory=directory,
-                        ready=True,
-                        found=True,
-                        file_name=remote_file.name,
-                        file_count=len(files),
-                    )
+        parsed_files = [
+            (remote_file, date_range)
+            for remote_file in files
+            if (date_range := parse_file_date_range(remote_file.name))
+        ]
+        if not parsed_files:
+            return RJDirectoryReadyStatus(
+                directory=directory,
+                ready=False,
+                found_days=[],
+                missing_days=target_days,
+                file_count=len(files),
+                error="目录中未找到可识别日期的 ZIP 文件",
+            )
 
-        return RJWeeklyDirectoryStatus(
+        latest_file, latest_range = max(
+            parsed_files,
+            key=lambda item: (item[1].start, item[1].end_exclusive, item[0].name),
+        )
+        granularity = "daily" if latest_range.span_days <= 1 else "weekly"
+        required = set(target_days)
+
+        found = {
+            target_day
+            for _, date_range in parsed_files
+            for target_day in date_range.covered_days()
+            if target_day in required
+        }
+        missing = [item for item in target_days if item not in found]
+
+        if granularity == "daily":
+            return RJDirectoryReadyStatus(
+                directory=directory,
+                ready=not missing,
+                granularity=granularity,
+                found_days=sorted(found),
+                missing_days=missing,
+                file_name=latest_file.name,
+                file_count=len(files),
+            )
+
+        for remote_file in files:
+            date_range = parse_file_date_range(remote_file.name)
+            if date_range and date_range.covers_all(required):
+                return RJDirectoryReadyStatus(
+                    directory=directory,
+                    ready=True,
+                    granularity=granularity,
+                    found_days=target_days,
+                    missing_days=[],
+                    file_name=remote_file.name,
+                    file_count=len(files),
+                )
+
+        return RJDirectoryReadyStatus(
             directory=directory,
             ready=False,
-            found=False,
+            granularity=granularity,
+            found_days=sorted(found),
+            missing_days=missing,
+            file_name=latest_file.name,
             file_count=len(files),
         )
 
@@ -457,7 +522,7 @@ class AutoScheduler:
         self,
         target_days: list[date],
         directory_status: dict[str, DirectoryReadyStatus],
-        rj_weekly_status: dict[str, RJWeeklyDirectoryStatus] | None = None,
+        rj_status: dict[str, RJDirectoryReadyStatus] | None = None,
     ) -> None:
         READY_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -470,10 +535,14 @@ class AutoScheduler:
                 for name, item in directory_status.items()
             },
         }
-        if rj_weekly_status:
+        if rj_status:
+            payload["rj_directories"] = {
+                name: item.to_dict()
+                for name, item in rj_status.items()
+            }
             payload["rj_weekly_directories"] = {
                 name: item.to_dict()
-                for name, item in rj_weekly_status.items()
+                for name, item in rj_status.items()
             }
         READY_FLAG.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -546,12 +615,39 @@ class AutoScheduler:
             "status": self.get_status(),
         }
 
-    def _set_directory_status(self, directory_status: dict[str, DirectoryReadyStatus]) -> None:
+    def _set_combined_directory_status(
+        self,
+        directory_status: dict[str, DirectoryReadyStatus],
+        rj_status: dict[str, RJDirectoryReadyStatus],
+    ) -> None:
         with self._status_lock:
-            self._directory_status = {
+            combined = {
                 name: item.to_dict()
                 for name, item in directory_status.items()
             }
+            combined.update(
+                {
+                    f"rj:{name}": item.to_dict()
+                    for name, item in rj_status.items()
+                }
+            )
+            self._directory_status = combined
+
+    @staticmethod
+    def _normalize_directory_name(directory: str) -> str:
+        normalized = str(directory or "").replace("\\", "/").strip().strip("/")
+        return "." if normalized in {"", "."} else normalized
+
+    @classmethod
+    def _is_excluded_directory(cls, directory: str, excluded: set[str]) -> bool:
+        if not excluded:
+            return False
+        normalized = cls._normalize_directory_name(directory)
+        return any(
+            normalized == item or normalized.startswith(f"{item}/")
+            for item in excluded
+            if item != "."
+        )
 
     def _set_next_check(self, value: datetime) -> None:
         with self._status_lock:

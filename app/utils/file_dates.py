@@ -23,18 +23,84 @@ class DirectoryDateSelection:
     start_date: date | None = None
 
 
+@dataclass(frozen=True)
+class FileDateRange:
+    start: date
+    end_exclusive: date
+    timestamp_count: int
+
+    @property
+    def span_days(self) -> int:
+        return max((self.end_exclusive - self.start).days, 1)
+
+    def covered_days(self) -> list[date]:
+        return [self.start + timedelta(days=offset) for offset in range(self.span_days)]
+
+    def covers_any(self, target_days: set[date]) -> bool:
+        return any(day in target_days for day in self.covered_days())
+
+    def covers_all(self, target_days: set[date]) -> bool:
+        return target_days.issubset(set(self.covered_days()))
+
+
 def extract_file_date(filename: str | Path) -> date | None:
     """Extract the first timestamp date from a filename."""
-    match = FILENAME_DATE_RE.search(Path(str(filename)).name)
-    if not match:
+    date_range = parse_file_date_range(filename)
+    return date_range.start if date_range else None
+
+
+def parse_file_date_range(filename: str | Path) -> FileDateRange | None:
+    """Extract the covered natural date range from a filename.
+
+    Files with one timestamp are treated as one-day data files. Files with two
+    timestamps use the second timestamp as an exclusive end when it is midnight,
+    matching names like xxx_202605110000_202605120000.zip.
+    """
+    values = FILENAME_DATE_RE.findall(Path(str(filename)).name)
+    if not values:
         return None
-    return parse_file_timestamp(match.group(1))
+
+    start_dt = parse_file_timestamp_datetime(values[0])
+    if not start_dt:
+        return None
+
+    if len(values) == 1:
+        return FileDateRange(
+            start=start_dt.date(),
+            end_exclusive=start_dt.date() + timedelta(days=1),
+            timestamp_count=1,
+        )
+
+    end_dt = parse_file_timestamp_datetime(values[1])
+    if not end_dt or end_dt <= start_dt:
+        return FileDateRange(
+            start=start_dt.date(),
+            end_exclusive=start_dt.date() + timedelta(days=1),
+            timestamp_count=len(values),
+        )
+
+    end_exclusive = end_dt.date()
+    if end_dt.time() != datetime.min.time():
+        end_exclusive += timedelta(days=1)
+    if end_exclusive <= start_dt.date():
+        end_exclusive = start_dt.date() + timedelta(days=1)
+
+    return FileDateRange(
+        start=start_dt.date(),
+        end_exclusive=end_exclusive,
+        timestamp_count=len(values),
+    )
 
 
 def parse_file_timestamp(value: str) -> date | None:
+    parsed = parse_file_timestamp_datetime(value)
+    return parsed.date() if parsed else None
+
+
+def parse_file_timestamp_datetime(value: str) -> datetime | None:
     fmt = "%Y%m%d%H%M%S" if len(value) == 14 else "%Y%m%d%H%M"
     try:
-        return datetime.strptime(value, fmt).date()
+        return datetime.strptime(value, fmt)
     except ValueError:
         return None
 

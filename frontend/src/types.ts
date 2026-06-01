@@ -79,8 +79,15 @@ export interface AppConfig {
   };
   remote_data: RemoteDataConfig;
   history_retention: HistoryRetentionConfig;
+  rj_data?: RJDataConfig;
   sheet_filter: string[];
   extract_fields: Array<Record<string, unknown>>;
+}
+
+export interface RJDataConfig {
+  enabled: boolean;
+  weekly_directories: string[];
+  table_field_mappings: Record<string, Array<Record<string, unknown>>>;
 }
 
 export interface RemoteDataConfig {
@@ -134,6 +141,7 @@ export interface RemoteSchedulerStatus {
     string,
     {
       ready: boolean;
+      granularity?: 'daily' | 'weekly' | string | null;
       found_days: string[];
       missing_days: string[];
       found_count: number;

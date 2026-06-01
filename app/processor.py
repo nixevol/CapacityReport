@@ -525,9 +525,14 @@ class DataProcessor:
 
         # 快速字段匹配（使用预编译的映射表）
         col_mapping = {}
+        mapped_targets = set()
         for col in df.columns:
             if col in field_map:
-                col_mapping[col] = field_map[col]
+                target_col = field_map[col]
+                if target_col in mapped_targets:
+                    continue
+                col_mapping[col] = target_col
+                mapped_targets.add(target_col)
 
         if len(col_mapping) < 1:
             if 'kpis' in str(csv_file).lower():

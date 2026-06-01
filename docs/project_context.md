@@ -1,5 +1,15 @@
 # 项目上下文记录
 
+## 2026-06-01：完善 RJ 自动调度日/周粒度识别
+
+- `app/utils/file_dates.py` 新增文件日期范围解析：`XXX_YYYYMMDDHHMM` 视为单日文件，`XXX_YYYYMMDDHHMM_YYYYMMDDHHMM` 按起止时间展开自然日，结束时间为零点时按右开区间处理。
+- `app/services/auto_scheduler.py` 的 RJ 检查改为按目录最新 ZIP 自动识别 `daily` 或 `weekly`：日粒度目录要求目标自然周 7 天都存在，周粒度目录要求有一个 ZIP 覆盖目标自然周；空 RJ 目录继续视为停推并跳过。
+- 自动调度普通 4G/5G 目录扫描会排除已配置的 RJ 目录，避免 `expected_directories=[]` 时 RJ 周目录被普通 7 天规则误判阻塞。
+- `app/services/remote_download.py` 的调度下载筛选改为使用日期覆盖范围：单日文件只要覆盖目标日即下载，多日/周文件必须覆盖完整目标周才下载，避免 ready 后漏下或误下 RJ 周文件。
+- `Configure.json` 将 `RJ/700M/700RJGD`、`RJ/700M/700RJYD` 加入 RJ 数据目录，并补充 `700MRJGD`、`700MRJYD` 字段映射；`processor.py` 避免多个源字段别名映射到同一目标字段时生成重复列。
+- 配置上传接口现在会导入/保存 `RJData`，前端类型补充 `rj_data` 和调度状态中的 `granularity` 字段。
+- 已验证：后端 AST 语法检查、`Configure.json` JSON 解析、`npm run build`、真实 SFTP 清单识别、MySQL 临时导入 700RJYD 样本并清理测试表均通过；前端构建仅保留既有大 chunk 警告。
+
 ## 2026-05-29：新增 RJ 周数据处理功能
 
 - 新增 `RJData` 配置块到 `app/config.py`，支持 `enabled`、`weekly_directories` 和 `table_field_mappings` 配置项，用于管理 RJ 周数据目录和字段映射。

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from app.config import RemoteDataConfig
-from app.utils.file_dates import extract_file_date, select_recent_items_by_directory
+from app.utils.file_dates import parse_file_date_range, select_recent_items_by_directory
 
 
 LogFn = Callable[[str], None]
@@ -93,7 +93,13 @@ class RemoteDataDownloader:
             selected = [
                 remote_file
                 for remote_file in files
-                if extract_file_date(remote_file.name) in target_dates
+                if (
+                    date_range := parse_file_date_range(remote_file.name)
+                ) and (
+                    date_range.covers_all(target_dates)
+                    if date_range.span_days > 1
+                    else date_range.covers_any(target_dates)
+                )
             ]
             selected_files.extend(selected)
             skipped_count = len(files) - len(selected)
