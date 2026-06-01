@@ -4,9 +4,9 @@
 
     <n-card size="small" class="work-card settings-tabs-card">
       <n-tabs type="line" animated class="settings-tabs">
-        <n-tab-pane name="connection" tab="连接配置">
-          <div class="settings-section-grid">
-            <div class="settings-connection-stack">
+        <n-tab-pane name="database" tab="数据库配置">
+          <div class="settings-database-panel">
+            <div class="settings-database-stack">
               <n-card title="数据库配置" size="small" class="work-card">
                 <n-form label-placement="top">
                   <n-grid :cols="12" :x-gap="12">
@@ -78,8 +78,12 @@
                 </template>
               </n-card>
             </div>
+          </div>
+        </n-tab-pane>
 
-            <n-card title="远程数据源" size="small" class="work-card">
+        <n-tab-pane name="remote" tab="远程数据源">
+          <div class="settings-remote-grid">
+            <n-card title="远程数据源配置" size="small" class="work-card settings-remote-card">
               <n-form label-placement="top">
                 <n-grid :cols="12" :x-gap="12">
                   <n-gi :span="6">
@@ -145,65 +149,77 @@
                   <n-input v-model:value="remoteForm.remote_dir" placeholder="/CapacityReportData" />
                 </n-form-item>
                 <p class="form-hint">自动化执行会递归下载该目录下的全部文件和文件夹到本地缓存，再按现有处理流程入库和执行脚本；自动删除源文件只会在处理成功后删除远程文件，保留目录结构。</p>
+              </n-form>
 
-                <n-divider class="settings-compact-divider">自动调度</n-divider>
-                <n-grid :cols="12" :x-gap="12">
-                  <n-gi :span="4">
-                    <n-form-item label="启用自动调度">
-                      <n-switch v-model:value="remoteForm.auto_scheduler.enabled" />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="4">
-                    <n-form-item label="检查间隔（小时）">
-                      <n-input-number
-                        v-model:value="remoteForm.auto_scheduler.check_interval_hours"
-                        class="full-width"
-                        :min="1"
-                        :precision="0"
-                        :disabled="!remoteForm.auto_scheduler.enabled"
-                      />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="4">
-                    <n-form-item label="目标周期">
-                      <n-select
-                        v-model:value="remoteForm.auto_scheduler.week_offset"
-                        :options="schedulerWeekOptions"
-                        :disabled="!remoteForm.auto_scheduler.enabled"
-                      />
-                    </n-form-item>
-                  </n-gi>
-                </n-grid>
-                <n-form-item label="预期目录">
-                  <div class="scheduler-dir-editor">
-                    <n-input-group>
-                      <n-input
-                        v-model:value="newSchedulerDirectory"
-                        placeholder="例如 4G/FDD"
-                        :disabled="!remoteForm.auto_scheduler.enabled"
-                        @keydown.enter.prevent="addSchedulerDirectory"
-                      />
-                      <n-button :disabled="!remoteForm.auto_scheduler.enabled" @click="addSchedulerDirectory">
-                        添加
-                      </n-button>
-                    </n-input-group>
-                    <div class="scheduler-dir-tags">
-                      <n-tag
-                        v-for="(directory, index) in remoteForm.auto_scheduler.expected_directories"
-                        :key="`${directory}-${index}`"
-                        closable
-                        :disabled="!remoteForm.auto_scheduler.enabled"
-                        @close="removeSchedulerDirectory(index)"
-                      >
-                        {{ directory }}
-                      </n-tag>
-                      <n-tag v-if="remoteForm.auto_scheduler.expected_directories.length === 0" type="default">
-                        按实际 ZIP 目录检测
-                      </n-tag>
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
+                  <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
+                </n-space>
+              </template>
+            </n-card>
+
+            <div class="settings-remote-stack">
+              <n-card title="自动调度" size="small" class="work-card settings-scheduler-card">
+                <n-form label-placement="top">
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="4">
+                      <n-form-item label="启用自动调度">
+                        <n-switch v-model:value="remoteForm.auto_scheduler.enabled" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="4">
+                      <n-form-item label="检查间隔（小时）">
+                        <n-input-number
+                          v-model:value="remoteForm.auto_scheduler.check_interval_hours"
+                          class="full-width"
+                          :min="1"
+                          :precision="0"
+                          :disabled="!remoteForm.auto_scheduler.enabled"
+                        />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="4">
+                      <n-form-item label="目标周期">
+                        <n-select
+                          v-model:value="remoteForm.auto_scheduler.week_offset"
+                          :options="schedulerWeekOptions"
+                          :disabled="!remoteForm.auto_scheduler.enabled"
+                        />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <n-form-item label="预期目录">
+                    <div class="scheduler-dir-editor">
+                      <n-input-group>
+                        <n-input
+                          v-model:value="newSchedulerDirectory"
+                          placeholder="例如 4G/FDD"
+                          :disabled="!remoteForm.auto_scheduler.enabled"
+                          @keydown.enter.prevent="addSchedulerDirectory"
+                        />
+                        <n-button :disabled="!remoteForm.auto_scheduler.enabled" @click="addSchedulerDirectory">
+                          添加
+                        </n-button>
+                      </n-input-group>
+                      <div class="scheduler-dir-tags">
+                        <n-tag
+                          v-for="(directory, index) in remoteForm.auto_scheduler.expected_directories"
+                          :key="`${directory}-${index}`"
+                          closable
+                          :disabled="!remoteForm.auto_scheduler.enabled"
+                          @close="removeSchedulerDirectory(index)"
+                        >
+                          {{ directory }}
+                        </n-tag>
+                        <n-tag v-if="remoteForm.auto_scheduler.expected_directories.length === 0" type="default">
+                          按实际 ZIP 目录检测
+                        </n-tag>
+                      </div>
                     </div>
-                  </div>
-                </n-form-item>
-                <p class="form-hint">自动调度会按文件名日期检查目标自然周 7 天；开启后会强制启用远程自动化和处理成功后删除源文件。</p>
+                  </n-form-item>
+                  <p class="form-hint">自动调度会按文件名日期检查目标自然周 7 天；开启后会强制启用远程自动化和处理成功后删除源文件。</p>
+                </n-form>
 
                 <div class="scheduler-status-panel">
                   <div class="scheduler-status-header">
@@ -250,15 +266,14 @@
                     </n-button>
                   </n-space>
                 </div>
-              </n-form>
 
-              <template #footer>
-                <n-space justify="end">
-                  <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
-                  <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
-                </n-space>
-              </template>
-            </n-card>
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存调度</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+            </div>
           </div>
         </n-tab-pane>
 

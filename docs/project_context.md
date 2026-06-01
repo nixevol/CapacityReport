@@ -612,3 +612,10 @@
 - `app/services/auto_scheduler.py` now keeps RJ directory status keys clean instead of prefixing them with `rj:` in the combined scheduler response.
 - `frontend/src/components/SettingsPanel.vue` strips any legacy `rj:` prefix before rendering the scheduler directory name, so the UI shows `RJ/2.6G/...` instead of `rj:RJ/2.6G/...`.
 - This is display-only cleanup; the underlying RJ directory detection and readiness logic were not changed.
+
+## 2026-06-01: Settings page split
+
+- `frontend/src/components/SettingsPanel.vue` splits the former combined connection page into a dedicated `数据库配置` tab and a separate `远程数据源` tab.
+- Database-related settings now stay together with `数据库配置` and `处理历史保留`; remote automation settings now own the FTP/SFTP fields, auto-delete toggle, scheduler configuration, and scheduler status panel.
+- `frontend/src/styles.css` now uses dedicated layout classes for the database and remote settings panes, with independent scrolling and responsive single-column stacking on narrower screens.
+- Verification performed: `cd frontend && npm run build` passed. Browser inspection on `http://127.0.0.1:9081/settings` confirmed the two new tabs render correctly, the remote panel shows its own configuration and scheduler cards, and horizontal overflow remained at `0`.

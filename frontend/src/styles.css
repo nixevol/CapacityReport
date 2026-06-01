@@ -1382,15 +1382,16 @@ select {
   overflow: hidden;
 }
 
-.settings-section-grid,
+.settings-database-panel,
+.settings-remote-grid,
 .settings-rules-grid {
   display: grid;
   align-items: start;
   gap: 18px;
 }
 
-.settings-section-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.settings-database-panel {
+  grid-template-columns: minmax(420px, 680px);
   height: 100%;
   min-height: 0;
   padding-right: 6px;
@@ -1400,25 +1401,45 @@ select {
   scrollbar-width: thin;
 }
 
-.settings-connection-stack {
+.settings-database-stack,
+.settings-remote-stack {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 18px;
 }
 
-.settings-section-grid::-webkit-scrollbar {
+.settings-remote-grid {
+  grid-template-columns: minmax(380px, 0.9fr) minmax(360px, 1.1fr);
+  height: 100%;
+  min-height: 0;
+  padding-right: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--td-scrollbar-color) transparent;
+  scrollbar-width: thin;
+}
+
+.settings-database-panel::-webkit-scrollbar,
+.settings-remote-grid::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.settings-section-grid::-webkit-scrollbar-thumb {
+.settings-database-panel::-webkit-scrollbar-thumb,
+.settings-remote-grid::-webkit-scrollbar-thumb {
   background: var(--td-scrollbar-color);
   border-radius: 8px;
 }
 
-.settings-section-grid::-webkit-scrollbar-track {
+.settings-database-panel::-webkit-scrollbar-track,
+.settings-remote-grid::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.settings-remote-card,
+.settings-scheduler-card {
+  min-width: 0;
 }
 
 .settings-rules-grid {
@@ -1482,10 +1503,6 @@ select {
   color: var(--td-text-color-placeholder);
   font-size: 12px;
   line-height: 20px;
-}
-
-.settings-compact-divider {
-  margin: 12px 0;
 }
 
 .scheduler-dir-editor {
@@ -1917,7 +1934,8 @@ select {
 
 /* ==================== Responsive ==================== */
 @media (max-width: 1200px) {
-  .settings-section-grid,
+  .settings-database-panel,
+  .settings-remote-grid,
   .settings-rules-grid {
     grid-template-columns: 1fr;
   }
