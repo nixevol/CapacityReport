@@ -606,3 +606,9 @@
 - `frontend/src/components/HistoryPanel.vue` keeps the processing log at the bottom of the task detail modal, and adds a `详情 / 文件` tab area above it. The file tab shows breadcrumb navigation, parent/refresh controls, directory/file type, size, modified time, and per-item download actions.
 - `frontend/src/types.ts` defines `HistoryFileEntry` and `HistoryFilesResponse`; `app/main.py` adds Chinese OpenAPI descriptions and examples for the new history file APIs.
 - Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, direct history file listing for `20260519_172434`, path traversal rejection, and single-file download of `log.txt` on a temporary local server all passed. Build output and Python caches were removed after verification.
+
+## 2026-06-01: RJ scheduler display cleanup
+
+- `app/services/auto_scheduler.py` now keeps RJ directory status keys clean instead of prefixing them with `rj:` in the combined scheduler response.
+- `frontend/src/components/SettingsPanel.vue` strips any legacy `rj:` prefix before rendering the scheduler directory name, so the UI shows `RJ/2.6G/...` instead of `rj:RJ/2.6G/...`.
+- This is display-only cleanup; the underlying RJ directory detection and readiness logic were not changed.

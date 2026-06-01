@@ -229,7 +229,7 @@
                   <p class="form-hint">{{ schedulerStatus?.last_message || '自动调度状态尚未加载' }}</p>
                   <div v-if="schedulerDirectoryRows.length > 0" class="scheduler-directory-list">
                     <div v-for="row in schedulerDirectoryRows" :key="row.name" class="scheduler-directory-row">
-                      <span class="scheduler-directory-name">{{ row.name }}</span>
+                      <span class="scheduler-directory-name">{{ row.displayName }}</span>
                       <n-tag size="small" :type="row.skipped ? 'info' : row.ready ? 'success' : 'warning'">
                         {{ row.skipped ? '已停推' : row.ready ? '就绪' : `缺 ${row.missing_days.length} 天` }}
                       </n-tag>
@@ -560,6 +560,7 @@ const schedulerDirectoryRows = computed(() => {
   const directoryStatus = schedulerStatus.value?.directory_status || {};
   return Object.entries(directoryStatus).map(([name, status]) => ({
     name,
+    displayName: name.replace(/^rj:/i, ''),
     ...status
   }));
 });

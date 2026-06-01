@@ -627,7 +627,7 @@ class AutoScheduler:
             }
             combined.update(
                 {
-                    f"rj:{name}": item.to_dict()
+                    name: item.to_dict()
                     for name, item in rj_status.items()
                 }
             )
