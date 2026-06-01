@@ -1,5 +1,4 @@
 import zipfile
-from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -10,15 +9,10 @@ from starlette.background import BackgroundTask
 
 from app import state
 from app.config import CACHE_DIR
-from app.utils.files import format_size, get_dir_size
+from app.utils.files import format_size, get_dir_size, remove_file_safely
 
 
 router = APIRouter(tags=["history"])
-
-
-def _remove_file(path: Path) -> None:
-    with suppress(OSError):
-        path.unlink()
 
 
 def _safe_filename_part(value: str) -> str:
@@ -202,14 +196,14 @@ async def download_history(record_id: str = Body(..., embed=True)):
     try:
         _zip_directory(work_dir, archive_path)
     except Exception:
-        _remove_file(archive_path)
+        remove_file_safely(archive_path)
         raise
 
     return FileResponse(
         path=str(archive_path),
         filename=filename,
         media_type="application/zip",
-        background=BackgroundTask(_remove_file, archive_path),
+        background=BackgroundTask(remove_file_safely, archive_path),
     )
 
 
@@ -238,12 +232,12 @@ async def download_history_file(
     try:
         _zip_history_item(target_path, archive_path)
     except Exception:
-        _remove_file(archive_path)
+        remove_file_safely(archive_path)
         raise
 
     return FileResponse(
         path=str(archive_path),
         filename=filename,
         media_type="application/zip",
-        background=BackgroundTask(_remove_file, archive_path),
+        background=BackgroundTask(remove_file_safely, archive_path),
     )

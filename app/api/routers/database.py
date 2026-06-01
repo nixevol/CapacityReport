@@ -1,5 +1,4 @@
 import re
-from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,15 +11,11 @@ from starlette.background import BackgroundTask
 from app import state
 from app.config import CACHE_DIR
 from app.database import DatabaseManager
+from app.utils.files import remove_file_safely
 
 
 router = APIRouter(tags=["database"])
 INVALID_SHEET_NAME_CHARS = re.compile(r"[:\\/?*\[\]]")
-
-
-def _remove_file(path: Path) -> None:
-    with suppress(OSError):
-        path.unlink()
 
 
 def _resolve_requested_tables(
@@ -227,12 +222,12 @@ async def download_table(
                     df.to_excel(writer, sheet_name=_make_sheet_name(name, used_sheet_names), index=False)
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     except Exception:
-        _remove_file(filepath)
+        remove_file_safely(filepath)
         raise
 
     return FileResponse(
         path=str(filepath),
         filename=filename,
         media_type=media_type,
-        background=BackgroundTask(_remove_file, filepath),
+        background=BackgroundTask(remove_file_safely, filepath),
     )

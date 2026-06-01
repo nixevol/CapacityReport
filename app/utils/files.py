@@ -1,6 +1,13 @@
 from pathlib import Path
 
 
+def remove_file_safely(path: Path) -> None:
+    try:
+        path.unlink()
+    except OSError:
+        pass
+
+
 def get_dir_size(path: Path) -> int:
     total_size = 0
     try:
@@ -26,4 +33,3 @@ def format_size(size_bytes: int) -> str:
             return f"{value:.2f} {unit}"
         value /= 1024.0
     return f"{value:.2f} PB"
-

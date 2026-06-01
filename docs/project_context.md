@@ -632,3 +632,9 @@
 - `app/api/routers/task_runtime.py` centralizes shared task-stage updates, processing license log output, and safe history-retention cleanup for manual processing and remote processing routes.
 - `app/api/routers/tasks.py` and `app/api/routers/remote.py` now reuse the shared helpers instead of carrying duplicate `_set_task_stage` and `_log_license_check` implementations.
 - Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
+
+## 2026-06-01: Download cleanup helper
+
+- `app/utils/files.py` now provides `remove_file_safely()` for best-effort temporary file cleanup.
+- Database table export and history archive download routes now reuse this helper instead of carrying duplicate private `_remove_file()` functions.
+- Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
