@@ -60,6 +60,24 @@ export interface HistoryDetail extends HistoryRecord {
   logs: string[];
 }
 
+export interface HistoryFileEntry {
+  name: string;
+  path: string;
+  type: 'dir' | 'file';
+  size: number;
+  size_formatted: string;
+  modified: string;
+  modified_formatted: string;
+}
+
+export interface HistoryFilesResponse {
+  success: boolean;
+  record_id: string;
+  path: string;
+  parent_path: string | null;
+  entries: HistoryFileEntry[];
+}
+
 export interface CacheSize {
   success: boolean;
   size_bytes: number;

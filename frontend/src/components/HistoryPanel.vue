@@ -37,40 +37,116 @@
     <n-modal v-model:show="detailVisible" preset="card" class="history-detail-modal" title="任务详情">
       <n-empty v-if="!detail" description="暂无详情" />
       <n-space v-else vertical size="large">
-        <div class="detail-info-list">
-          <div class="detail-info-row">
-            <span class="detail-info-label">任务 ID</span>
-            <span class="detail-info-value monospace">{{ detail.id }}</span>
-          </div>
-          <div class="detail-info-row">
-            <span class="detail-info-label">状态</span>
-            <span class="detail-info-value">{{ statusText(detail.status) }}</span>
-          </div>
-          <div class="detail-info-row">
-            <span class="detail-info-label">文件数</span>
-            <span class="detail-info-value">{{ detail.file_count }}</span>
-          </div>
-          <div class="detail-info-row">
-            <span class="detail-info-label">耗时</span>
-            <span class="detail-info-value">{{ formatElapsed(detail.elapsed_time) }}</span>
-          </div>
-          <div class="detail-info-row">
-            <span class="detail-info-label">创建时间</span>
-            <span class="detail-info-value monospace">{{ formatDate(detail.timestamp) }}</span>
-          </div>
-          <div class="detail-info-row">
-            <span class="detail-info-label">占用</span>
-            <span class="detail-info-value" :class="{ muted: recordSizeLoading }">{{ recordSize }}</span>
-          </div>
-          <div class="detail-info-row">
-            <span class="detail-info-label">工作目录</span>
-            <span class="detail-info-value path-value">{{ detail.work_dir }}</span>
-          </div>
-          <div v-if="detail.error" class="detail-info-row error-row">
-            <span class="detail-info-label">错误</span>
-            <span class="detail-info-value">{{ detail.error }}</span>
-          </div>
-        </div>
+        <n-tabs v-model:value="detailTab" type="segment" animated>
+          <n-tab-pane name="detail" tab="详情">
+            <div class="detail-info-list">
+              <div class="detail-info-row">
+                <span class="detail-info-label">任务 ID</span>
+                <span class="detail-info-value monospace">{{ detail.id }}</span>
+              </div>
+              <div class="detail-info-row">
+                <span class="detail-info-label">状态</span>
+                <span class="detail-info-value">{{ statusText(detail.status) }}</span>
+              </div>
+              <div class="detail-info-row">
+                <span class="detail-info-label">文件数</span>
+                <span class="detail-info-value">{{ detail.file_count }}</span>
+              </div>
+              <div class="detail-info-row">
+                <span class="detail-info-label">耗时</span>
+                <span class="detail-info-value">{{ formatElapsed(detail.elapsed_time) }}</span>
+              </div>
+              <div class="detail-info-row">
+                <span class="detail-info-label">创建时间</span>
+                <span class="detail-info-value monospace">{{ formatDate(detail.timestamp) }}</span>
+              </div>
+              <div class="detail-info-row">
+                <span class="detail-info-label">占用</span>
+                <span class="detail-info-value" :class="{ muted: recordSizeLoading }">{{ recordSize }}</span>
+              </div>
+              <div class="detail-info-row">
+                <span class="detail-info-label">工作目录</span>
+                <span class="detail-info-value path-value">{{ detail.work_dir }}</span>
+              </div>
+              <div v-if="detail.error" class="detail-info-row error-row">
+                <span class="detail-info-label">错误</span>
+                <span class="detail-info-value">{{ detail.error }}</span>
+              </div>
+            </div>
+          </n-tab-pane>
+          <n-tab-pane name="files" tab="文件">
+            <div class="history-file-browser">
+              <div class="history-file-toolbar">
+                <div class="history-file-breadcrumb">
+                  <button type="button" class="breadcrumb-link" @click="loadHistoryFiles('')">根目录</button>
+                  <template v-for="crumb in fileBreadcrumbs" :key="crumb.path">
+                    <n-icon class="breadcrumb-separator"><ChevronForwardOutline /></n-icon>
+                    <button type="button" class="breadcrumb-link" @click="loadHistoryFiles(crumb.path)">
+                      {{ crumb.name }}
+                    </button>
+                  </template>
+                </div>
+                <div class="history-file-toolbar-actions">
+                  <n-button size="small" tertiary :disabled="fileParentPath === null || fileLoading" @click="loadHistoryFiles(fileParentPath || '')">
+                    <template #icon><n-icon><ArrowBackOutline /></n-icon></template>
+                    上一级
+                  </n-button>
+                  <n-button size="small" tertiary :loading="fileLoading" @click="reloadHistoryFiles">
+                    <template #icon><n-icon><RefreshOutline /></n-icon></template>
+                    刷新
+                  </n-button>
+                </div>
+              </div>
+
+              <n-spin :show="fileLoading">
+                <n-empty v-if="!fileEntries.length && !fileLoading" description="当前目录为空" />
+                <div v-else class="history-file-list">
+                  <div v-for="entry in fileEntries" :key="entry.path" class="history-file-row">
+                    <div class="history-file-main">
+                      <n-icon class="history-file-icon" :class="entry.type">
+                        <FolderOpenOutline v-if="entry.type === 'dir'" />
+                        <DocumentOutline v-else />
+                      </n-icon>
+                      <div class="history-file-text">
+                        <button
+                          type="button"
+                          class="history-file-name"
+                          :disabled="entry.type !== 'dir'"
+                          @click="entry.type === 'dir' && loadHistoryFiles(entry.path)"
+                        >
+                          {{ entry.name }}
+                        </button>
+                        <span class="history-file-meta">
+                          {{ entry.type === 'dir' ? '目录' : '文件' }} · {{ entry.size_formatted }} · {{ entry.modified_formatted }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="history-file-actions">
+                      <n-button
+                        v-if="entry.type === 'dir'"
+                        size="small"
+                        tertiary
+                        @click="loadHistoryFiles(entry.path)"
+                      >
+                        打开
+                      </n-button>
+                      <n-button
+                        size="small"
+                        tertiary
+                        :loading="downloadingFilePath === entry.path"
+                        :disabled="detailDownloadDisabled"
+                        @click="downloadHistoryItem(entry)"
+                      >
+                        <template #icon><n-icon><DownloadOutline /></n-icon></template>
+                        下载
+                      </n-button>
+                    </div>
+                  </div>
+                </div>
+              </n-spin>
+            </div>
+          </n-tab-pane>
+        </n-tabs>
 
         <div>
           <div class="section-label log-section-header">
@@ -94,12 +170,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDialog, useMessage } from 'naive-ui';
-import { CopyOutline, DownloadOutline, FileTrayOutline, RefreshOutline, TrashOutline } from '@vicons/ionicons5';
+import {
+  ArrowBackOutline,
+  ChevronForwardOutline,
+  CopyOutline,
+  DocumentOutline,
+  DownloadOutline,
+  FileTrayOutline,
+  FolderOpenOutline,
+  RefreshOutline,
+  TrashOutline
+} from '@vicons/ionicons5';
 
 import { apiGet, apiPost, download as downloadFile } from '../api/client';
-import type { CacheSize, HistoryDetail, HistoryRecord } from '../types';
+import type { CacheSize, HistoryDetail, HistoryFileEntry, HistoryFilesResponse, HistoryRecord } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { toColoredLogLines } from '../composables/logLines';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
@@ -114,12 +200,33 @@ const recordSize = ref('-');
 const recordSizeLoading = ref(false);
 const loading = ref(false);
 const downloadingRecordId = ref<string | null>(null);
+const detailTab = ref<'detail' | 'files'>('detail');
+const fileEntries = ref<HistoryFileEntry[]>([]);
+const fileCurrentPath = ref('');
+const fileParentPath = ref<string | null>(null);
+const fileLoading = ref(false);
+const downloadingFilePath = ref<string | null>(null);
 let recordSizeToken = 0;
+let fileListToken = 0;
 
 const totalSizeText = computed(() => `总占用: ${cacheSize.value?.size_formatted || '计算中...'}`);
 const hasRecords = computed(() => records.value.length > 0);
 const detailLogText = computed(() => detail.value?.logs?.join('\n') || '');
 const detailLogLines = computed(() => toColoredLogLines(detailLogText.value));
+const detailDownloadDisabled = computed(() => {
+  const status = detail.value?.status;
+  return status === 'pending' || status === 'processing';
+});
+const fileBreadcrumbs = computed(() => {
+  let currentPath = '';
+  return fileCurrentPath.value
+    .split('/')
+    .filter(Boolean)
+    .map(name => {
+      currentPath = currentPath ? `${currentPath}/${name}` : name;
+      return { name, path: currentPath };
+    });
+});
 
 onMounted(() => {
   setPageHeader({
@@ -144,6 +251,12 @@ onBeforeUnmount(() => {
   resetPageHeader();
 });
 
+watch(detailTab, tab => {
+  if (tab === 'files' && detail.value && fileEntries.value.length === 0 && !fileLoading.value) {
+    void loadHistoryFiles(fileCurrentPath.value);
+  }
+});
+
 async function loadHistory() {
   loading.value = true;
   try {
@@ -163,11 +276,21 @@ async function loadHistory() {
 async function openDetail(recordId: string) {
   try {
     detail.value = await apiPost<HistoryDetail>('/api/history/detail', { record_id: recordId });
+    detailTab.value = 'detail';
+    resetFileBrowser();
     detailVisible.value = true;
     void loadRecordSize(recordId);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载任务详情失败');
   }
+}
+
+function resetFileBrowser() {
+  fileEntries.value = [];
+  fileCurrentPath.value = '';
+  fileParentPath.value = null;
+  downloadingFilePath.value = null;
+  fileListToken += 1;
 }
 
 async function downloadHistory(record: HistoryRecord) {
@@ -187,6 +310,59 @@ async function downloadHistory(record: HistoryRecord) {
     message.error(error instanceof Error ? error.message : '下载历史数据失败');
   } finally {
     downloadingRecordId.value = null;
+  }
+}
+
+async function loadHistoryFiles(path: string) {
+  if (!detail.value) return;
+
+  const currentToken = ++fileListToken;
+  fileLoading.value = true;
+  try {
+    const result = await apiPost<HistoryFilesResponse>('/api/history/files', {
+      record_id: detail.value.id,
+      path
+    });
+    if (currentToken !== fileListToken) return;
+    fileEntries.value = result.entries;
+    fileCurrentPath.value = result.path;
+    fileParentPath.value = result.parent_path;
+  } catch (error) {
+    if (currentToken !== fileListToken) return;
+    message.error(error instanceof Error ? error.message : '加载历史文件失败');
+  } finally {
+    if (currentToken === fileListToken) {
+      fileLoading.value = false;
+    }
+  }
+}
+
+function reloadHistoryFiles() {
+  void loadHistoryFiles(fileCurrentPath.value);
+}
+
+async function downloadHistoryItem(entry: HistoryFileEntry) {
+  if (!detail.value) return;
+  if (detailDownloadDisabled.value) {
+    message.warning('任务尚未完成，暂不能下载历史数据');
+    return;
+  }
+
+  downloadingFilePath.value = entry.path;
+  try {
+    const fallbackFilename = entry.type === 'dir' ? `${entry.name}.zip` : entry.name;
+    const result = await downloadFile(
+      '/api/history/file/download',
+      { record_id: detail.value.id, path: entry.path },
+      fallbackFilename
+    );
+    if (result.saved) {
+      showDownloadCompleteDialog(dialog, fallbackFilename, result.path);
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '下载历史文件失败');
+  } finally {
+    downloadingFilePath.value = null;
   }
 }
 

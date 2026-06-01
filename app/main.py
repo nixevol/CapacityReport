@@ -164,6 +164,16 @@ OPENAPI_OPERATION_DOCS = {
         "description": "将历史记录对应工作目录压缩为 ZIP 后下载，下载响应完成后自动清理临时压缩包。",
         "example": {"record_id": "20260519_172457"},
     },
+    ("post", "/api/history/files"): {
+        "summary": "浏览历史文件",
+        "description": "列出指定历史记录工作目录下某个相对目录的文件和子目录，返回类型、大小和修改时间。",
+        "example": {"record_id": "20260519_172457", "path": "4G/FDD"},
+    },
+    ("post", "/api/history/file/download"): {
+        "summary": "下载历史单个文件或目录",
+        "description": "下载历史工作目录内的单个文件；如果目标是目录，则先压缩该目录后下载，并在响应完成后清理临时压缩包。",
+        "example": {"record_id": "20260519_172457", "path": "4G/FDD/CapacityReportData4G_202605110000_202605120000.zip"},
+    },
     ("post", "/api/history/size"): {
         "summary": "查询历史目录大小",
         "description": "统计指定历史记录工作目录的文件数和占用空间。",

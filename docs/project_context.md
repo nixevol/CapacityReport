@@ -599,3 +599,10 @@
 - `frontend/src/router.ts` now lazy-loads `FileWorkflow.vue`, matching the other main pages and keeping the data processing page out of the base entry chunk until the route is opened.
 - `frontend/src/AppShell.vue` now lazy-loads `LoginView.vue` and the hidden license activation dialog; the dialog UI and activation API flow moved to `frontend/src/components/LicenseActivationModal.vue`.
 - Build verification: `npm run build` passed. The base `index` chunk dropped from about `572 kB` to about `461 kB`; the remaining large chunks are still `ApiDocs` (`swagger-ui-dist`) and `ScriptPanel` (`monaco-editor`).
+
+## 2026-06-01: History detail file browser
+
+- `app/api/routers/history.py` adds `/api/history/files` for browsing a history work directory by safe relative path, and `/api/history/file/download` for downloading one file directly or one directory as a temporary ZIP. Both paths are constrained under the record's `cache/` work directory; download still rejects pending/processing records.
+- `frontend/src/components/HistoryPanel.vue` keeps the processing log at the bottom of the task detail modal, and adds a `详情 / 文件` tab area above it. The file tab shows breadcrumb navigation, parent/refresh controls, directory/file type, size, modified time, and per-item download actions.
+- `frontend/src/types.ts` defines `HistoryFileEntry` and `HistoryFilesResponse`; `app/main.py` adds Chinese OpenAPI descriptions and examples for the new history file APIs.
+- Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, direct history file listing for `20260519_172434`, path traversal rejection, and single-file download of `log.txt` on a temporary local server all passed. Build output and Python caches were removed after verification.
