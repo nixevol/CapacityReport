@@ -1,5 +1,12 @@
 # 项目上下文记录
 
+## 2026-06-01：Naive UI 自动按需导入
+
+- `frontend/vite.config.ts` 增加 `unplugin-vue-components`、`unplugin-auto-import` 和 `NaiveUiResolver`，模板中的 `n-*` 组件改为构建期自动按需导入；`dts` 关闭以避免生成额外类型文件。
+- `frontend/src/main.ts` 移除 `app.use(naive)` 全量注册，保留脚本中对 `useMessage`、`useDialog`、`darkTheme` 等 Naive UI API 的显式导入。
+- 已验证 `npm run build` 通过：主入口 JS 从约 1497KB 降到约 572KB，gzip 从约 415KB 降到约 171KB；剩余大 chunk 主要是已懒加载的 Monaco `ScriptPanel` 和 Swagger `ApiDocs`。
+- 注意：`npm install` 报告 2 个 moderate audit 项，未执行 `npm audit fix --force`，避免自动升级引入额外风险。
+
 ## 2026-06-01：前端非首页路由懒加载
 
 - `frontend/src/router.ts` 保留首屏 `FileWorkflow` 同步加载，将 `HistoryPanel`、`DatabasePanel`、`SettingsPanel` 改为动态导入，和已有的 `ScriptPanel`、`ApiDocs` 保持一致。

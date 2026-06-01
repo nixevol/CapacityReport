@@ -1,5 +1,4 @@
 import { createApp } from 'vue';
-import naive from 'naive-ui';
 
 import App from './App.vue';
 import { router } from './router';
@@ -14,7 +13,7 @@ if (isTauriRuntime()) {
   });
 }
 
-createApp(App).use(router).use(naive).mount('#app');
+createApp(App).use(router).mount('#app');
 
 function isTauriRuntime(): boolean {
   const win = window as Window & {
