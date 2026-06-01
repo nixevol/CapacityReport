@@ -11,6 +11,9 @@
   "scarfSettings": {
     "enabled": false
   },
+  "overrides": {
+    "dompurify": "3.4.7"
+  },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
     "@vicons/ionicons5": "^0.13.0",

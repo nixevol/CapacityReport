@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-06-01：修复前端 npm audit moderate 漏洞
+
+- `frontend/package.json` 增加 `overrides.dompurify=3.4.7`，将 `monaco-editor@0.55.1` 间接依赖的 vulnerable `dompurify@3.2.7` 覆盖到安全版本。
+- 未执行 `npm audit fix --force`，因为 npm 建议的自动修复会把 Monaco 降级到 `0.53.0`，属于破坏性方向；override 保持 Monaco 版本不变，风险更小。
+- 已验证 `npm audit --json` 返回 0 漏洞，`npm ls monaco-editor dompurify` 显示 `monaco-editor@0.55.1 -> dompurify@3.4.7 overridden`，`npm run build` 通过。
+
 ## 2026-06-01：Naive UI 自动按需导入
 
 - `frontend/vite.config.ts` 增加 `unplugin-vue-components`、`unplugin-auto-import` 和 `NaiveUiResolver`，模板中的 `n-*` 组件改为构建期自动按需导入；`dts` 关闭以避免生成额外类型文件。
