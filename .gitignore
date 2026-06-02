@@ -35,6 +35,7 @@ dist/
 cache/
 logs/
 uploads/
+platform/
 src-tauri/target/
 src-tauri/binaries/
 CapacityReportData/

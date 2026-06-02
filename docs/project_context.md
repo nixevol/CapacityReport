@@ -656,3 +656,9 @@
 - `app/api/routers/script.py` now reuses the shared `set_task_stage()` helper for manual SQL script task status updates.
 - Script execution status entries now include the same `stage` field shape used by processing and remote tasks while preserving the existing status values.
 - Verification performed: `.venv\Scripts\python.exe -m compileall app`, `npm run build`, and `cargo check --manifest-path src-tauri\Cargo.toml` with a temporary sidecar placeholder all passed. Generated build output, Python caches, and temporary Tauri sidecar files were removed after verification.
+
+## 2026-06-02: Platform architecture planning
+
+- `docs/platform_architecture_plan.md` records the planned standalone Web data-processing platform architecture, module boundaries, submodule strategy, data flow, storage/history model, and staged roadmap.
+- The future platform workspace is reserved as `platform/` under the current repository root and is ignored by CapaReport through `.gitignore` so exploratory platform development does not affect this project.
+- The design intentionally treats CapaReport as a reference implementation only; reusable ideas should be extracted by responsibility rather than copied into one large module.
