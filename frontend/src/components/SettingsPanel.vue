@@ -4,10 +4,10 @@
 
     <n-card size="small" class="work-card settings-tabs-card">
       <n-tabs type="line" animated class="settings-tabs">
-        <n-tab-pane name="database" tab="数据库配置">
+        <n-tab-pane name="database" tab="输出数据">
           <div class="settings-database-panel">
             <div class="settings-database-stack">
-              <n-card title="数据库配置" size="small" class="work-card">
+              <n-card title="MySQL配置" size="small" class="work-card">
                 <n-form label-placement="top">
                   <n-grid :cols="12" :x-gap="12">
                     <n-gi :span="8">
@@ -83,7 +83,7 @@
 
         <n-tab-pane name="remote" tab="远程数据源">
           <div class="settings-remote-panel">
-            <n-card title="远程数据源配置" size="small" class="work-card settings-remote-card">
+            <n-card title="数据推送信息" size="small" class="work-card settings-remote-card">
               <n-form label-placement="top">
                 <div class="remote-connection-row">
                   <n-form-item label="协议">
