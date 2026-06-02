@@ -662,3 +662,4 @@
 - `docs/platform_architecture_plan.md` records the planned standalone Web data-processing platform architecture, module boundaries, submodule strategy, data flow, storage/history model, and staged roadmap.
 - The future platform workspace is reserved as `platform/` under the current repository root and is ignored by CapaReport through `.gitignore` so exploratory platform development does not affect this project.
 - The design intentionally treats CapaReport as a reference implementation only; reusable ideas should be extracted by responsibility rather than copied into one large module.
+- `platform/` is explicitly isolated from CapaReport: it must not use this repository's virtual environment, dependency files such as `requirements.txt`, frontend packages such as `frontend/node_modules`, build scripts, configs, runtime data, or source modules.

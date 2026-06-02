@@ -6,6 +6,22 @@
 
 当前 CapaReport 项目只作为参考和代码借鉴来源。新平台前期放在当前项目根目录的 `platform/` 目录下开发，该目录已加入 CapaReport 的 `.gitignore`，避免影响当前项目提交。
 
+## 隔离边界
+
+`platform/` 是完全独立的新平台工作区，只是临时放在当前项目根目录下，方便开发时查看和参考 CapaReport 的现有实现。该目录下的所有内容都不属于 CapaReport 项目。
+
+必须遵守以下边界：
+
+- 不使用 CapaReport 的 Python 虚拟环境，例如 `.venv/`、`venv/`。
+- 不使用 CapaReport 的 Python 依赖文件，例如 `requirements.txt`。
+- 不使用 CapaReport 的启动脚本、构建脚本或运行配置。
+- 不使用 CapaReport 的前端依赖目录，例如 `frontend/node_modules/`。
+- 不使用 CapaReport 的前端构建配置或包管理文件，例如 `frontend/package.json`、`frontend/package-lock.json`、`frontend/vite.config.ts`。
+- 不从 CapaReport 的 `app/`、`frontend/`、`src-tauri/` 等目录直接导入代码。
+- 不读取或依赖 CapaReport 的 `Configure.json`、`ReportScript.sql`、缓存、日志、授权文件或本地运行数据。
+- 不把 `platform/` 的代码、依赖、配置或生成物提交到 CapaReport 仓库。
+- 如需复用思路，只能按模块职责重新实现或后续抽取为独立仓库，不能形成对当前项目目录的运行时依赖。
+
 ## 设计原则
 
 - 只做 Web 平台，不再引入桌面端打包形态。
