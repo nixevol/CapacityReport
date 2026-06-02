@@ -4,7 +4,7 @@
 
     <n-card size="small" class="work-card settings-tabs-card">
       <n-tabs type="line" animated class="settings-tabs">
-        <n-tab-pane name="database" tab="输出数据">
+        <n-tab-pane name="database" tab="数据库">
           <div class="settings-database-panel">
             <div class="settings-database-stack">
               <n-card title="MySQL配置" size="small" class="work-card">
