@@ -234,7 +234,7 @@ const logContainer = ref<HTMLElement | null>(null);
 const licenseModalVisible = ref(false);
 const activationCode = ref('');
 const activationLoading = ref(false);
-const activationKeyLabel = ref('2026/06/20');
+const activationKeyLabel = ref('2026/12/30');
 const licenseErrorMessage = ref('当前数据日期已超过授权到期日期，请输入激活码延长 30 天。');
 const taskMode = ref<'local' | 'remote' | 'unknown'>('unknown');
 let activationRetry: (() => Promise<void>) | null = null;

@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from app import state
 from app.config import CACHE_DIR, AutoSchedulerConfig
+from app.services.platform import make_source_downloader
 from app.services.remote_download import RemoteDataDownloader, RemoteFileInfo
 from app.utils.file_dates import parse_file_date_range, required_week_days
 
@@ -186,7 +187,7 @@ class AutoScheduler:
             return self._trigger_processing(target_dates, ready_flag, manual)
 
         target_days = required_week_days(scheduler.week_offset)
-        downloader = RemoteDataDownloader(remote_config)
+        downloader = make_source_downloader(app_config)
         rj_config = app_config.rj_data.normalized()
         rj_directories = set(rj_config.weekly_directories) if rj_config.enabled else set()
 

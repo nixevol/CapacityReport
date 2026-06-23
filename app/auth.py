@@ -123,12 +123,6 @@ def resolve_access_context(request: Request) -> AuthContext | None:
     if payload:
         return AuthContext(kind="jwt", payload=payload)
 
-    from app.services.api_tokens import verify_api_token
-
-    api_payload = verify_api_token(token)
-    if api_payload:
-        return AuthContext(kind="api_token", payload=api_payload)
-
     return None
 
 

@@ -4,6 +4,78 @@
 
     <n-card size="small" class="work-card settings-tabs-card">
       <n-tabs type="line" animated class="settings-tabs">
+        <n-tab-pane name="backend" tab="数据源 / 仓库">
+          <div class="settings-database-panel">
+            <div class="settings-database-stack">
+              <n-card title="后端类型" size="small" class="work-card">
+                <n-form label-placement="top">
+                  <n-form-item label="数据源">
+                    <n-radio-group v-model:value="sourceType">
+                      <n-radio-button value="sftp">SFTP</n-radio-button>
+                      <n-radio-button value="ftp">FTP</n-radio-button>
+                      <n-radio-button value="metrix">Metrix 存储平台</n-radio-button>
+                    </n-radio-group>
+                  </n-form-item>
+                  <n-form-item label="数据仓库">
+                    <n-radio-group v-model:value="warehouseType">
+                      <n-radio-button value="mysql">MySQL</n-radio-button>
+                      <n-radio-button value="metrix">Metrix 数据库平台</n-radio-button>
+                    </n-radio-group>
+                  </n-form-item>
+                  <p class="form-hint">两侧可独立选择：源用 FTP/SFTP 或 Metrix 存储平台；仓库用本地 MySQL 或 Metrix 数据库平台。选 Metrix 时在下方填写连接；选 FTP/SFTP 或 MySQL 时在对应标签页填写。源目录在「远程数据源」标签页的「远程目录」。</p>
+                </n-form>
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingBackend" @click="saveBackend">保存类型</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+
+              <n-card title="Metrix 连接（存储平台 / 数据库平台）" size="small" class="work-card">
+                <n-form label-placement="top">
+                  <n-form-item label="平台地址 (api_base)">
+                    <n-input v-model:value="metrixForm.base_url" placeholder="http://host.docker.internal:8000" />
+                  </n-form-item>
+                  <n-form-item label="API Token">
+                    <n-input v-model:value="metrixForm.token" type="password" show-password-on="click" placeholder="mtx_..." />
+                  </n-form-item>
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="6">
+                      <n-form-item label="储存连接 ID">
+                        <n-input v-model:value="metrixForm.storage_id" placeholder="stg_..." />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="6">
+                      <n-form-item label="数据库连接 ID">
+                        <n-input v-model:value="metrixForm.database_conn_id" placeholder="db_..." />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="8">
+                      <n-form-item label="目标库/Schema">
+                        <n-input v-model:value="metrixForm.target_database" placeholder="连接已指定库时可空" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="4">
+                      <n-form-item label="最近 N 天回退">
+                        <n-input-number v-model:value="metrixForm.recent_days" class="full-width" :min="1" :precision="0" />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <p class="form-hint">仅当数据源或仓库选择 Metrix 时使用。存储平台用 storage_id，数据库平台用 database_conn_id，二者共用地址与 Token。</p>
+                </n-form>
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingMetrix" @click="saveMetrix">保存连接</n-button>
+                    <n-button :loading="testingRemote" @click="testRemote">测试储存</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+            </div>
+          </div>
+        </n-tab-pane>
+
         <n-tab-pane name="database" tab="数据库">
           <div class="settings-database-panel">
             <div class="settings-database-stack">
@@ -46,7 +118,7 @@
                 </template>
               </n-card>
 
-              <n-card title="处理历史保留" size="small" class="work-card">
+              <n-card title="处理历史保留" size="small" class="work-card work-card-narrow">
                 <n-form label-placement="top">
                   <n-grid :cols="12" :x-gap="12">
                     <n-gi :span="6">
@@ -408,11 +480,6 @@
           </div>
         </n-tab-pane>
 
-        <n-tab-pane name="api-token" tab="API Token">
-          <div class="settings-token-panel">
-            <ApiTokenManager embedded />
-          </div>
-        </n-tab-pane>
       </n-tabs>
     </n-card>
   </div>
@@ -428,13 +495,13 @@ import type {
   ApiMessage,
   AppConfig,
   HistoryRetentionConfig,
+  MetrixConfig,
   RemoteAutoSchedulerConfig,
   RemoteDataConfig,
   RemoteSchedulerStatus
 } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
-import ApiTokenManager from './ApiTokenManager.vue';
 
 interface ExtractFieldConfig {
   Field: string;
@@ -455,6 +522,10 @@ const loadingSchedulerStatus = ref(false);
 const triggeringScheduler = ref(false);
 const savingMysql = ref(false);
 const savingRemote = ref(false);
+const savingBackend = ref(false);
+const savingMetrix = ref(false);
+const sourceType = ref<'ftp' | 'sftp' | 'metrix'>('sftp');
+const warehouseType = ref<'mysql' | 'metrix'>('mysql');
 const savingHistoryRetention = ref(false);
 const savingSheetFilter = ref(false);
 const savingExtractFields = ref(false);
@@ -492,6 +563,16 @@ const remoteForm = reactive<RemoteDataConfig>({
     expected_directories: [],
     week_offset: 0
   }
+});
+
+const metrixForm = reactive<MetrixConfig>({
+  base_url: 'http://host.docker.internal:8000',
+  token: '',
+  storage_id: '',
+  database_conn_id: '',
+  target_database: '',
+  recent_days: 7,
+  data_dir_to_table: { '4G': '4G_UD', '5G': '5G_UD' }
 });
 
 const historyRetentionForm = reactive<HistoryRetentionConfig>({
@@ -606,6 +687,17 @@ async function loadConfig() {
   try {
     const config = await apiGet<AppConfig>('/api/config/full');
     configUpdate.value = config.update;
+    sourceType.value = config.source_type || 'sftp';
+    warehouseType.value = config.warehouse_type || 'mysql';
+    if (config.metrix) {
+      metrixForm.base_url = config.metrix.base_url || '';
+      metrixForm.token = config.metrix.token || '';
+      metrixForm.storage_id = config.metrix.storage_id || '';
+      metrixForm.database_conn_id = config.metrix.database_conn_id || '';
+      metrixForm.target_database = config.metrix.target_database || '';
+      metrixForm.recent_days = Number(config.metrix.recent_days) || 7;
+      metrixForm.data_dir_to_table = config.metrix.data_dir_to_table || { '4G': '4G_UD', '5G': '5G_UD' };
+    }
     mysqlForm.host = config.mysql.host;
     mysqlForm.port = config.mysql.port;
     mysqlForm.user = config.mysql.user;
@@ -630,6 +722,42 @@ function updateRemoteProtocol(value: string) {
   }
   if (value === 'ftp' && (!remoteForm.port || remoteForm.port === 22)) {
     remoteForm.port = 21;
+  }
+}
+
+async function saveBackend() {
+  savingBackend.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/backend', {
+      source_type: sourceType.value,
+      warehouse_type: warehouseType.value
+    });
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || '后端类型已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存后端类型失败');
+  } finally {
+    savingBackend.value = false;
+  }
+}
+
+async function saveMetrix() {
+  if (!metrixForm.base_url) {
+    message.warning('请填写平台地址');
+    return;
+  }
+  savingMetrix.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/metrix', {
+      ...metrixForm,
+      recent_days: Math.max(Number(metrixForm.recent_days) || 7, 1)
+    });
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || 'Metrix 连接已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存 Metrix 连接失败');
+  } finally {
+    savingMetrix.value = false;
   }
 }
 

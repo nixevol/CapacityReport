@@ -663,3 +663,27 @@
 - The future platform workspace is reserved as `platform/` under the current repository root and is ignored by CapaReport through `.gitignore` so exploratory platform development does not affect this project.
 - The design intentionally treats CapaReport as a reference implementation only; reusable ideas should be extracted by responsibility rather than copied into one large module.
 - `platform/` is explicitly isolated from CapaReport: it must not use this repository's virtual environment, dependency files such as `requirements.txt`, frontend packages such as `frontend/node_modules`, build scripts, configs, runtime data, or source modules.
+
+## 2026-06-23：双模式后端（自带 FTP/MySQL + Metrix 平台可选，两侧独立）
+
+把应用做成「自包含 + Metrix 可选」：源与仓库各自可在直连与 Metrix 间独立选择，互不依赖。基于原版（pre-M2 全功能：FTP/MySQL/查看导出/license）叠加 Metrix 后端。
+
+- 配置 `app/config.py`：新增 `source_type`(ftp/sftp/metrix)、`warehouse_type`(mysql/metrix)、`MetrixConfig`(base_url/token/storage_id/database_conn_id/target_database/recent_days/data_dir_to_table)，保留 `MySQLConfig`/`RemoteDataConfig`；Configure.json 新增 `SourceType`/`WarehouseType`/`Metrix`（token 隐藏于 to_dict，含于 to_file_dict）；缺省向后兼容（source_type 缺省取 RemoteData.protocol，warehouse 缺省 mysql）。
+- 源工厂 `app/services/platform.py::make_source_downloader`：按 source_type 返回 `RemoteDataDownloader`(FTP/SFTP) 或 `PlatformStorageDownloader`(Metrix 储存)，接口一致。`platform.py` 改用 MetrixConfig（token 从配置读），并扩展 `PlatformClient` 增 list_tables/table_columns/table_data/submit_export/download_job_file 供仓库代理。
+- 仓库分派：`remote.py`/`tasks.py`/`script.py` 按 warehouse_type 分流——mysql 走原版 `DataProcessor`（直连、LOAD DATA、单会话报表 SQL）；metrix 走 `app/services/pipeline.py`（CsvProcessor → 平台 import → run-script single_session）。`auto_scheduler.py` 扫描也改用 make_source_downloader。
+- 仓库视图代理 `app/warehouse.py`：`make_warehouse(config)` → 直连返回原版 `DatabaseManager`，Metrix 返回 `MetrixWarehouse`（用平台 API 实现 get_tables/get_table_info/query_table/truncate/drop/drop_all/execute_sql 同接口）；`routers/database.py` 的 `_db()` 透明切换，`/api/download` 在 metrix 模式代理到平台导出任务（避免分页上限丢行）。
+- 路由 `routers/config.py`：新增 `POST /api/config/backend`(类型)、`/api/config/metrix`(连接)，配置上传也识别 SourceType/WarehouseType/Metrix。
+- 前端 `SettingsPanel.vue`：新增「数据源/仓库」标签——源/仓库单选 + Metrix 连接卡片（地址/Token/storage_id/database_conn_id/目标库/recent_days）+ 保存/测试储存；保留原 MySQL/远程数据源标签与 DatabasePanel 查看导出。`types.ts` 加 `source_type/warehouse_type/metrix`+`MetrixConfig`。
+- 重要修复：`routers/database.py` 全部处理函数由 `async def` 改为 `def`——这些是阻塞式（直连 pymysql / Metrix HTTP / 大表导出轮询），放在事件循环里会冻结单 worker（实测大表导出把 /health 也卡死）；改 def 后 FastAPI 用线程池执行。
+- 容器：`main.py` 重新支持 `CAPAREPORT_FRONTEND_DIR`（代码/前端在 /app、运行态 /data 分离，robocopy 覆盖后补回）；`.dockerignore` 放开 `frontend/dist`；`requirements.txt` 含 requests + pymysql/cryptography/paramiko（双模式都要）。Token 改存配置，entrypoint 不再需要环境变量。
+- 验证：前端 `npm run build`（vue-tsc）通过；镜像构建成功；容器冒烟（Metrix 模式）端到端通过——登录/`config/full`(新字段)/tables/table info/table-data/execute/导出代理全部 200，行数与列数正确。直连 MySQL 路径为原版未改代码。
+
+## 2026-06-24：精简（去 API 文档 / API Token）+ 设置页卡片自适应 + 授权默认期改 2026-12-30
+
+随双模式集成一起进入 `metrix-integration` 分支。去掉与数据处理无关的对外 API 能力，业务接口仅保留登录态访问：
+
+- 删除 API Token 与离线 API 文档：删 `app/api/routers/api_tokens.py`、`app/services/api_tokens.py`、`frontend/src/components/ApiDocs.vue`、`ApiTokenManager.vue`；前端去掉 `router.ts`/`AppShell.vue` 的 `api-center` 路由与菜单、`package.json` 的 `swagger-ui-dist` 依赖、`types.ts` 的 `ApiToken*` 类型、`vite-env.d.ts` 的 swagger 声明、`SettingsPanel.vue` 的「API Token」分页。
+- 后端解耦：`auth.py::resolve_access_context` 只保留 JWT（去掉 api_token 分支）；`main.py` 去掉 api_tokens 路由注册、`touch_token_usage`、`/api/openapi.json` `/api/docs-ui` 文档端点，并删除随之不可达的整套 OpenAPI 定制（`custom_openapi`/`TAG_LABELS`/`OPENAPI_TAGS`/`OPENAPI_OPERATION_DOCS` 及 `_make_operation_id` 等辅助、`get_openapi` 导入、`LOGIN_ONLY_API_PATHS`），`LOGIN_ONLY_API_PREFIXES` 去掉 `/api/tokens`；`config.py` 去掉配置下载/上传里的 `ApiTokens` 字段。
+- 授权默认到期日：`app/services/license.py::DEFAULT_EXPIRES_ON` 由 `2026-06-20` 改为 `2026-12-30`，前端兜底文案（`FileWorkflow.vue`、`LicenseActivationModal.vue`）同步；授权功能本身保留（连点品牌图标 8 次打开延期窗口）。
+- 设置页排版：`styles.css` 的 `.settings-database-stack` 由纵向 `column` 改为 `row wrap`，子卡 `flex:1 1 360px;min-width:320px`，宽屏并排、窄屏自动换行；「处理历史保留」卡加 `work-card-narrow`（`flex-grow:0` + `max-width`）显著收窄；规则同时作用于「数据源/仓库」与「数据库」两个标签页；清理已失效的 `.settings-token-panel` 规则。
+- 验证：`python -m compileall app` 通过；前端 `npm run build`（vue-tsc）通过，产物中不再出现 swagger/ApiDocs chunk。

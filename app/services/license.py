@@ -12,7 +12,7 @@ from typing import Any
 from app.config import BASE_DIR
 
 
-DEFAULT_EXPIRES_ON = date(2026, 6, 20)
+DEFAULT_EXPIRES_ON = date(2026, 12, 30)
 EXTEND_DAYS = 30
 LICENSE_FILE = BASE_DIR / "license.dat"
 _SECRET = b"CapacityReport local license v1"

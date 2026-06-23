@@ -10,7 +10,9 @@ from starlette.background import BackgroundTask
 from app import state
 from app.config import CACHE_DIR
 from app.database import DatabaseManager
+from app.services.platform import make_client
 from app.utils.files import remove_file_safely
+from app.warehouse import make_warehouse
 
 
 router = APIRouter(tags=["database"])
@@ -47,19 +49,20 @@ def _dataframe_from_table(db: DatabaseManager, table_name: str) -> pd.DataFrame:
     return pd.DataFrame(result["data"], columns=columns)
 
 
-def _db() -> DatabaseManager:
-    return DatabaseManager(state.current_config())
+def _db():
+    """Direct MySQL DatabaseManager, or a Metrix-backed warehouse with the same interface."""
+    return make_warehouse(state.current_config())
 
 
 @router.post("/api/database/test")
-async def test_database():
+def test_database():
     db = _db()
     success, message = db.test_connection()
     return {"success": success, "message": message}
 
 
 @router.get("/api/database/info")
-async def get_database_info():
+def get_database_info():
     db = _db()
     try:
         return {"success": True, **db.get_server_info()}
@@ -69,7 +72,7 @@ async def get_database_info():
 
 @router.get("/api/database/tables")
 @router.post("/api/database/tables")
-async def get_tables():
+def get_tables():
     db = _db()
     try:
         return {"tables": db.get_tables()}
@@ -78,7 +81,7 @@ async def get_tables():
 
 
 @router.post("/api/database/table/info")
-async def get_table_info(table_name: str = Body(..., embed=True)):
+def get_table_info(table_name: str = Body(..., embed=True)):
     db = _db()
     try:
         return db.get_table_info(table_name)
@@ -87,7 +90,7 @@ async def get_table_info(table_name: str = Body(..., embed=True)):
 
 
 @router.post("/api/database/table/data")
-async def query_table_data(
+def query_table_data(
     table_name: str = Body(..., embed=True),
     page: int = Body(1),
     page_size: int = Body(50),
@@ -102,7 +105,7 @@ async def query_table_data(
 
 
 @router.post("/api/database/table/query")
-async def query_table_with_filter(
+def query_table_with_filter(
     table_name: str = Body(..., embed=True),
     page: int = Body(1),
     page_size: int = Body(50),
@@ -125,7 +128,7 @@ async def query_table_with_filter(
 
 
 @router.post("/api/database/table/truncate")
-async def truncate_table(table_name: str = Body(..., embed=True)):
+def truncate_table(table_name: str = Body(..., embed=True)):
     db = _db()
     try:
         db.truncate_table(table_name)
@@ -135,7 +138,7 @@ async def truncate_table(table_name: str = Body(..., embed=True)):
 
 
 @router.post("/api/database/table/drop")
-async def drop_table(table_name: str = Body(..., embed=True)):
+def drop_table(table_name: str = Body(..., embed=True)):
     db = _db()
     try:
         db.drop_table(table_name)
@@ -145,7 +148,7 @@ async def drop_table(table_name: str = Body(..., embed=True)):
 
 
 @router.post("/api/database/table/drop-all")
-async def drop_all_tables():
+def drop_all_tables():
     db = _db()
     try:
         result = db.drop_all_tables()
@@ -160,7 +163,7 @@ async def drop_all_tables():
 
 
 @router.post("/api/database/execute")
-async def execute_sql(sql: str = Body(..., embed=True)):
+def execute_sql(sql: str = Body(..., embed=True)):
     db = _db()
     try:
         success, result = db.execute_sql(sql)
@@ -173,8 +176,10 @@ async def execute_sql(sql: str = Body(..., embed=True)):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+# Sync def so FastAPI runs it in a threadpool: exporting large tables (and the Metrix
+# export-job polling) is blocking and would otherwise freeze the single-worker event loop.
 @router.post("/api/download")
-async def download_table(
+def download_table(
     table_name: Optional[str] = Body(None, embed=True),
     table_names: Optional[list[str]] = Body(None, embed=True),
     file_format: str = Body("csv", alias="format"),
@@ -187,6 +192,10 @@ async def download_table(
         raise HTTPException(status_code=400, detail="请选择要导出的数据表")
     if file_format == "csv" and len(requested_tables) != 1:
         raise HTTPException(status_code=400, detail="CSV 每次只能导出一张表")
+
+    config = state.current_config()
+    if config.warehouse_type == "metrix":
+        return _download_via_metrix(config, requested_tables, file_format)
 
     db = _db()
     try:
@@ -224,6 +233,35 @@ async def download_table(
         remove_file_safely(filepath)
         raise
 
+    return FileResponse(
+        path=str(filepath),
+        filename=filename,
+        media_type=media_type,
+        background=BackgroundTask(remove_file_safely, filepath),
+    )
+
+
+def _download_via_metrix(config, requested_tables: list[str], file_format: str) -> FileResponse:
+    """Metrix 仓库模式：用平台导出任务生成文件后流式返回（避免分页上限丢行）。"""
+    metrix = config.metrix.normalized()
+    client = make_client(metrix)
+    try:
+        job_id = client.submit_export(metrix.database_conn_id, requested_tables, file_format, metrix.target_database)
+        job = client.wait_job(job_id)
+        if job.get("status") != "success":
+            raise HTTPException(status_code=500, detail=f"导出失败: {job.get('error_code') or job.get('status')}")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename_prefix = requested_tables[0] if len(requested_tables) == 1 else "tables"
+        filename = f"{filename_prefix}_{timestamp}.{file_format}"
+        filepath = CACHE_DIR / filename
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        client.download_job_file(job_id, filepath)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    media_type = "text/csv" if file_format == "csv" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return FileResponse(
         path=str(filepath),
         filename=filename,

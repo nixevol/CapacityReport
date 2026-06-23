@@ -1404,11 +1404,27 @@ select {
   scrollbar-width: thin;
 }
 
+.settings-database-panel {
+  grid-template-columns: 1fr;
+}
+
 .settings-database-stack {
   display: flex;
   min-width: 0;
-  flex-direction: column;
+  flex-flow: row wrap;
+  align-items: flex-start;
   gap: 18px;
+}
+
+.settings-database-stack > .work-card {
+  flex: 1 1 360px;
+  min-width: 320px;
+}
+
+.settings-database-stack > .work-card-narrow {
+  flex: 0 1 360px;
+  min-width: 300px;
+  max-width: 460px;
 }
 
 .settings-database-panel::-webkit-scrollbar,
@@ -1499,12 +1515,6 @@ select {
 
 .settings-security-panel {
   max-width: 560px;
-}
-
-.settings-token-panel {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .card-actions {

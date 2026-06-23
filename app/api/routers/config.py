@@ -7,8 +7,14 @@ from fastapi import APIRouter, Body, HTTPException, UploadFile, File
 from fastapi.responses import Response
 
 from app import state
-from app.config import HistoryRetentionConfig, RJDataConfig, RemoteDataConfig
-from app.services.api_tokens import export_tokens, import_tokens
+from app.config import (
+    HistoryRetentionConfig,
+    MetrixConfig,
+    RJDataConfig,
+    RemoteDataConfig,
+    SOURCE_TYPES,
+    WAREHOUSE_TYPES,
+)
 
 
 router = APIRouter(tags=["config"])
@@ -50,6 +56,30 @@ async def update_remote_config(config: dict[str, Any] = Body(...)):
     return {"success": True, "message": "远程数据配置已更新", "update": state.config.update}
 
 
+@router.post("/api/config/backend")
+async def update_backend(
+    source_type: str = Body(...),
+    warehouse_type: str = Body(...),
+):
+    if source_type not in SOURCE_TYPES:
+        raise HTTPException(status_code=400, detail="不支持的源类型")
+    if warehouse_type not in WAREHOUSE_TYPES:
+        raise HTTPException(status_code=400, detail="不支持的仓库类型")
+    state.reload_config()
+    state.config.source_type = source_type
+    state.config.warehouse_type = warehouse_type
+    state.config.save()
+    return {"success": True, "message": "后端类型已更新", "update": state.config.update}
+
+
+@router.post("/api/config/metrix")
+async def update_metrix_config(config: dict[str, Any] = Body(...)):
+    state.reload_config()
+    state.config.metrix = MetrixConfig.from_dict(config)
+    state.config.save()
+    return {"success": True, "message": "Metrix 连接配置已更新", "update": state.config.update}
+
+
 @router.post("/api/config/history-retention")
 async def update_history_retention(config: dict[str, Any] = Body(...)):
     state.reload_config()
@@ -79,7 +109,6 @@ async def download_config():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"Configure_{timestamp}.json"
     config_data = state.current_config().to_file_dict()
-    config_data["ApiTokens"] = export_tokens()
     content = json.dumps(config_data, ensure_ascii=False, indent=2)
     return Response(
         content=content,
@@ -100,8 +129,6 @@ async def upload_config(file: UploadFile = File(...)):
 
         state.reload_config()
         _apply_config_data(data)
-        if "ApiTokens" in data:
-            import_tokens(data["ApiTokens"])
         state.config.save()
         return {"success": True, "message": "配置文件上传成功", "update": state.config.update}
     except json.JSONDecodeError as exc:
@@ -113,6 +140,15 @@ async def upload_config(file: UploadFile = File(...)):
 
 
 def _apply_config_data(data: dict[str, Any]) -> None:
+    if data.get("SourceType") in SOURCE_TYPES:
+        state.config.source_type = data["SourceType"]
+    if data.get("WarehouseType") in WAREHOUSE_TYPES:
+        state.config.warehouse_type = data["WarehouseType"]
+
+    metrix_data = data.get("Metrix")
+    if isinstance(metrix_data, dict):
+        state.config.metrix = MetrixConfig.from_dict(metrix_data)
+
     mysql_data = data.get("MySQL_DBInfo")
     if isinstance(mysql_data, dict):
         for key in ("host", "port", "user", "passwd", "dbname"):

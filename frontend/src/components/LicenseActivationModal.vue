@@ -37,7 +37,7 @@ const visible = defineModel<boolean>('show', { required: true });
 const message = useMessage();
 const activationCode = ref('');
 const activationLoading = ref(false);
-const activationKeyLabel = ref('2026/06/20');
+const activationKeyLabel = ref('2026/12/30');
 const licenseMessage = ref('输入激活码可将授权到期日期延长 30 天。');
 
 onMounted(() => {

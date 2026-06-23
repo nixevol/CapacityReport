@@ -1,17 +1,17 @@
-# Web framework
+# Web 框架
 fastapi
 uvicorn[standard]
 python-multipart
 
-# Database
+# Metrix 平台 API 客户端（Metrix 源/仓库模式）
+requests
+
+# 直连数据库 / 授权（直连 MySQL 模式 + 本地授权）
 pymysql
 cryptography
 
-# Data processing
+# 数据处理 + FTP/SFTP
 pandas
 openpyxl
 chardet
 paramiko
-
-# Process manager
-supervisor

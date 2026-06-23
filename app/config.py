@@ -34,6 +34,77 @@ class MySQLConfig:
     dbname: str = "CapacityReport"
 
 
+# Source backends: direct FTP/SFTP, or Metrix storage platform.
+SOURCE_TYPES = ("ftp", "sftp", "metrix")
+# Warehouse backends: direct MySQL, or Metrix database platform.
+WAREHOUSE_TYPES = ("mysql", "metrix")
+
+
+@dataclass
+class MetrixConfig:
+    """Connection to a Metrix platform, used when source_type/warehouse_type is 'metrix'.
+
+    Metrix appears in the UI as two connection types ("存储平台"/"数据库平台") that share the
+    same base_url + token; storage_id is the file source, database_conn_id + target_database
+    are the warehouse. data_dir_to_table maps data sub-dirs to staging tables (Metrix mode only).
+    """
+    base_url: str = "http://host.docker.internal:8000"
+    token: str = ""
+    storage_id: str = ""
+    database_conn_id: str = ""
+    target_database: str = ""
+    recent_days: int = 7
+    data_dir_to_table: Dict[str, str] = field(default_factory=lambda: {"4G": "4G_UD", "5G": "5G_UD"})
+
+    def normalized(self) -> "MetrixConfig":
+        try:
+            recent_days = max(int(self.recent_days), 1)
+        except (TypeError, ValueError):
+            recent_days = 7
+        mapping = {
+            str(k).strip(): str(v).strip()
+            for k, v in (self.data_dir_to_table or {}).items()
+            if str(k).strip() and str(v).strip()
+        }
+        return MetrixConfig(
+            base_url=str(self.base_url or "").strip(),
+            token=str(self.token or "").strip(),
+            storage_id=str(self.storage_id or "").strip(),
+            database_conn_id=str(self.database_conn_id or "").strip(),
+            target_database=str(self.target_database or "").strip(),
+            recent_days=recent_days,
+            data_dir_to_table=mapping or {"4G": "4G_UD", "5G": "5G_UD"},
+        )
+
+    def to_dict(self, include_token: bool = False) -> Dict[str, Any]:
+        n = self.normalized()
+        data = {
+            "base_url": n.base_url,
+            "storage_id": n.storage_id,
+            "database_conn_id": n.database_conn_id,
+            "target_database": n.target_database,
+            "recent_days": n.recent_days,
+            "data_dir_to_table": n.data_dir_to_table,
+        }
+        if include_token:
+            data["token"] = n.token
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "MetrixConfig":
+        data = data or {}
+        mapping = data.get("data_dir_to_table")
+        return cls(
+            base_url=str(data.get("base_url", "http://host.docker.internal:8000")),
+            token=str(data.get("token", "")),
+            storage_id=str(data.get("storage_id", "")),
+            database_conn_id=str(data.get("database_conn_id", "")),
+            target_database=str(data.get("target_database", "")),
+            recent_days=data.get("recent_days", 7),
+            data_dir_to_table=mapping if isinstance(mapping, dict) else {"4G": "4G_UD", "5G": "5G_UD"},
+        ).normalized()
+
+
 @dataclass
 class AutoSchedulerConfig:
     enabled: bool = False
@@ -250,10 +321,26 @@ class HistoryRetentionConfig:
         ).normalized()
 
 
+def _normalize_source_type(value: Any, protocol: str = "sftp") -> str:
+    text = str(value or "").strip().lower()
+    if text in SOURCE_TYPES:
+        return text
+    # Back-compat: no explicit source type means direct remote, pick its protocol.
+    return "ftp" if str(protocol).strip().lower() == "ftp" else "sftp"
+
+
+def _normalize_warehouse_type(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in WAREHOUSE_TYPES else "mysql"
+
+
 @dataclass
 class AppConfig:
     update: str = ""
+    source_type: str = "sftp"
+    warehouse_type: str = "mysql"
     mysql: MySQLConfig = field(default_factory=MySQLConfig)
+    metrix: MetrixConfig = field(default_factory=MetrixConfig)
     remote_data: RemoteDataConfig = field(default_factory=RemoteDataConfig)
     history_retention: HistoryRetentionConfig = field(default_factory=HistoryRetentionConfig)
     rj_data: RJDataConfig = field(default_factory=RJDataConfig)
@@ -278,12 +365,16 @@ class AppConfig:
             dbname=mysql_data.get("dbname", "CapacityReport")
         )
         remote_config = RemoteDataConfig.from_dict(data.get("RemoteData"))
+        metrix_config = MetrixConfig.from_dict(data.get("Metrix"))
         history_retention = HistoryRetentionConfig.from_dict(data.get("HistoryRetention"))
         rj_data = RJDataConfig.from_dict(data.get("RJData"))
 
         return cls(
             update=data.get("Update", ""),
+            source_type=_normalize_source_type(data.get("SourceType"), remote_config.protocol),
+            warehouse_type=_normalize_warehouse_type(data.get("WarehouseType")),
             mysql=mysql_config,
+            metrix=metrix_config,
             remote_data=remote_config,
             history_retention=history_retention,
             rj_data=rj_data,
@@ -303,6 +394,8 @@ class AppConfig:
         """转换为配置文件结构（包含敏感字段，用于保存和下载）"""
         return {
             "Update": self.update,
+            "SourceType": self.source_type,
+            "WarehouseType": self.warehouse_type,
             "MySQL_DBInfo": {
                 "host": self.mysql.host,
                 "port": self.mysql.port,
@@ -310,6 +403,7 @@ class AppConfig:
                 "passwd": self.mysql.passwd,
                 "dbname": self.mysql.dbname
             },
+            "Metrix": self.metrix.normalized().to_dict(include_token=True),
             "RemoteData": self.remote_data.normalized().to_dict(include_password=True),
             "HistoryRetention": self.history_retention.normalized().to_dict(),
             "RJData": self.rj_data.normalized().to_dict(),
@@ -321,12 +415,15 @@ class AppConfig:
         """转换为字典（用于返回给前端，隐藏密码）"""
         return {
             "update": self.update,
+            "source_type": self.source_type,
+            "warehouse_type": self.warehouse_type,
             "mysql": {
                 "host": self.mysql.host,
                 "port": self.mysql.port,
                 "user": self.mysql.user,
                 "dbname": self.mysql.dbname
             },
+            "metrix": self.metrix.normalized().to_dict(),
             "remote_data": self.remote_data.normalized().to_dict(),
             "history_retention": self.history_retention.normalized().to_dict(),
             "rj_data": self.rj_data.normalized().to_dict(),
@@ -338,6 +435,8 @@ class AppConfig:
         """转换为完整字典（包含密码，用于编辑时回显）"""
         return {
             "update": self.update,
+            "source_type": self.source_type,
+            "warehouse_type": self.warehouse_type,
             "mysql": {
                 "host": self.mysql.host,
                 "port": self.mysql.port,
@@ -345,6 +444,7 @@ class AppConfig:
                 "passwd": self.mysql.passwd,
                 "dbname": self.mysql.dbname
             },
+            "metrix": self.metrix.normalized().to_dict(include_token=True),
             "remote_data": self.remote_data.normalized().to_dict(include_password=True),
             "history_retention": self.history_retention.normalized().to_dict(),
             "rj_data": self.rj_data.normalized().to_dict(),

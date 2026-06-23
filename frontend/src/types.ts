@@ -88,6 +88,8 @@ export interface CacheSize {
 
 export interface AppConfig {
   update: string;
+  source_type: 'ftp' | 'sftp' | 'metrix';
+  warehouse_type: 'mysql' | 'metrix';
   mysql: {
     host: string;
     port: number;
@@ -95,11 +97,22 @@ export interface AppConfig {
     passwd?: string;
     dbname: string;
   };
+  metrix: MetrixConfig;
   remote_data: RemoteDataConfig;
   history_retention: HistoryRetentionConfig;
   rj_data?: RJDataConfig;
   sheet_filter: string[];
   extract_fields: Array<Record<string, unknown>>;
+}
+
+export interface MetrixConfig {
+  base_url: string;
+  token?: string;
+  storage_id: string;
+  database_conn_id: string;
+  target_database: string;
+  recent_days: number;
+  data_dir_to_table: Record<string, string>;
 }
 
 export interface RJDataConfig {
@@ -224,29 +237,3 @@ export interface ApiMessage {
   task_id?: string;
 }
 
-export interface ApiTokenRecord {
-  id: string;
-  name: string;
-  prefix: string;
-  suffix: string;
-  token?: string | null;
-  token_available?: boolean;
-  created_at: string;
-  expires_at: string | null;
-  enabled: boolean;
-  expired: boolean;
-  last_used_at?: string | null;
-  last_used_from?: string | null;
-}
-
-export interface ApiTokenListResponse {
-  success: boolean;
-  tokens: ApiTokenRecord[];
-}
-
-export interface ApiTokenMutationResponse {
-  success: boolean;
-  message?: string;
-  token?: string;
-  record: ApiTokenRecord;
-}

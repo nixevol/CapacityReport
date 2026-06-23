@@ -84,11 +84,15 @@ def _run_script(task_id: str, logger: ProcessLogger, logs: list[str], app_config
     temp_work_dir: Path | None = None
     try:
         logger.info("开始执行 SQL 脚本...")
-        temp_work_dir = CACHE_DIR / task_id
-        temp_work_dir.mkdir(parents=True, exist_ok=True)
+        if app_config.warehouse_type == "metrix":
+            from app.services.pipeline import run_report_sql
 
-        processor = DataProcessor(app_config, temp_work_dir, logger)
-        processor._execute_sql_script()
+            run_report_sql(app_config, logger)
+        else:
+            temp_work_dir = CACHE_DIR / task_id
+            temp_work_dir.mkdir(parents=True, exist_ok=True)
+            processor = DataProcessor(app_config, temp_work_dir, logger)
+            processor._execute_sql_script()
         logger.success("SQL 脚本执行完成")
         set_task_stage(task_id, "completed", logs, status="completed")
     except Exception as exc:

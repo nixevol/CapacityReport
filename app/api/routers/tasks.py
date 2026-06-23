@@ -168,19 +168,29 @@ def _task_finished(task_id: str) -> bool:
 
 def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_config: AppConfig) -> None:
     try:
-        logger.set_stage("license")
-        log_license_check(logger, check_processing_allowed(work_dir))
+        if app_config.warehouse_type == "metrix":
+            import time
 
-        processor = DataProcessor(app_config, work_dir, logger)
-        result = processor.process()
-        status = "completed" if result.get("success") else "failed"
-        error = result.get("error")
+            from app.services.pipeline import RESULT_TABLES, run_import_and_report
+
+            started = time.time()
+            run_import_and_report(work_dir, app_config, logger)
+            status, error, elapsed, result_tables = "completed", None, round(time.time() - started, 2), RESULT_TABLES
+        else:
+            logger.set_stage("license")
+            log_license_check(logger, check_processing_allowed(work_dir))
+            processor = DataProcessor(app_config, work_dir, logger)
+            result = processor.process()
+            status = "completed" if result.get("success") else "failed"
+            error = result.get("error")
+            elapsed = result.get("elapsed_time", 0)
+            result_tables = ["4G_结果表", "5G_结果表"]
         state.history_manager.update(
             task_id,
             status=status,
-            elapsed_time=result.get("elapsed_time", 0),
+            elapsed_time=elapsed,
             error=error,
-            result_tables=["4G_结果表", "5G_结果表"],
+            result_tables=result_tables,
         )
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),

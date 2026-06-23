@@ -1,3 +1,4 @@
+import time
 from datetime import date, datetime
 from pathlib import Path
 from threading import Thread
@@ -14,6 +15,8 @@ from app.api.routers.task_runtime import (
 from app.config import AppConfig, CACHE_DIR, RemoteDataConfig
 from app.processor import DataProcessor, ProcessLogger
 from app.services.license import LicenseError, check_processing_allowed
+from app.services.platform import PlatformStorageDownloader, make_source_downloader
+from app.services.pipeline import RESULT_TABLES, run_import_and_report
 from app.services.remote_download import RemoteDataDownloader
 
 
@@ -22,12 +25,17 @@ router = APIRouter(tags=["remote"])
 
 @router.post("/api/remote/test")
 async def test_remote_connection(config: dict[str, Any] | None = Body(None)):
-    remote_config = RemoteDataConfig.from_dict(config) if config else state.current_config().remote_data
+    app_config = state.current_config()
     try:
+        if app_config.source_type == "metrix":
+            PlatformStorageDownloader(app_config).test_connection()
+            return {"success": True, "message": "平台储存连接成功"}
+        # FTP/SFTP: test the posted form config if provided, else the saved one.
+        remote_config = RemoteDataConfig.from_dict(config) if config else app_config.remote_data
         RemoteDataDownloader(remote_config).test_connection()
         return {"success": True, "message": "远程服务器连接成功"}
     except Exception as exc:
-        return {"success": False, "message": f"远程服务器连接失败: {exc}"}
+        return {"success": False, "message": f"连接失败: {exc}"}
 
 
 @router.post("/api/remote/start")
@@ -123,28 +131,37 @@ def _run_remote_processing(
 ) -> None:
     final_status = "failed"
     try:
-        logger.info(
-            f"开始远程下载，协议: {remote_config.protocol.upper()}，"
-            f"服务器: {remote_config.host}:{remote_config.port}，目录: {remote_config.remote_dir}"
-        )
-        downloader = RemoteDataDownloader(remote_config, logger.info)
+        if app_config.source_type == "metrix":
+            logger.info(f"开始从平台储存下载，目录: {remote_config.remote_dir}")
+        else:
+            logger.info(
+                f"开始远程下载，协议: {remote_config.protocol.upper()}，"
+                f"服务器: {remote_config.host}:{remote_config.port}，目录: {remote_config.remote_dir}"
+            )
+        downloader = make_source_downloader(app_config, logger.info)
         download_result = downloader.download_to(work_dir, target_dates=target_dates)
         logger.success(
-            f"远程下载完成，共 {download_result.file_count} 个文件，"
+            f"下载完成，共 {download_result.file_count} 个文件，"
             f"{_format_bytes(download_result.total_bytes)}"
         )
 
         if download_result.file_count == 0:
-            raise RuntimeError("远程目录中未下载到任何文件")
+            raise RuntimeError("源目录中未下载到任何文件")
 
         state.history_manager.update(task_id, file_count=download_result.file_count)
-        logger.set_stage("license")
-        log_license_check(logger, check_processing_allowed(work_dir))
 
-        processor = DataProcessor(app_config, work_dir, logger)
-        result = processor.process()
-        status = "completed" if result.get("success") else "failed"
-        error = result.get("error")
+        if app_config.warehouse_type == "metrix":
+            started = time.time()
+            run_import_and_report(work_dir, app_config, logger)
+            status, error, elapsed = "completed", None, round(time.time() - started, 2)
+        else:
+            logger.set_stage("license")
+            log_license_check(logger, check_processing_allowed(work_dir))
+            processor = DataProcessor(app_config, work_dir, logger)
+            result = processor.process()
+            status = "completed" if result.get("success") else "failed"
+            error = result.get("error")
+            elapsed = result.get("elapsed_time", 0)
         if status == "completed" and remote_config.auto_delete_source:
             try:
                 deleted_count = downloader.delete_source_files(download_result.remote_files)
@@ -159,9 +176,9 @@ def _run_remote_processing(
         state.history_manager.update(
             task_id,
             status=status,
-            elapsed_time=result.get("elapsed_time", 0),
+            elapsed_time=elapsed,
             error=error,
-            result_tables=["4G_结果表", "5G_结果表"],
+            result_tables=RESULT_TABLES,
         )
         state.processing_tasks[task_id] = {
             "logs": state.history_manager.get_logs(task_id),

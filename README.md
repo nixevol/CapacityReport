@@ -2,6 +2,16 @@
 
 CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的字段映射和 `ReportScript.sql` 的业务脚本完成数据清洗、入库、计算和结果表生成。系统支持本地上传处理，也支持从 FTP/SFTP 远程目录递归下载数据后自动处理。
 
+## 双模式后端（自带 FTP/MySQL，或接入 Metrix 平台）
+
+CapacityReport 是自包含应用，源与仓库各自可在「直连」与「Metrix 平台」之间独立选择，二者可任意组合，互不依赖——Metrix 在不在、CapacityReport 怎么跑都不影响：
+
+- **数据源**（系统设置 → 数据源/仓库）：`SFTP` / `FTP`（直连，填服务器与账号密码）或 `Metrix 存储平台`（填平台地址 + Token + storage_id）。
+- **数据仓库**：`MySQL`（直连，填主机/账号密码）或 `Metrix 数据库平台`（填平台地址 + Token + database_conn_id + 目标库）。
+- **Metrix 连接**作为一种连接类型在「数据源/仓库」标签页配置：`base_url` + `API Token`（存配置，非环境变量）+ `storage_id`（存储平台）+ `database_conn_id`/`target_database`（数据库平台），存储/数据库平台共用同一地址与 Token。
+- 直连模式走原生路径（自带 LOAD DATA 入库、单会话跑报表 SQL、本地查看/导出）；Metrix 模式下源走平台储存 API、仓库走平台导入 + `run-script(single_session)`，「数据管理」查看/导出自动**代理到 Metrix** 的 table-data/导出接口。
+- 切换后端不改业务：字段映射、报表 SQL、自动调度、处理历史在两种模式下一致。
+
 ## 功能概览
 
 - Excel/CSV/ZIP 数据导入与自动解压、转换、入库。
@@ -10,9 +20,8 @@ CapacityReport 用于导入每周容量报表数据，按 `Configure.json` 的�
 - MySQL 数据表查看、清空、删除、CSV/XLSX 导出。
 - SQL 脚本在线查看、保存和执行。
 - 处理历史、日志查看、历史原始数据打包下载。
-- 系统设置内置 API Token 管理，左侧提供登录后可见的离线 API 文档，便于内网系统直接调用上传、远程处理、查表和 SQL 执行接口。
 - 按 ZIP 文件名数据日期校验本地授权期限，过期后可输入激活码顺延。
-- 系统设置：数据库、远程数据源、Sheet 过滤、字段映射、API Token、历史保留、密码修改。
+- 系统设置：数据库、远程数据源、Sheet 过滤、字段映射、历史保留、密码修改。
 - 发行形态：Server Portable、Tauri 桌面版、Docker 服务端版。
 
 ## 技术栈
@@ -243,36 +252,14 @@ Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 W
 无论手动上传还是远程下载，处理流程都会按文件名日期对每个目录只保留最近 7 天文件。文件名支持 `XXX_YYYYMMDDHHMM_YYYYMMDDHHMM` 和 `XXX_YYYYMMDDHHMM` 两类格式，数据日期始终取第一个时间戳。
 
 登录密码保存在本地 `auth.ini`，该文件不应提交到版本库。
-API Token 保存在本地 `api_tokens.json`，包含 HMAC 哈希、显示用前后缀和完整 Token，登录后可在列表中重复复制。该文件属于运行时数据，不应提交到版本库。
 
-## API Token 与文档
+## 授权
 
-登录后在 `系统设置 > API Token` 可生成、复制、启用/停用、批量删除、设置永久或指定日期到期的 API Token；左侧 `API 文档` 只展示内置 Swagger 文档。API 文档基于本地 `swagger-ui-dist` 打包，不依赖外网 CDN。
-如果 Token 未设置为永久有效，则必须明确选择到期日期；到期、停用或重生成后的旧 Token 都不能继续调用业务 API。
-
-Token 调用方式：
-```text
-Authorization: Bearer <token>
-```
-
-也兼容：
-```text
-X-API-Token: <token>
-```
-
-API Token 与登录态一样可访问业务 API，包括文件上传、远程下载并处理、数据库表查询、筛选查询、导出以及 `/api/database/execute` 自定义 SQL 执行。Token 管理、系统配置、授权和 API 文档本身仍要求登录后访问。
-桌面端和配置了 `VITE_API_BASE` 的部署中，API 文档会自动使用当前后端基址加载 OpenAPI，并且不会覆盖用户在 Swagger UI 中手动填写的 API Token；Swagger 默认隐藏底部 Schemas 区域，接口分组、说明和常用请求示例使用中文。
-配置下载会在 JSON 中附带 `ApiTokens`，配置上传时如果包含该字段会同步恢复 API Token。
-
-授权到期日期保存在本地加密文件 `license.dat`，默认到期日由 `app/services/license.py` 中的 `DEFAULT_EXPIRES_ON` 控制，当前为 `2026-06-20`。处理任务不会读取系统日期，而是从任务目录 ZIP 文件名中的 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳取最大日期进行比对。登录后连续点击左上角品牌图标 8 次，可主动打开授权延期窗口。
+授权到期日期保存在本地加密文件 `license.dat`，默认到期日由 `app/services/license.py` 中的 `DEFAULT_EXPIRES_ON` 控制，当前为 `2026-12-30`。处理任务不会读取系统日期，而是从任务目录 ZIP 文件名中的 `YYYYMMDDHHMM` 或 `YYYYMMDDHHMMSS` 时间戳取最大日期进行比对。登录后连续点击左上角品牌图标 8 次，可主动打开授权延期窗口。
 
 ## 常用接口
 
 - `POST /api/login`：登录
-- `GET /api/tokens`：列出 API Token（仅登录）
-- `POST /api/tokens/create`：生成 API Token（仅登录）
-- `GET /api/openapi.json`：OpenAPI JSON（仅登录）
-- `GET /api/docs-info`：API 文档入口信息（仅登录）
 - `POST /api/change-password`：修改密码
 - `POST /api/upload`：上传文件
 - `POST /api/remote/test`：测试 FTP/SFTP 连接
