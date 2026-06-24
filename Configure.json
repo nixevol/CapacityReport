@@ -1,5 +1,5 @@
 {
-  "Update": "2026/06/25 03:58:45",
+  "Update": "2026/06/25 05:17:26",
   "SourceType": "sftp",
   "WarehouseType": "mysql",
   "MySQL_DBInfo": {
@@ -206,11 +206,11 @@
   },
   "CellData": {
     "remote_data": {
-      "enabled": false,
+      "enabled": true,
       "protocol": "sftp",
-      "host": "",
-      "port": 22,
-      "user": "",
+      "host": "127.0.0.1",
+      "port": 2022,
+      "user": "nixevol",
       "remote_dir": "/",
       "passive": true,
       "timeout": 30,
@@ -221,7 +221,7 @@
         "expected_directories": [],
         "week_offset": 0
       },
-      "passwd": ""
+      "passwd": "242520"
     },
     "mysql": {
       "host": "127.0.0.1",
@@ -234,10 +234,111 @@
       "/网优日常优化数据文档/日常性能报表/{maxyear}年/300表"
     ],
     "year_dir_regex": "(?P<year>\\d{4})年",
-    "month_dir_regex": "(?P<month>\\d{1,2})月",
-    "day_dir_regex": "(?P<day>\\d{1,2})日",
     "file_name_regex": "^Result_300_.*\\.zip$",
-    "file_time_regex": "(?P<timestamp>\\d{14})(?=\\.zip$)"
+    "file_time_regex": "(?P<timestamp>\\d{14})(?=\\.zip$)",
+    "mapping": {
+      "target_table": "cellinfo",
+      "key": {
+        "field": "CGI",
+        "expr": "{PLMN}-{eNodeBID}-{CellID}"
+      },
+      "sources": [
+        {
+          "band": "2.6G",
+          "file_prefix": "LTE_ITBBU_CellInfo",
+          "fields": {
+            "eNodeBID": "eNBId",
+            "CellID": "cellLocalId",
+            "PLMN": "plmn",
+            "基站名称": "eNBName",
+            "小区名称": "CellName",
+            "频点": "frequency",
+            "带宽": "bandWidth",
+            "制式": "radioMode",
+            "功率": "cpSpeRefSigPwr",
+            "网络": {
+              "value": "4G"
+            }
+          }
+        },
+        {
+          "band": "2.6G",
+          "file_prefix": "LTE_SDR_CellInfo",
+          "fields": {
+            "eNodeBID": "eNBId",
+            "CellID": "cellLocalId",
+            "PLMN": "plmn",
+            "基站名称": "eNBName",
+            "小区名称": "CellName",
+            "频点": "frequency",
+            "带宽": "bandWidth",
+            "制式": "radioMode",
+            "功率": "cpSpeRefSigPwr",
+            "网络": {
+              "value": "4G"
+            }
+          }
+        },
+        {
+          "band": "2.6G",
+          "file_prefix": "NR_CellInfo",
+          "fields": {
+            "eNodeBID": "gNBId",
+            "CellID": "cellLocalId",
+            "PLMN": "plmn",
+            "基站名称": "gNBName",
+            "小区名称": "CellName",
+            "频点": "ssbFrequency",
+            "带宽": "carrierBandwidth",
+            "制式": {
+              "value": "2.6G"
+            },
+            "功率": "powerPerRERef",
+            "网络": {
+              "value": "5G"
+            }
+          }
+        },
+        {
+          "band": "700M",
+          "file_prefix": "LTE_ITBBU_CellInfo",
+          "fields": {
+            "eNodeBID": "eNBId",
+            "CellID": "cellLocalId",
+            "PLMN": "plmn",
+            "基站名称": "eNBName",
+            "小区名称": "CellName",
+            "频点": "frequency",
+            "带宽": "bandWidth",
+            "制式": "radioMode",
+            "功率": "cpSpeRefSigPwr",
+            "网络": {
+              "value": "4G"
+            }
+          }
+        },
+        {
+          "band": "700M",
+          "file_prefix": "NR_CellInfo",
+          "fields": {
+            "eNodeBID": "gNBId",
+            "CellID": "cellLocalId",
+            "PLMN": "plmn",
+            "基站名称": "gNBName",
+            "小区名称": "CellName",
+            "频点": "ssbFrequency",
+            "带宽": "carrierBandwidth",
+            "制式": {
+              "value": "700M"
+            },
+            "功率": "powerPerRERef",
+            "网络": {
+              "value": "5G"
+            }
+          }
+        }
+      ]
+    }
   },
   "HistoryRetention": {
     "enabled": true,

@@ -717,14 +717,65 @@
 
         <section class="cell-data-settings-section">
           <div class="cell-data-section-title">
-            <strong>映射规则 JSON</strong>
+            <strong>映射规则</strong>
             <n-space size="small">
-              <n-button size="small" @click="formatCellDataMapping">格式化</n-button>
+              <n-radio-group v-model:value="cellDataMappingMode" size="small" @update:value="switchCellDataMappingMode">
+                <n-radio-button value="form">图形化</n-radio-button>
+                <n-radio-button value="json">JSON</n-radio-button>
+              </n-radio-group>
+              <n-button v-if="cellDataMappingMode === 'json'" size="small" @click="formatCellDataMapping">格式化</n-button>
               <n-button size="small" :loading="validatingCellDataSettings" @click="validateCellDataSettings">校验</n-button>
               <n-button size="small" @click="restoreDefaultCellDataMapping">恢复默认</n-button>
             </n-space>
           </div>
-          <div ref="cellDataEditorHost" class="cell-data-json-editor"></div>
+          <div v-if="cellDataMappingMode === 'json'" ref="cellDataEditorHost" class="cell-data-json-editor"></div>
+          <div v-else class="cell-data-mapping-form">
+            <div class="cell-data-mapping-key">
+              <n-form-item label="目标表">
+                <n-input v-model:value="cellDataMappingForm.target_table" />
+              </n-form-item>
+              <n-form-item label="主键字段">
+                <n-input v-model:value="cellDataMappingForm.key.field" />
+              </n-form-item>
+              <n-form-item label="主键表达式">
+                <n-input v-model:value="cellDataMappingForm.key.expr" />
+              </n-form-item>
+            </div>
+            <div class="cell-data-source-list">
+              <div v-for="(source, sourceIndex) in cellDataMappingForm.sources" :key="sourceIndex" class="cell-data-source-card">
+                <div class="cell-data-source-header">
+                  <strong>来源 {{ sourceIndex + 1 }}</strong>
+                  <n-button quaternary circle size="small" type="error" @click="removeCellDataMappingSource(sourceIndex)">
+                    <template #icon>
+                      <n-icon><CloseOutline /></n-icon>
+                    </template>
+                  </n-button>
+                </div>
+                <div class="cell-data-source-meta">
+                  <n-form-item label="目录">
+                    <n-input v-model:value="source.band" placeholder="如 2.6G" />
+                  </n-form-item>
+                  <n-form-item label="CSV 前缀">
+                    <n-input v-model:value="source.file_prefix" placeholder="如 NR_CellInfo" />
+                  </n-form-item>
+                </div>
+                <div class="cell-data-field-list">
+                  <div v-for="(field, fieldIndex) in source.fields" :key="fieldIndex" class="cell-data-field-row">
+                    <n-input v-model:value="field.target" size="small" placeholder="目标字段" />
+                    <n-select v-model:value="field.mode" size="small" :options="mappingFieldModeOptions" />
+                    <n-input v-model:value="field.value" size="small" :placeholder="field.mode === 'value' ? '固定值' : 'CSV 字段名'" />
+                    <n-button quaternary circle size="small" type="error" @click="removeCellDataMappingField(sourceIndex, fieldIndex)">
+                      <template #icon>
+                        <n-icon><CloseOutline /></n-icon>
+                      </template>
+                    </n-button>
+                  </div>
+                </div>
+                <n-button size="small" @click="addCellDataMappingField(sourceIndex)">添加字段</n-button>
+              </div>
+            </div>
+            <n-button size="small" @click="addCellDataMappingSource">添加来源</n-button>
+          </div>
         </section>
       </div>
 
@@ -767,6 +818,29 @@ interface ExtractFieldConfig {
   Type: string;
   Extract: string[];
   [key: string]: unknown;
+}
+
+type MappingFieldMode = 'field' | 'value';
+
+interface MappingFieldForm {
+  target: string;
+  mode: MappingFieldMode;
+  value: string;
+}
+
+interface MappingSourceForm {
+  band: string;
+  file_prefix: string;
+  fields: MappingFieldForm[];
+}
+
+interface CellDataMappingForm {
+  target_table: string;
+  key: {
+    field: string;
+    expr: string;
+  };
+  sources: MappingSourceForm[];
 }
 
 type MonacoGlobal = typeof globalThis & {
@@ -816,8 +890,17 @@ const cellDataHelpVisible = ref(false);
 const cellDataSettingsVisible = ref(false);
 const cellDataScanPaths = ref<string[]>([]);
 const cellDataMappingText = ref('');
+const cellDataMappingMode = ref<'form' | 'json'>('form');
 const cellDataEditorHost = ref<HTMLDivElement | null>(null);
 const cellDataEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+const cellDataMappingForm = reactive<CellDataMappingForm>({
+  target_table: 'cellinfo',
+  key: {
+    field: 'CGI',
+    expr: '{PLMN}-{eNodeBID}-{CellID}'
+  },
+  sources: []
+});
 const schedulerStatus = ref<RemoteSchedulerStatus | null>(null);
 const newExtractValues = reactive<Record<number, string>>({});
 
@@ -935,6 +1018,10 @@ const readyRuleOptions: SelectOption[] = [
   { label: '每日7天', value: 'daily' },
   { label: '自动日/周', value: 'auto' }
 ];
+const mappingFieldModeOptions: SelectOption[] = [
+  { label: '字段', value: 'field' },
+  { label: '固定值', value: 'value' }
+];
 
 const visibleFieldMappings = computed(() => {
   const keyword = fieldSearch.value.trim().toLowerCase();
@@ -1048,7 +1135,8 @@ async function loadConfig() {
     cellDataRegexForm.day_dir_regex = config.cell_data?.day_dir_regex || '(?P<day>\\\\d{1,2})日';
     cellDataRegexForm.file_name_regex = config.cell_data?.file_name_regex || '^Result_300_.*\\\\.zip$';
     cellDataRegexForm.file_time_regex = config.cell_data?.file_time_regex || '(?P<timestamp>\\\\d{14})(?=\\\\.zip$)';
-    cellDataMappingText.value = JSON.stringify(config.cell_data?.mapping || {}, null, 2);
+    setCellDataMappingText(JSON.stringify(config.cell_data?.mapping || {}, null, 2));
+    syncCellDataMappingFormFromText();
     Object.assign(historyRetentionForm, normalizeHistoryRetentionConfig(config.history_retention));
     sheetFilters.value = [...config.sheet_filter];
     extractFields.value = normalizeExtractFields(config.extract_fields);
@@ -1259,6 +1347,9 @@ function removeCellDataScanPath(index: number) {
 }
 
 function getCellDataSettingsPayload() {
+  if (cellDataMappingMode.value === 'form') {
+    syncCellDataMappingTextFromForm();
+  }
   let mapping: Record<string, unknown>;
   try {
     mapping = JSON.parse(getCellDataMappingText() || '{}') as Record<string, unknown>;
@@ -1292,6 +1383,7 @@ async function restoreDefaultCellDataMapping() {
   try {
     const mapping = await apiGet<Record<string, unknown>>('/api/config/cell-data/mapping/default');
     setCellDataMappingText(JSON.stringify(mapping, null, 2));
+    syncCellDataMappingFormFromText();
     message.success('已恢复默认映射');
   } catch (error) {
     message.error(error instanceof Error ? error.message : '恢复默认映射失败');
@@ -1305,6 +1397,7 @@ async function saveCellDataSettings() {
     const result = await apiPost<ApiMessage>('/api/config/cell-data/settings', payload);
     cellDataScanPaths.value = normalizeCellDataScanPaths(payload.scan_paths);
     setCellDataMappingText(JSON.stringify(payload.mapping, null, 2));
+    syncCellDataMappingFormFromText();
     configUpdate.value = result.update || configUpdate.value;
     message.success(result.message || 'CellData 规则已保存');
   } catch (error) {
@@ -1316,7 +1409,9 @@ async function saveCellDataSettings() {
 
 function openCellDataSettingsModal() {
   cellDataSettingsVisible.value = true;
-  void nextTick(createCellDataEditor);
+  if (cellDataMappingMode.value === 'json') {
+    void nextTick(createCellDataEditor);
+  }
 }
 
 function createCellDataEditor() {
@@ -1362,6 +1457,96 @@ function setCellDataMappingText(value: string) {
   if (cellDataEditor.value) {
     cellDataEditor.value.setValue(value);
   }
+}
+
+function switchCellDataMappingMode(value: string) {
+  if (value === 'json') {
+    syncCellDataMappingTextFromForm();
+    cellDataMappingMode.value = 'json';
+    void nextTick(createCellDataEditor);
+    return;
+  }
+  cellDataMappingText.value = getCellDataMappingText();
+  disposeCellDataEditor();
+  cellDataMappingMode.value = 'form';
+  syncCellDataMappingFormFromText();
+}
+
+function syncCellDataMappingFormFromText() {
+  try {
+    applyCellDataMappingForm(JSON.parse(cellDataMappingText.value || '{}') as Record<string, unknown>);
+  } catch {
+    applyCellDataMappingForm({});
+  }
+}
+
+function syncCellDataMappingTextFromForm() {
+  setCellDataMappingText(JSON.stringify(mappingFormToJson(), null, 2));
+}
+
+function applyCellDataMappingForm(mapping: Record<string, unknown>) {
+  cellDataMappingForm.target_table = String(mapping.target_table || 'cellinfo');
+  const key = typeof mapping.key === 'object' && mapping.key !== null ? mapping.key as Record<string, unknown> : {};
+  cellDataMappingForm.key.field = String(key.field || 'CGI');
+  cellDataMappingForm.key.expr = String(key.expr || '{PLMN}-{eNodeBID}-{CellID}');
+  cellDataMappingForm.sources.splice(0, cellDataMappingForm.sources.length);
+  const sources = Array.isArray(mapping.sources) ? mapping.sources : [];
+  for (const item of sources) {
+    if (typeof item !== 'object' || item === null) continue;
+    const source = item as Record<string, unknown>;
+    const fields = typeof source.fields === 'object' && source.fields !== null ? source.fields as Record<string, unknown> : {};
+    cellDataMappingForm.sources.push({
+      band: String(source.band || ''),
+      file_prefix: String(source.file_prefix || ''),
+      fields: Object.entries(fields).map(([target, rule]) => {
+        if (typeof rule === 'object' && rule !== null && 'value' in rule) {
+          return { target, mode: 'value', value: String((rule as Record<string, unknown>).value ?? '') };
+        }
+        return { target, mode: 'field', value: String(rule ?? '') };
+      })
+    });
+  }
+}
+
+function mappingFormToJson(): Record<string, unknown> {
+  return {
+    target_table: cellDataMappingForm.target_table.trim() || 'cellinfo',
+    key: {
+      field: cellDataMappingForm.key.field.trim() || 'CGI',
+      expr: cellDataMappingForm.key.expr.trim() || '{PLMN}-{eNodeBID}-{CellID}'
+    },
+    sources: cellDataMappingForm.sources
+      .map(source => {
+        const fields: Record<string, unknown> = {};
+        for (const field of source.fields) {
+          const target = field.target.trim();
+          if (!target) continue;
+          fields[target] = field.mode === 'value' ? { value: field.value } : field.value.trim();
+        }
+        return {
+          band: source.band.trim(),
+          file_prefix: source.file_prefix.trim(),
+          fields
+        };
+      })
+      .filter(source => source.band && source.file_prefix && Object.keys(source.fields).length)
+  };
+}
+
+function addCellDataMappingSource() {
+  cellDataMappingForm.sources.push({ band: '', file_prefix: '', fields: [] });
+}
+
+function removeCellDataMappingSource(index: number) {
+  cellDataMappingForm.sources.splice(index, 1);
+}
+
+function addCellDataMappingField(sourceIndex: number) {
+  cellDataMappingForm.sources[sourceIndex]?.fields.push({ target: '', mode: 'field', value: '' });
+}
+
+function removeCellDataMappingField(sourceIndex: number, fieldIndex: number) {
+  cellDataMappingForm.sources[sourceIndex]?.fields.splice(fieldIndex, 1);
 }
 
 async function formatCellDataMapping() {

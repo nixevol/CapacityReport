@@ -1667,6 +1667,51 @@ select {
   border-radius: var(--td-radius-default);
 }
 
+.cell-data-mapping-form,
+.cell-data-source-list,
+.cell-data-source-card {
+  display: grid;
+  gap: 10px;
+}
+
+.cell-data-mapping-key {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(120px, 0.6fr) minmax(240px, 1.4fr);
+  gap: 12px;
+}
+
+.cell-data-source-card {
+  padding: 12px;
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
+}
+
+.cell-data-source-header,
+.cell-data-source-meta,
+.cell-data-field-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+
+.cell-data-source-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.cell-data-source-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cell-data-field-list {
+  display: grid;
+  gap: 6px;
+}
+
+.cell-data-field-row {
+  grid-template-columns: minmax(120px, 0.9fr) 96px minmax(160px, 1fr) auto;
+}
+
 .settings-rules-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.4fr);
