@@ -267,7 +267,7 @@ import {
 } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, download } from '../api/client';
-import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
+import type { ApiMessage, AppConfig, DatabaseInfo, TableData, TableInfo } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
@@ -277,6 +277,8 @@ type DatabaseSource = 'main' | 'cell_data';
 interface DatabaseSourceOption {
   label: string;
   value: DatabaseSource;
+  title: string;
+  databaseName: string;
 }
 
 const COLUMN_MIN_WIDTH = 140;
@@ -286,8 +288,8 @@ const databaseInfo = ref<DatabaseInfo | null>(null);
 const selectedDatabaseSource = ref<DatabaseSource>('main');
 const databaseSourceModalVisible = ref(false);
 const databaseSourceOptions = ref<DatabaseSourceOption[]>([
-  { label: '主数据库', value: 'main' },
-  { label: 'CellData', value: 'cell_data' }
+  { label: '主数据库', value: 'main', title: '主数据库', databaseName: '' },
+  { label: 'CellData', value: 'cell_data', title: 'CellData', databaseName: '' }
 ]);
 const tables = ref<string[]>([]);
 const selectedTable = ref<string | null>(null);
@@ -309,7 +311,7 @@ let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 const selectedDatabaseSourceLabel = computed(() => (
-  databaseSourceOptions.value.find(option => option.value === selectedDatabaseSource.value)?.label || '主数据库'
+  databaseSourceOptions.value.find(option => option.value === selectedDatabaseSource.value)?.title || '主数据库'
 ));
 const downloading = computed(() => Boolean(downloadingFormat.value));
 const exportButtonText = computed(() => (
@@ -405,11 +407,23 @@ async function testConnection() {
   }
 }
 
-function loadDatabaseSourceOptions() {
-  databaseSourceOptions.value = [
-    { label: '主数据库', value: 'main' },
-    { label: 'CellData', value: 'cell_data' }
-  ];
+async function loadDatabaseSourceOptions() {
+  try {
+    const config = await apiGet<AppConfig>('/api/config');
+    const mainName = config.warehouse_type === 'metrix'
+      ? (config.metrix.target_database || 'Metrix')
+      : (config.mysql.dbname || '主数据库');
+    const cellName = config.cell_data?.mysql?.dbname || 'CellData';
+    databaseSourceOptions.value = [
+      { label: `主数据库：${mainName}`, value: 'main', title: '主数据库', databaseName: mainName },
+      { label: `CellData：${cellName}`, value: 'cell_data', title: 'CellData', databaseName: cellName }
+    ];
+  } catch {
+    databaseSourceOptions.value = [
+      { label: '主数据库', value: 'main', title: '主数据库', databaseName: '' },
+      { label: 'CellData', value: 'cell_data', title: 'CellData', databaseName: '' }
+    ];
+  }
 }
 
 async function loadTables() {
