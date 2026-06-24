@@ -730,3 +730,17 @@
 - 数据管理页不再用下拉框切换数据库，改为表标题旁的图标按钮打开「选择数据库」弹窗；弹窗内为固定高度列表，超出高度滚动。
 - 左侧标题只显示分类名（主数据库 / CellData），不显示具体库名，也不再显示“表”字；弹窗列表显示真实库名（如 `主数据库：CapacityReport`）。选择项后续新增更多数据库时继续扩展同一列表，不占用侧栏宽度。
 - 验证：`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物已清理。
+
+## 2026-06-25：CellData cellinfo 来源与映射规则（待实现）
+
+- 数据来源：SFTP `127.0.0.1:2022` 开发环境中，CellData 原始文件位于 `/网优日常优化数据文档/日常性能报表/2026年/300表/{700M,2.6G}/`。目录下文件为 `Result_300_*.zip`；文件时间取 ZIP 文件名末尾时间戳（如 `20260620132109`），**不要用 SFTP 修改时间**。
+- ZIP 结构：压缩包内部包含若干 CSV，例如 `LTE_ITBBU_CellInfo_*.csv`、`LTE_SDR_CellInfo_*.csv`、`NR_CellInfo_*.csv`、`NetworkInfoStat_*.csv`、`SpecificColumn/...`、`others/...`。核心入库来源先按文件名前缀识别 `LTE_ITBBU_CellInfo`、`LTE_SDR_CellInfo`、`NR_CellInfo`。
+- 编码注意：样本中 `NR_CellInfo` 用 GBK/GB18030 解码中文正常，按 UTF-8 会乱码；后续读取 CSV 时需要做编码探测或优先兼容 GBK。
+- 目标表：`celldata.cellinfo`，字段为 `CGI/eNodeBID/CellID/PLMN/基站名称/小区名称/频点/带宽/制式/功率/网络`。其中 `CGI` 由 `PLMN-eNodeBID-CellID` 拼接生成。
+- 2.6G 映射：
+  - `LTE_ITBBU_CellInfo`：`eNodeBID<-eNBId`，`CellID<-cellLocalId`，`PLMN<-plmn`，`基站名称<-eNBName`，`小区名称<-CellName`，`频点<-frequency`，`带宽<-bandWidth`，`制式<-radioMode`，`功率<-cpSpeRefSigPwr`，`网络="4G"`。
+  - `LTE_SDR_CellInfo`：同 `LTE_ITBBU_CellInfo`。
+  - `NR_CellInfo`：`eNodeBID<-gNBId`，`CellID<-cellLocalId`，`PLMN<-plmn`，`基站名称<-gNBName`，`小区名称<-CellName`，`频点<-ssbFrequency`，`带宽<-carrierBandwidth`，`制式="2.6G"`，`功率<-powerPerRERef`，`网络="5G"`。
+- 700M 映射：
+  - `LTE_ITBBU_CellInfo`：`eNodeBID<-eNBId`，`CellID<-cellLocalId`，`PLMN<-plmn`，`基站名称<-eNBName`，`小区名称<-CellName`，`频点<-frequency`，`带宽<-bandWidth`，`制式<-radioMode`，`功率<-cpSpeRefSigPwr`，`网络="4G"`。
+  - `NR_CellInfo`：`eNodeBID<-gNBId`，`CellID<-cellLocalId`，`PLMN<-plmn`，`基站名称<-gNBName`，`小区名称<-CellName`，`频点<-ssbFrequency`，`带宽<-carrierBandwidth`，`制式="700M"`，`功率<-powerPerRERef`，`网络="5G"`。
