@@ -4,7 +4,6 @@
       <section class="database-table-pane">
         <div class="database-table-pane-header">
           <div class="database-source-header">
-            <h2>表</h2>
             <span class="database-source-name">{{ selectedDatabaseSourceLabel }}</span>
             <n-button
               quaternary
@@ -268,7 +267,7 @@ import {
 } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, download } from '../api/client';
-import type { ApiMessage, AppConfig, DatabaseInfo, TableData, TableInfo } from '../types';
+import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
@@ -406,23 +405,11 @@ async function testConnection() {
   }
 }
 
-async function loadDatabaseSourceOptions() {
-  try {
-    const config = await apiGet<AppConfig>('/api/config');
-    const mainName = config.warehouse_type === 'metrix'
-      ? (config.metrix.target_database || 'Metrix')
-      : (config.mysql.dbname || '主数据库');
-    const cellName = config.cell_data?.mysql?.dbname || 'CellData';
-    databaseSourceOptions.value = [
-      { label: `主数据库：${mainName}`, value: 'main' },
-      { label: `CellData：${cellName}`, value: 'cell_data' }
-    ];
-  } catch {
-    databaseSourceOptions.value = [
-      { label: '主数据库', value: 'main' },
-      { label: 'CellData', value: 'cell_data' }
-    ];
-  }
+function loadDatabaseSourceOptions() {
+  databaseSourceOptions.value = [
+    { label: '主数据库', value: 'main' },
+    { label: 'CellData', value: 'cell_data' }
+  ];
 }
 
 async function loadTables() {
@@ -756,14 +743,6 @@ function formatCell(value: unknown): string {
   border-bottom: 1px solid var(--td-border-color-light);
 }
 
-.database-table-pane-header h2 {
-  margin: 0;
-  color: var(--td-text-color-primary);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-
 .database-source-header {
   display: flex;
   min-width: 0;
@@ -775,8 +754,10 @@ function formatCell(value: unknown): string {
 .database-source-name {
   min-width: 0;
   overflow: hidden;
-  color: var(--td-text-color-secondary);
-  font-size: 12px;
+  color: var(--td-text-color-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
