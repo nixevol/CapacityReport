@@ -687,3 +687,10 @@
 - 授权默认到期日：`app/services/license.py::DEFAULT_EXPIRES_ON` 由 `2026-06-20` 改为 `2026-12-30`，前端兜底文案（`FileWorkflow.vue`、`LicenseActivationModal.vue`）同步；授权功能本身保留（连点品牌图标 8 次打开延期窗口）。
 - 设置页排版：`styles.css` 的 `.settings-database-stack` 由纵向 `column` 改为 `row wrap`，子卡 `flex:1 1 360px;min-width:320px`，宽屏并排、窄屏自动换行；「处理历史保留」卡加 `work-card-narrow`（`flex-grow:0` + `max-width`）显著收窄；规则同时作用于「数据源/仓库」与「数据库」两个标签页；清理已失效的 `.settings-token-panel` 规则。
 - 验证：`python -m compileall app` 通过；前端 `npm run build`（vue-tsc）通过，产物中不再出现 swagger/ApiDocs chunk。
+
+## 2026-06-24：Metrix 模式报表 SQL 固定按本地 ReportScript.sql 执行（移除库内脚本 script_id 死路径）
+
+- 背景：Metrix 平台 `POST /run-script` 同时支持 `content`（直接执行 SQL 文本）与 `script_id`（执行平台数据库里保存的脚本，且 `script_id` 会覆盖 `content`）。CapacityReport 期望「无论哪种触发，Metrix 模式都执行本应用本地的 `ReportScript.sql`」，不使用平台库内保存的脚本。
+- 现状确认：`pipeline.py`/`warehouse.py` 所有 `run_script` 调用本就只传 `content`（报表 SQL 来自 `read_report_sql()` 读取本地 `ReportScript.sql`），从不传 `script_id`，行为已正确。
+- 改动：`app/services/platform.py::run_script` 删除一直未被调用的 `script_id` 参数与对应 body 分支，方法只构造 `content`，从代码层面杜绝走平台库内脚本那条路；签名由 `(conn_id, script_id=None, content="", ...)` 改为 `(conn_id, content="", ...)`，现有调用全用 `content=` 关键字、`conn_id` 位置参，未受影响。
+- 验证：`python -m compileall app` 通过；全仓 `app` 内除该行注释外无 `script_id` 引用。

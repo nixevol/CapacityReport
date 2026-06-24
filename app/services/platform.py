@@ -103,13 +103,10 @@ class PlatformClient:
             time.sleep(interval)
         raise TimeoutError(f"导入任务 {job_id} 超过 {max_wait}s 仍未完成")
 
-    def run_script(self, conn_id: str, script_id: int | None = None, content: str = "",
+    def run_script(self, conn_id: str, content: str = "",
                    database: str = "", single_session: bool = False, run_timeout: int = 7200) -> dict:
-        body: dict = {"database": database, "stop_on_error": True, "single_session": single_session}
-        if content:
-            body["content"] = content
-        if script_id is not None:
-            body["script_id"] = int(script_id)
+        # 始终按传入的 SQL 文本执行（来自本地 ReportScript.sql），不走 Metrix 库内脚本(script_id)那条路。
+        body: dict = {"content": content, "database": database, "stop_on_error": True, "single_session": single_session}
         resp = self.session.post(
             f"{self.base}/api/databases/{conn_id}/run-script",
             json=body,
