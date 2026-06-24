@@ -719,6 +719,7 @@
           <div class="cell-data-section-title">
             <strong>映射规则</strong>
             <n-space size="small">
+              <n-button v-if="cellDataMappingMode === 'form'" size="small" @click="addCellDataMappingSource">添加来源</n-button>
               <n-radio-group v-model:value="cellDataMappingMode" size="small" @update:value="switchCellDataMappingMode">
                 <n-radio-button value="form">图形化</n-radio-button>
                 <n-radio-button value="json">JSON</n-radio-button>
@@ -743,39 +744,42 @@
             </div>
             <div class="cell-data-source-list">
               <div v-for="(source, sourceIndex) in cellDataMappingForm.sources" :key="sourceIndex" class="cell-data-source-card">
-                <div class="cell-data-source-header">
-                  <strong>来源 {{ sourceIndex + 1 }}</strong>
-                  <n-button quaternary circle size="small" type="error" @click="removeCellDataMappingSource(sourceIndex)">
+                <div class="cell-data-source-header" @click="toggleCellDataMappingSource(sourceIndex)">
+                  <div class="cell-data-source-title">
+                    <span class="cell-data-source-toggle">{{ source.collapsed ? '▶' : '▼' }}</span>
+                    <strong>来源 {{ sourceIndex + 1 }}</strong>
+                    <span>{{ source.band || '未填写目录' }} / {{ source.file_prefix || '未填写前缀' }}</span>
+                  </div>
+                  <n-button quaternary circle size="small" type="error" @click.stop="removeCellDataMappingSource(sourceIndex)">
                     <template #icon>
                       <n-icon><CloseOutline /></n-icon>
                     </template>
                   </n-button>
                 </div>
-                <div class="cell-data-source-meta">
-                  <n-form-item label="目录">
-                    <n-input v-model:value="source.band" placeholder="如 2.6G" />
-                  </n-form-item>
-                  <n-form-item label="CSV 前缀">
-                    <n-input v-model:value="source.file_prefix" placeholder="如 NR_CellInfo" />
-                  </n-form-item>
-                </div>
-                <div class="cell-data-field-list">
-                  <div v-for="(field, fieldIndex) in source.fields" :key="fieldIndex" class="cell-data-field-row">
-                    <n-input v-model:value="field.target" size="small" placeholder="目标字段" />
-                    <n-select v-model:value="field.mode" size="small" :options="mappingFieldModeOptions" />
-                    <n-input v-model:value="field.value" size="small" :placeholder="field.mode === 'value' ? '固定值' : 'CSV 字段名'" />
-                    <n-button quaternary circle size="small" type="error" @click="removeCellDataMappingField(sourceIndex, fieldIndex)">
-                      <template #icon>
-                        <n-icon><CloseOutline /></n-icon>
-                      </template>
-                    </n-button>
+                <template v-if="!source.collapsed">
+                  <div class="cell-data-source-meta">
+                    <n-form-item label="目录">
+                      <n-input v-model:value="source.band" placeholder="如 2.6G" />
+                    </n-form-item>
+                    <n-form-item label="CSV 前缀">
+                      <n-input v-model:value="source.file_prefix" placeholder="如 NR_CellInfo" />
+                    </n-form-item>
                   </div>
-                </div>
-                <n-button size="small" @click="addCellDataMappingField(sourceIndex)">添加字段</n-button>
+                  <div class="cell-data-field-list">
+                    <div v-for="(field, fieldIndex) in source.fields" :key="fieldIndex" class="cell-data-field-row">
+                      <n-input v-model:value="field.target" size="small" placeholder="目标字段" />
+                      <n-select v-model:value="field.mode" size="small" :options="mappingFieldModeOptions" />
+                      <n-input v-model:value="field.value" size="small" :placeholder="field.mode === 'value' ? '固定值' : 'CSV 字段名'" />
+                      <n-button quaternary circle size="small" type="error" @click="removeCellDataMappingField(sourceIndex, fieldIndex)">
+                        <template #icon>
+                          <n-icon><CloseOutline /></n-icon>
+                        </template>
+                      </n-button>
+                    </div>
+                  </div>
+                  <n-button size="small" @click="addCellDataMappingField(sourceIndex)">添加字段</n-button>
+                </template>
               </div>
-            </div>
-            <div class="cell-data-mapping-actions">
-              <n-button size="small" @click="addCellDataMappingSource">添加来源</n-button>
             </div>
           </div>
         </section>
@@ -833,6 +837,7 @@ interface MappingFieldForm {
 interface MappingSourceForm {
   band: string;
   file_prefix: string;
+  collapsed: boolean;
   fields: MappingFieldForm[];
 }
 
@@ -1500,6 +1505,7 @@ function applyCellDataMappingForm(mapping: Record<string, unknown>) {
     cellDataMappingForm.sources.push({
       band: String(source.band || ''),
       file_prefix: String(source.file_prefix || ''),
+      collapsed: false,
       fields: Object.entries(fields).map(([target, rule]) => {
         if (typeof rule === 'object' && rule !== null && 'value' in rule) {
           return { target, mode: 'value', value: String((rule as Record<string, unknown>).value ?? '') };
@@ -1536,7 +1542,14 @@ function mappingFormToJson(): Record<string, unknown> {
 }
 
 function addCellDataMappingSource() {
-  cellDataMappingForm.sources.push({ band: '', file_prefix: '', fields: [] });
+  cellDataMappingForm.sources.push({ band: '', file_prefix: '', collapsed: false, fields: [] });
+}
+
+function toggleCellDataMappingSource(index: number) {
+  const source = cellDataMappingForm.sources[index];
+  if (source) {
+    source.collapsed = !source.collapsed;
+  }
 }
 
 function removeCellDataMappingSource(index: number) {

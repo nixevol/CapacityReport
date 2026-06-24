@@ -1722,6 +1722,29 @@ select {
 
 .cell-data-source-header {
   grid-template-columns: minmax(0, 1fr) auto;
+  cursor: pointer;
+}
+
+.cell-data-source-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.cell-data-source-title span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--td-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cell-data-source-toggle {
+  flex: 0 0 auto;
+  color: var(--td-text-color-placeholder);
+  font-size: 11px;
 }
 
 .cell-data-source-meta {
