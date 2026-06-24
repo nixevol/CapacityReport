@@ -276,7 +276,7 @@
         </section>
         <section class="cell-data-help-section">
           <h4>CellData</h4>
-          <p>启用 CellData 数据源时，处理容量数据前会先刷新 CellData。</p>
+          <p>启用 CellData 数据源时，处理容量数据前会先更新 CellData。</p>
         </section>
       </n-scrollbar>
     </n-modal>
