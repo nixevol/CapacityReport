@@ -15,6 +15,20 @@
       @dragleave="onDragLeave"
       @drop.prevent.stop="onDrop"
     >
+      <span class="upload-card-label">容量数据</span>
+      <n-button
+        quaternary
+        circle
+        size="small"
+        class="upload-help-button"
+        aria-label="查看容量数据说明"
+        title="查看说明"
+        @click.stop="capacityHelpVisible = true"
+      >
+        <template #icon>
+          <n-icon><InformationCircleOutline /></n-icon>
+        </template>
+      </n-button>
       <div class="upload-icon">
         <n-icon size="24"><FolderOpenOutline /></n-icon>
       </div>
@@ -59,20 +73,66 @@
       />
     </section>
 
-    <section v-if="!taskInProgress" class="cell-data-card">
-      <div>
-        <h3>CellData</h3>
-        <p>刷新 CellData 数据。</p>
-      </div>
+    <section
+      v-if="!taskInProgress"
+      class="cell-data-upload-zone"
+      :class="{ dragover: isCellDataDragging, disabled: cellDataStarting }"
+      role="button"
+      tabindex="0"
+      :aria-disabled="cellDataStarting"
+      @click="cellDataFolderInput?.click()"
+      @keydown.enter.prevent="cellDataFolderInput?.click()"
+      @keydown.space.prevent="cellDataFolderInput?.click()"
+      @dragenter.prevent.stop="onCellDataDragEnter"
+      @dragover.prevent.stop="onCellDataDragOver"
+      @dragleave="onCellDataDragLeave"
+      @drop.prevent.stop="onCellDataDrop"
+    >
+      <span class="upload-card-label">CellData</span>
       <n-button
-        type="primary"
-        secondary
-        :loading="cellDataStarting"
-        :disabled="working || remoteStarting || cellDataStarting"
-        @click="startCellDataProcessing"
+        quaternary
+        circle
+        size="small"
+        class="upload-help-button"
+        aria-label="查看 CellData 文件说明"
+        title="查看说明"
+        @click.stop="cellDataHelpVisible = true"
       >
-        刷新 CellData
+        <template #icon>
+          <n-icon><InformationCircleOutline /></n-icon>
+        </template>
       </n-button>
+      <div class="upload-icon">
+        <n-icon size="24"><FolderOpenOutline /></n-icon>
+      </div>
+      <div class="cell-data-upload-text">
+        <h3>拖拽文件夹到这里</h3>
+        <p>包含 700M、2.6G 等目录</p>
+      </div>
+      <div class="upload-zone-actions">
+        <span class="upload-hint">或者点击选择文件夹</span>
+        <n-space size="small" @click.stop @keydown.stop>
+          <n-button
+            type="primary"
+            secondary
+            :loading="cellDataStarting"
+            :disabled="working || remoteStarting || cellDataStarting"
+            @click="startCellDataProcessing"
+          >
+            <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+            远程刷新
+          </n-button>
+        </n-space>
+      </div>
+      <input
+        ref="cellDataFolderInput"
+        class="hidden-input"
+        type="file"
+        multiple
+        webkitdirectory
+        directory
+        @change="pickCellDataFiles"
+      />
     </section>
 
     <div v-if="!taskInProgress && files.length > 0" class="file-list">
@@ -193,6 +253,58 @@
         </div>
       </template>
     </n-modal>
+
+    <n-modal
+      v-model:show="capacityHelpVisible"
+      preset="card"
+      class="cell-data-help-modal"
+      title="容量数据说明"
+      :style="{ width: 'min(520px, calc(100vw - 32px))' }"
+    >
+      <n-scrollbar class="cell-data-help-scroll">
+        <section class="cell-data-help-section">
+          <h4>支持格式</h4>
+          <p>支持 ZIP、Excel 和 CSV 文件。</p>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>上传方式</h4>
+          <p>可拖拽文件或文件夹，也可点击卡片选择文件。</p>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>远程处理</h4>
+          <p>使用系统设置中的数据源配置下载并处理。</p>
+        </section>
+      </n-scrollbar>
+    </n-modal>
+
+    <n-modal
+      v-model:show="cellDataHelpVisible"
+      preset="card"
+      class="cell-data-help-modal"
+      title="CellData 文件说明"
+      :style="{ width: 'min(520px, calc(100vw - 32px))' }"
+    >
+      <n-scrollbar class="cell-data-help-scroll">
+        <section class="cell-data-help-section">
+          <h4>目录结构</h4>
+          <p>请选择包含频段目录的文件夹，例如：</p>
+          <code>300表/700M/Result_300_*.zip</code>
+          <code>300表/2.6G/Result_300_*.zip</code>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>文件要求</h4>
+          <p>只处理文件名以 <strong>Result_300_</strong> 开头的 ZIP。</p>
+          <p>每个频段目录只取文件名末尾时间戳最新的 ZIP。</p>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>ZIP 内容</h4>
+          <p>识别以下 CSV 文件名前缀：</p>
+          <code>LTE_ITBBU_CellInfo</code>
+          <code>LTE_SDR_CellInfo</code>
+          <code>NR_CellInfo</code>
+        </section>
+      </n-scrollbar>
+    </n-modal>
   </div>
 </template>
 
@@ -204,6 +316,7 @@ import {
   CloudUploadOutline,
   DocumentTextOutline,
   FolderOpenOutline,
+  InformationCircleOutline,
   RefreshOutline,
   TrashOutline
 } from '@vicons/ionicons5';
@@ -238,12 +351,16 @@ const validExtensions = new Set(['.zip', '.xlsx', '.xls', '.csv']);
 const message = useMessage();
 const fileInput = ref<HTMLInputElement | null>(null);
 const folderInput = ref<HTMLInputElement | null>(null);
+const cellDataFolderInput = ref<HTMLInputElement | null>(null);
 const files = ref<PickedFile[]>([]);
 const uploadProgress = ref(0);
 const working = ref(false);
 const remoteStarting = ref(false);
 const cellDataStarting = ref(false);
 const isDragging = ref(false);
+const isCellDataDragging = ref(false);
+const capacityHelpVisible = ref(false);
+const cellDataHelpVisible = ref(false);
 const taskStatus = ref<TaskStatus | null>(null);
 const activeTask = ref<ActiveTask | null>(null);
 const keepLatestLog = ref(false);
@@ -320,6 +437,10 @@ onMounted(() => {
   if (folder) {
     folder.webkitdirectory = true;
   }
+  const cellDataFolder = cellDataFolderInput.value as (HTMLInputElement & { webkitdirectory?: boolean }) | null;
+  if (cellDataFolder) {
+    cellDataFolder.webkitdirectory = true;
+  }
   void checkActiveTask();
 });
 
@@ -367,6 +488,43 @@ async function onDrop(event: DragEvent) {
   addFiles(dropped);
 }
 
+function onCellDataDragEnter() {
+  if (!cellDataStarting.value && !taskInProgress.value) {
+    isCellDataDragging.value = true;
+  }
+}
+
+function onCellDataDragOver() {
+  if (!cellDataStarting.value && !taskInProgress.value) {
+    isCellDataDragging.value = true;
+  }
+}
+
+function onCellDataDragLeave(event: DragEvent) {
+  const target = event.currentTarget as HTMLElement;
+  const related = event.relatedTarget as Node | null;
+  if (!related || !target.contains(related)) {
+    isCellDataDragging.value = false;
+  }
+}
+
+async function onCellDataDrop(event: DragEvent) {
+  isCellDataDragging.value = false;
+  if (cellDataStarting.value || taskInProgress.value || !event.dataTransfer) return;
+  if (!hasDroppedDirectory(event.dataTransfer)) {
+    message.warning('请拖入包含 Result_300 ZIP 的文件夹');
+    return;
+  }
+  await startCellDataUpload(await readDroppedFiles(event.dataTransfer));
+}
+
+async function pickCellDataFiles(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const selected = Array.from(input.files || []).map(toDroppedFile);
+  input.value = '';
+  await startCellDataUpload(selected);
+}
+
 async function readDroppedFiles(dataTransfer: DataTransfer): Promise<DroppedFile[]> {
   const result: DroppedFile[] = [];
   const items = Array.from(dataTransfer.items || []);
@@ -384,6 +542,13 @@ async function readDroppedFiles(dataTransfer: DataTransfer): Promise<DroppedFile
   }
 
   return Array.from(dataTransfer.files || []).map(toDroppedFile);
+}
+
+function hasDroppedDirectory(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.items || []).some(item => {
+    if (item.kind !== 'file' || typeof item.webkitGetAsEntry !== 'function') return false;
+    return Boolean(item.webkitGetAsEntry()?.isDirectory);
+  });
 }
 
 async function traverseEntry(entry: FileSystemEntry, parentPath: string): Promise<DroppedFile[]> {
@@ -479,6 +644,11 @@ function isSupportedFile(path: string): boolean {
   const dotIndex = path.lastIndexOf('.');
   if (dotIndex < 0) return false;
   return validExtensions.has(path.slice(dotIndex).toLowerCase());
+}
+
+function isCellDataZip(path: string): boolean {
+  const name = normalizePath(path).split('/').pop() || '';
+  return /^Result_300_.*\.zip$/i.test(name);
 }
 
 function normalizePath(path: string): string {
@@ -584,6 +754,46 @@ async function startCellDataProcessing() {
     startPolling(result.task_id);
   } catch (error) {
     message.error(error instanceof Error ? error.message : 'CellData 处理启动失败');
+  } finally {
+    cellDataStarting.value = false;
+  }
+}
+
+async function startCellDataUpload(items: DroppedFile[]) {
+  if (cellDataStarting.value || taskInProgress.value) return;
+  const accepted = items
+    .map(item => ({ ...item, path: normalizePath(item.path) }))
+    .filter(item => isCellDataZip(item.path));
+  if (accepted.length === 0) {
+    message.warning('请选择 Result_300 ZIP 文件');
+    return;
+  }
+
+  const formData = new FormData();
+  for (const item of accepted) {
+    formData.append('files', item.file, item.path);
+  }
+
+  cellDataStarting.value = true;
+  try {
+    const result = await upload<UploadResponse>('/api/cell-data/process/upload', formData);
+    message.success(result.message || `已上传 ${accepted.length} 个文件`);
+    activeTask.value = {
+      has_active: true,
+      task_id: result.task_id,
+      stage: result.stage || 'parsing',
+      started_at: new Date().toISOString()
+    };
+    taskStatus.value = {
+      task_id: result.task_id,
+      status: 'processing',
+      stage: result.stage || 'parsing',
+      logs: ['CellData 文件已上传，等待处理日志...']
+    };
+    taskMode.value = 'cell_data';
+    startPolling(result.task_id);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'CellData 上传处理失败');
   } finally {
     cellDataStarting.value = false;
   }

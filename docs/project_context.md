@@ -753,3 +753,16 @@
 - 接口：新增 `app/api/routers/cell_data.py`，提供 `POST /api/cell-data/process/start` 与 `/status`，数据处理页新增独立 CellData 卡片，可只刷新 CellData，不跑容量处理。
 - 接入：本地上传、远程手动和自动调度入口都会在容量处理前调用 CellData 预处理；CellData 单独处理和容量处理共用现有全局任务锁，避免并发写库。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过；远程定位可从最新年份 `2026年/300表` 选出 `2.6G` 与 `700M` 各自最新 `Result_300` ZIP；用 SFTP MCP 读取的小样本 ZIP 验证解析和入库，`celldata.cellinfo` 写入 1 行且中文字段正常（样本 `CGI=460-00-12683845-1`）。
+
+## 2026-06-25：CellData 卡片支持本地上传处理
+
+- 数据处理页 CellData 卡片改为与主上传区一致的拖拽/点击上传样式，支持拖入或选择多个 `Result_300_*.zip`，也支持选择文件夹上传。
+- 新增 `/api/cell-data/process/upload`，上传后复用 CellData 解析入库逻辑；若 ZIP 不在 `700M/2.6G` 等目录下且无法识别频段，会跳过无法唯一匹配的 CSV。
+- CellData 卡片仍保留「远程刷新」操作，用于按系统设置中的 CellData SFTP/FTP 配置拉取处理。
+- 验证：`frontend` `npm run build` 通过；构建产物已清理。
+
+## 2026-06-25：数据处理卡片补说明按钮并规范 CellData 上传
+
+- 数据处理页的容量数据卡片与 CellData 卡片左上角均显示数据类型，右上角均提供说明图标按钮，点击后以小弹窗展示所需文件格式和目录结构。
+- CellData 卡片改为点击/拖拽文件夹上传，不再提供单文件选择；直接拖入单个 ZIP 会提示选择包含 `Result_300` ZIP 的文件夹。
+- 验证：`frontend` `npm run build` 通过；构建产物已清理。

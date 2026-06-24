@@ -84,6 +84,24 @@ class CellDataProcessor:
         self._log(f"CellData 导入完成，共 {result.imported_rows} 行")
         return result
 
+    def run_local(self, upload_root: Path) -> CellDataResult:
+        self._set_stage("locating")
+        local_files = self._select_local_zip_files(upload_root)
+        if not local_files:
+            raise RuntimeError("未找到可处理的 CellData ZIP 文件")
+        self._log(f"已选择 {len(local_files)} 个 CellData ZIP 文件")
+
+        self._set_stage("parsing")
+        result = CellDataResult(selected_files=len(local_files))
+        rows = self._parse_zip_files(local_files, result)
+        if not rows:
+            raise RuntimeError("CellData ZIP 中未解析到有效数据")
+
+        self._set_stage("importing")
+        result.imported_rows = self._replace_cellinfo(rows)
+        self._log(f"CellData 导入完成，共 {result.imported_rows} 行")
+        return result
+
     def _select_latest_zip_files(self) -> list[SelectedZip]:
         selected: list[SelectedZip] = []
         for template in self.config.scan_paths:
@@ -182,6 +200,47 @@ class CellDataProcessor:
             ssh.close()
         return local_files
 
+    def _select_local_zip_files(self, upload_root: Path) -> list[tuple[SelectedZip, Path]]:
+        grouped: dict[str, list[Path]] = {}
+        for path in upload_root.rglob("*.zip"):
+            if not self.file_name_re.search(path.name):
+                continue
+            try:
+                parent = str(path.parent.relative_to(upload_root)).replace("\\", "/")
+            except ValueError:
+                parent = ""
+            grouped.setdefault("" if parent == "." else parent, []).append(path)
+
+        selected: list[tuple[SelectedZip, Path]] = []
+        for parent, paths in sorted(grouped.items(), key=lambda item: item[0]):
+            candidates = []
+            for path in paths:
+                match = self.file_time_re.search(path.name)
+                if match:
+                    candidates.append((match.group("timestamp"), path))
+            if not candidates:
+                continue
+            timestamp, path = max(candidates, key=lambda item: item[0])
+            band = Path(parent).name if parent else ""
+            selected_zip = SelectedZip(
+                scan_path=str(upload_root),
+                band=band,
+                remote_file=RemoteFileInfo(
+                    path=str(path),
+                    relative_path=str(path.relative_to(upload_root)).replace("\\", "/"),
+                    parent=parent,
+                    name=path.name,
+                    size=path.stat().st_size,
+                ),
+                timestamp=timestamp,
+            )
+            if not band:
+                self._log(f"未从目录名识别频段: {path.name}")
+            else:
+                self._log(f"{band}: {path.name}")
+            selected.append((selected_zip, path))
+        return selected
+
     @staticmethod
     def _download_result():
         from app.services.remote_download import RemoteDownloadResult
@@ -194,15 +253,22 @@ class CellDataProcessor:
         rows_by_key: dict[str, dict[str, str]] = {}
         for selected, local_path in local_files:
             with zipfile.ZipFile(local_path) as zf:
-                for source in mapping["sources"]:
-                    if source["band"] != selected.band:
+                sources = list(mapping["sources"])
+                for info in zf.infolist():
+                    name = Path(info.filename).name
+                    if not name.lower().endswith(".csv"):
                         continue
-                    for info in zf.infolist():
-                        name = Path(info.filename).name
-                        if not name.lower().endswith(".csv"):
-                            continue
-                        if not name.startswith(source["file_prefix"]):
-                            continue
+                    matching_sources = [
+                        source
+                        for source in sources
+                        if name.startswith(source["file_prefix"]) and (not selected.band or source["band"] == selected.band)
+                    ]
+                    if not matching_sources:
+                        continue
+                    if not selected.band and len(matching_sources) > 1:
+                        self._log(f"跳过无法识别频段的文件: {name}")
+                        continue
+                    for source in matching_sources:
                         raw = zf.read(info.filename)
                         text = self._decode_csv(raw)
                         reader = csv.DictReader(text.splitlines())
