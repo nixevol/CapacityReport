@@ -809,6 +809,12 @@
 - JSON 模式仍使用 Monaco 编辑器，支持格式化、校验、恢复默认；两种模式共用同一份 `CellData.mapping` JSON，切换时自动互转。
 - 验证：`frontend` `npm run build` 通过；构建产物已清理。
 
+## 2026-06-25：修正 LTE_SDR 小区名称映射
+
+- `LTE_SDR_CellInfo` 的小区名称字段实际为 `cellName`（小写 c），不是 `CellName`；默认 CellData 映射和 `Configure.json` 已同步修正。
+- 使用 2.6G 样本重新导入后，`celldata.cellinfo` 中 4G/5G 的 `小区名称` 空值数均为 0。
+- 验证：`python -m compileall -q app` 通过。
+
 ## 2026-06-25：固定图形化映射基础区与添加来源按钮
 
 - CellData「规则设置」弹窗不再整体滚动；高级匹配、目标表、主键字段和主键表达式固定显示，图形化模式下仅来源列表滚动。

@@ -112,7 +112,7 @@ DEFAULT_CELL_DATA_MAPPING: Dict[str, Any] = {
                 "CellID": "cellLocalId",
                 "PLMN": "plmn",
                 "基站名称": "eNBName",
-                "小区名称": "CellName",
+                "小区名称": "cellName",
                 "频点": "frequency",
                 "带宽": "bandWidth",
                 "制式": "radioMode",
