@@ -1683,7 +1683,7 @@ select {
 
 .cell-data-mapping-form {
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .cell-data-mapping-key {
@@ -1709,7 +1709,7 @@ select {
 
 .cell-data-mapping-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .cell-data-source-header,

@@ -719,7 +719,6 @@
           <div class="cell-data-section-title">
             <strong>映射规则</strong>
             <n-space size="small">
-              <n-button v-if="cellDataMappingMode === 'form'" size="small" @click="addCellDataMappingSource">添加来源</n-button>
               <n-radio-group v-model:value="cellDataMappingMode" size="small" @update:value="switchCellDataMappingMode">
                 <n-radio-button value="form">图形化</n-radio-button>
                 <n-radio-button value="json">JSON</n-radio-button>
@@ -742,7 +741,10 @@
                 <n-input v-model:value="cellDataMappingForm.key.expr" />
               </n-form-item>
             </div>
-            <div class="cell-data-source-list">
+            <div class="cell-data-mapping-actions">
+              <n-button size="small" @click="addCellDataMappingSource">添加来源</n-button>
+            </div>
+            <div ref="cellDataSourceListRef" class="cell-data-source-list">
               <div v-for="(source, sourceIndex) in cellDataMappingForm.sources" :key="sourceIndex" class="cell-data-source-card">
                 <div class="cell-data-source-header" @click="toggleCellDataMappingSource(sourceIndex)">
                   <div class="cell-data-source-title">
@@ -900,6 +902,7 @@ const cellDataMappingText = ref('');
 const cellDataMappingMode = ref<'form' | 'json'>('form');
 const cellDataEditorHost = ref<HTMLDivElement | null>(null);
 const cellDataEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+const cellDataSourceListRef = ref<HTMLElement | null>(null);
 const cellDataMappingForm = reactive<CellDataMappingForm>({
   target_table: 'cellinfo',
   key: {
@@ -1543,6 +1546,12 @@ function mappingFormToJson(): Record<string, unknown> {
 
 function addCellDataMappingSource() {
   cellDataMappingForm.sources.push({ band: '', file_prefix: '', collapsed: false, fields: [] });
+  void nextTick(() => {
+    const container = cellDataSourceListRef.value;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  });
 }
 
 function toggleCellDataMappingSource(index: number) {
