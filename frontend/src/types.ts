@@ -149,6 +149,11 @@ export interface CellDataConfig {
     passwd?: string;
     dbname: string;
   };
+  scan_paths: string[];
+  year_dir_regex: string;
+  file_name_regex: string;
+  file_time_regex: string;
+  mapping: Record<string, unknown>;
 }
 
 export interface RemoteAutoSchedulerConfig {

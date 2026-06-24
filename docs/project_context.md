@@ -744,3 +744,12 @@
 - 700M 映射：
   - `LTE_ITBBU_CellInfo`：`eNodeBID<-eNBId`，`CellID<-cellLocalId`，`PLMN<-plmn`，`基站名称<-eNBName`，`小区名称<-CellName`，`频点<-frequency`，`带宽<-bandWidth`，`制式<-radioMode`，`功率<-cpSpeRefSigPwr`，`网络="4G"`。
   - `NR_CellInfo`：`eNodeBID<-gNBId`，`CellID<-cellLocalId`，`PLMN<-plmn`，`基站名称<-gNBName`，`小区名称<-CellName`，`频点<-ssbFrequency`，`带宽<-carrierBandwidth`，`制式="700M"`，`功率<-powerPerRERef`，`网络="5G"`。
+
+## 2026-06-25：实现 CellData 预处理与单独刷新入口
+
+- 配置：`CellData` 新增 `scan_paths`、`year_dir_regex`、`file_name_regex`、`file_time_regex` 与 `mapping`。默认扫描路径为 `/网优日常优化数据文档/日常性能报表/{maxyear}年/300表`；默认 ZIP 过滤为 `Result_300_*.zip`；默认映射写入 `cellinfo` 并生成 `CGI={PLMN}-{eNodeBID}-{CellID}`。
+- 设置页：CellData 数据源卡片新增扫描路径列表、路径说明弹窗、三个高级正则输入、映射 JSON 编辑框，以及“校验 JSON / 恢复默认映射 / 保存规则”操作。说明弹窗包含路径模板、占位符、正则和多目录示例，避免在表单页堆长文案。
+- 后端：新增 `app/services/cell_data.py`，负责路径模板解析（含 `{maxyear}`/`{yyyy}`/`{yyyymm}`/`{yyyymmdd}`）、按扫描目录下一级子目录选择最新 ZIP、解析目标 CSV、执行 JSON 映射、清空并批量写入 `celldata.cellinfo`。CSV 解码优先 UTF-8/UTF-8-SIG，回退 GB18030/GBK。
+- 接口：新增 `app/api/routers/cell_data.py`，提供 `POST /api/cell-data/process/start` 与 `/status`，数据处理页新增独立 CellData 卡片，可只刷新 CellData，不跑容量处理。
+- 接入：本地上传、远程手动和自动调度入口都会在容量处理前调用 CellData 预处理；CellData 单独处理和容量处理共用现有全局任务锁，避免并发写库。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过；远程定位可从最新年份 `2026年/300表` 选出 `2.6G` 与 `700M` 各自最新 `Result_300` ZIP；用 SFTP MCP 读取的小样本 ZIP 验证解析和入库，`celldata.cellinfo` 写入 1 行且中文字段正常（样本 `CGI=460-00-12683845-1`）。

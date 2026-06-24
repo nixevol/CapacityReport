@@ -59,6 +59,22 @@
       />
     </section>
 
+    <section v-if="!taskInProgress" class="cell-data-card">
+      <div>
+        <h3>CellData</h3>
+        <p>刷新 CellData 数据。</p>
+      </div>
+      <n-button
+        type="primary"
+        secondary
+        :loading="cellDataStarting"
+        :disabled="working || remoteStarting || cellDataStarting"
+        @click="startCellDataProcessing"
+      >
+        刷新 CellData
+      </n-button>
+    </section>
+
     <div v-if="!taskInProgress && files.length > 0" class="file-list">
       <div class="file-list-header">
         <h4>已选择文件</h4>
@@ -226,6 +242,7 @@ const files = ref<PickedFile[]>([]);
 const uploadProgress = ref(0);
 const working = ref(false);
 const remoteStarting = ref(false);
+const cellDataStarting = ref(false);
 const isDragging = ref(false);
 const taskStatus = ref<TaskStatus | null>(null);
 const activeTask = ref<ActiveTask | null>(null);
@@ -236,17 +253,19 @@ const activationCode = ref('');
 const activationLoading = ref(false);
 const activationKeyLabel = ref('2026/12/30');
 const licenseErrorMessage = ref('当前数据日期已超过授权到期日期，请输入激活码延长 30 天。');
-const taskMode = ref<'local' | 'remote' | 'unknown'>('unknown');
+const taskMode = ref<'local' | 'remote' | 'cell_data' | 'unknown'>('unknown');
 let activationRetry: (() => Promise<void>) | null = null;
 let timer: number | undefined;
 
 const stageLabels: Record<string, string> = {
   license: '授权校验中...',
+  locating: '定位数据中...',
   downloading: '远程下载中...',
   uploading: '上传文件中...',
   processing: '处理中...',
   extracting: '解压数据中...',
   converting: '转换 Excel 中...',
+  parsing: '解析数据中...',
   importing: '上传数据中...',
   scripting: '运行脚本中...',
   completed: '处理完成',
@@ -542,6 +561,34 @@ async function startRemoteProcessing() {
   }
 }
 
+async function startCellDataProcessing() {
+  if (working.value || remoteStarting.value || cellDataStarting.value) return;
+
+  cellDataStarting.value = true;
+  try {
+    const result = await apiPost<UploadResponse>('/api/cell-data/process/start');
+    message.success(result.message || 'CellData 处理已启动');
+    activeTask.value = {
+      has_active: true,
+      task_id: result.task_id,
+      stage: result.stage || 'locating',
+      started_at: new Date().toISOString()
+    };
+    taskStatus.value = {
+      task_id: result.task_id,
+      status: 'processing',
+      stage: result.stage || 'locating',
+      logs: ['CellData 任务已提交，等待处理日志...']
+    };
+    taskMode.value = 'cell_data';
+    startPolling(result.task_id);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'CellData 处理启动失败');
+  } finally {
+    cellDataStarting.value = false;
+  }
+}
+
 async function startUploadedTask(taskId: string) {
   await apiPost('/api/process/start', { task_id: taskId });
   taskMode.value = 'local';
@@ -566,7 +613,7 @@ async function checkActiveTask() {
   try {
     activeTask.value = await apiGet<ActiveTask>('/api/task/status');
     if (activeTask.value.has_active && activeTask.value.task_id) {
-      taskMode.value = 'unknown';
+      taskMode.value = activeTask.value.task_id.startsWith('cell_data_') ? 'cell_data' : 'unknown';
       startPolling(activeTask.value.task_id);
     }
   } catch (error) {
@@ -589,7 +636,10 @@ function stopPolling() {
 
 async function poll(taskId: string) {
   try {
-    taskStatus.value = await apiPost<TaskStatus>('/api/process/status', { task_id: taskId });
+    const statusUrl = taskMode.value === 'cell_data'
+      ? '/api/cell-data/process/status'
+      : '/api/process/status';
+    taskStatus.value = await apiPost<TaskStatus>(statusUrl, { task_id: taskId });
     if (activeTask.value?.has_active && taskStatus.value.stage) {
       activeTask.value = { ...activeTask.value, stage: taskStatus.value.stage };
     }

@@ -14,6 +14,7 @@ from app.api.routers.task_runtime import (
 )
 from app.config import AppConfig, CACHE_DIR, RemoteDataConfig
 from app.processor import DataProcessor, ProcessLogger
+from app.services.cell_data import refresh_cell_data
 from app.services.license import LicenseError, check_processing_allowed
 from app.services.platform import PlatformStorageDownloader, make_source_downloader
 from app.services.pipeline import RESULT_TABLES, run_import_and_report
@@ -149,6 +150,8 @@ def _run_remote_processing(
             raise RuntimeError("源目录中未下载到任何文件")
 
         state.history_manager.update(task_id, file_count=download_result.file_count)
+
+        refresh_cell_data(app_config, work_dir, logger)
 
         if app_config.warehouse_type == "metrix":
             started = time.time()

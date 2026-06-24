@@ -559,6 +559,35 @@ select {
   display: inline-flex;
 }
 
+.cell-data-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-large);
+}
+
+.cell-data-card h3,
+.cell-data-card p {
+  margin: 0;
+}
+
+.cell-data-card h3 {
+  color: var(--td-text-color-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.cell-data-card p {
+  margin-top: 4px;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+}
+
 .license-dialog-body {
   display: flex;
   flex-direction: column;
@@ -1480,6 +1509,56 @@ select {
 
 .remote-toggle-row .n-form-item {
   margin-bottom: 0;
+}
+
+.cell-data-path-editor,
+.cell-data-path-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cell-data-path-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cell-data-path-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.cell-data-help-scroll {
+  max-height: 360px;
+}
+
+.cell-data-help-section {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 14px;
+}
+
+.cell-data-help-section + .cell-data-help-section {
+  padding-top: 12px;
+  border-top: 1px solid var(--td-border-color-light);
+}
+
+.cell-data-help-section h4,
+.cell-data-help-section p {
+  margin: 0;
+}
+
+.cell-data-help-section code {
+  display: block;
+  overflow-x: auto;
+  padding: 6px 8px;
+  color: var(--td-text-color-primary);
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-small);
 }
 
 .settings-rules-grid {

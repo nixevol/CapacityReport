@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+from copy import deepcopy
 from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -74,6 +75,99 @@ class MySQLConfig:
 SOURCE_TYPES = ("ftp", "sftp", "metrix")
 # Warehouse backends: direct MySQL, or Metrix database platform.
 WAREHOUSE_TYPES = ("mysql", "metrix")
+
+DEFAULT_CELL_DATA_SCAN_PATHS = [
+    "/网优日常优化数据文档/日常性能报表/{maxyear}年/300表",
+]
+DEFAULT_CELL_DATA_YEAR_DIR_REGEX = r"(?P<year>\d{4})年"
+DEFAULT_CELL_DATA_FILE_NAME_REGEX = r"^Result_300_.*\.zip$"
+DEFAULT_CELL_DATA_FILE_TIME_REGEX = r"(?P<timestamp>\d{14})(?=\.zip$)"
+DEFAULT_CELL_DATA_MAPPING: Dict[str, Any] = {
+    "target_table": "cellinfo",
+    "key": {"field": "CGI", "expr": "{PLMN}-{eNodeBID}-{CellID}"},
+    "sources": [
+        {
+            "band": "2.6G",
+            "file_prefix": "LTE_ITBBU_CellInfo",
+            "fields": {
+                "eNodeBID": "eNBId",
+                "CellID": "cellLocalId",
+                "PLMN": "plmn",
+                "基站名称": "eNBName",
+                "小区名称": "CellName",
+                "频点": "frequency",
+                "带宽": "bandWidth",
+                "制式": "radioMode",
+                "功率": "cpSpeRefSigPwr",
+                "网络": {"value": "4G"},
+            },
+        },
+        {
+            "band": "2.6G",
+            "file_prefix": "LTE_SDR_CellInfo",
+            "fields": {
+                "eNodeBID": "eNBId",
+                "CellID": "cellLocalId",
+                "PLMN": "plmn",
+                "基站名称": "eNBName",
+                "小区名称": "CellName",
+                "频点": "frequency",
+                "带宽": "bandWidth",
+                "制式": "radioMode",
+                "功率": "cpSpeRefSigPwr",
+                "网络": {"value": "4G"},
+            },
+        },
+        {
+            "band": "2.6G",
+            "file_prefix": "NR_CellInfo",
+            "fields": {
+                "eNodeBID": "gNBId",
+                "CellID": "cellLocalId",
+                "PLMN": "plmn",
+                "基站名称": "gNBName",
+                "小区名称": "CellName",
+                "频点": "ssbFrequency",
+                "带宽": "carrierBandwidth",
+                "制式": {"value": "2.6G"},
+                "功率": "powerPerRERef",
+                "网络": {"value": "5G"},
+            },
+        },
+        {
+            "band": "700M",
+            "file_prefix": "LTE_ITBBU_CellInfo",
+            "fields": {
+                "eNodeBID": "eNBId",
+                "CellID": "cellLocalId",
+                "PLMN": "plmn",
+                "基站名称": "eNBName",
+                "小区名称": "CellName",
+                "频点": "frequency",
+                "带宽": "bandWidth",
+                "制式": "radioMode",
+                "功率": "cpSpeRefSigPwr",
+                "网络": {"value": "4G"},
+            },
+        },
+        {
+            "band": "700M",
+            "file_prefix": "NR_CellInfo",
+            "fields": {
+                "eNodeBID": "gNBId",
+                "CellID": "cellLocalId",
+                "PLMN": "plmn",
+                "基站名称": "gNBName",
+                "小区名称": "CellName",
+                "频点": "ssbFrequency",
+                "带宽": "carrierBandwidth",
+                "制式": {"value": "700M"},
+                "功率": "powerPerRERef",
+                "网络": {"value": "5G"},
+            },
+        },
+    ],
+}
 
 
 @dataclass
@@ -335,15 +429,36 @@ class CellDataConfig:
         default_factory=lambda: RemoteDataConfig(
             enabled=False,
             protocol="sftp",
-            remote_dir="/CellData",
+            remote_dir="/",
         )
     )
     mysql: MySQLConfig = field(default_factory=lambda: MySQLConfig(dbname="celldata"))
+    scan_paths: List[str] = field(default_factory=lambda: list(DEFAULT_CELL_DATA_SCAN_PATHS))
+    year_dir_regex: str = DEFAULT_CELL_DATA_YEAR_DIR_REGEX
+    file_name_regex: str = DEFAULT_CELL_DATA_FILE_NAME_REGEX
+    file_time_regex: str = DEFAULT_CELL_DATA_FILE_TIME_REGEX
+    mapping: Dict[str, Any] = field(default_factory=lambda: deepcopy(DEFAULT_CELL_DATA_MAPPING))
 
     def normalized(self) -> "CellDataConfig":
+        scan_paths = []
+        seen = set()
+        for path in self.scan_paths or []:
+            normalized = str(path).replace("\\", "/").strip()
+            if normalized and normalized not in seen:
+                scan_paths.append(normalized)
+                seen.add(normalized)
+        if not scan_paths:
+            scan_paths = list(DEFAULT_CELL_DATA_SCAN_PATHS)
+
+        mapping = self.mapping if isinstance(self.mapping, dict) and self.mapping else deepcopy(DEFAULT_CELL_DATA_MAPPING)
         return CellDataConfig(
             remote_data=self.remote_data.normalized(),
             mysql=self.mysql.normalized(),
+            scan_paths=scan_paths,
+            year_dir_regex=str(self.year_dir_regex or DEFAULT_CELL_DATA_YEAR_DIR_REGEX).strip() or DEFAULT_CELL_DATA_YEAR_DIR_REGEX,
+            file_name_regex=str(self.file_name_regex or DEFAULT_CELL_DATA_FILE_NAME_REGEX).strip() or DEFAULT_CELL_DATA_FILE_NAME_REGEX,
+            file_time_regex=str(self.file_time_regex or DEFAULT_CELL_DATA_FILE_TIME_REGEX).strip() or DEFAULT_CELL_DATA_FILE_TIME_REGEX,
+            mapping=mapping,
         )
 
     def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
@@ -351,6 +466,11 @@ class CellDataConfig:
         return {
             "remote_data": normalized.remote_data.to_dict(include_password=include_password),
             "mysql": normalized.mysql.to_dict(include_password=include_password),
+            "scan_paths": normalized.scan_paths,
+            "year_dir_regex": normalized.year_dir_regex,
+            "file_name_regex": normalized.file_name_regex,
+            "file_time_regex": normalized.file_time_regex,
+            "mapping": normalized.mapping,
         }
 
     @classmethod
@@ -362,6 +482,11 @@ class CellDataConfig:
         return cls(
             remote_data=RemoteDataConfig.from_dict(remote_data) if isinstance(remote_data, dict) else default.remote_data,
             mysql=MySQLConfig.from_dict(mysql_data, default_dbname="celldata") if isinstance(mysql_data, dict) else default.mysql,
+            scan_paths=data.get("scan_paths", default.scan_paths) if isinstance(data.get("scan_paths", default.scan_paths), list) else default.scan_paths,
+            year_dir_regex=str(data.get("year_dir_regex", default.year_dir_regex)),
+            file_name_regex=str(data.get("file_name_regex", default.file_name_regex)),
+            file_time_regex=str(data.get("file_time_regex", default.file_time_regex)),
+            mapping=data.get("mapping", default.mapping) if isinstance(data.get("mapping", default.mapping), dict) else default.mapping,
         ).normalized()
 
 

@@ -291,8 +291,64 @@
                   </n-gi>
                 </n-grid>
                 <n-form-item label="远程目录">
-                  <n-input v-model:value="cellDataRemoteForm.remote_dir" placeholder="/CellData" />
+                  <n-input v-model:value="cellDataRemoteForm.remote_dir" placeholder="/" />
                 </n-form-item>
+                <n-form-item label="扫描路径">
+                  <div class="cell-data-path-editor">
+                    <div class="cell-data-path-header">
+                      <span class="form-hint">支持路径模板和多目录组合</span>
+                      <n-button quaternary circle size="small" title="查看说明" @click="cellDataHelpVisible = true">
+                        <template #icon>
+                          <n-icon><InformationCircleOutline /></n-icon>
+                        </template>
+                      </n-button>
+                    </div>
+                    <div class="cell-data-path-list">
+                      <div v-for="(path, index) in cellDataScanPaths" :key="`${path}-${index}`" class="cell-data-path-row">
+                        <n-input v-model:value="cellDataScanPaths[index]" size="small" placeholder="/.../{maxyear}年/300表" />
+                        <n-button quaternary circle size="small" type="error" @click="removeCellDataScanPath(index)">
+                          <template #icon>
+                            <n-icon><CloseOutline /></n-icon>
+                          </template>
+                        </n-button>
+                      </div>
+                    </div>
+                    <n-input-group>
+                      <n-input v-model:value="newCellDataScanPath" placeholder="扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
+                      <n-button @click="addCellDataScanPath">添加</n-button>
+                    </n-input-group>
+                  </div>
+                </n-form-item>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="4">
+                    <n-form-item label="年份目录正则">
+                      <n-input v-model:value="cellDataRegexForm.year_dir_regex" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="文件名正则">
+                      <n-input v-model:value="cellDataRegexForm.file_name_regex" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="4">
+                    <n-form-item label="时间戳正则">
+                      <n-input v-model:value="cellDataRegexForm.file_time_regex" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-form-item label="映射规则 JSON">
+                  <n-input
+                    v-model:value="cellDataMappingText"
+                    type="textarea"
+                    :autosize="{ minRows: 8, maxRows: 16 }"
+                    spellcheck="false"
+                  />
+                </n-form-item>
+                <n-space justify="end" size="small">
+                  <n-button :loading="validatingCellDataSettings" @click="validateCellDataSettings">校验 JSON</n-button>
+                  <n-button @click="restoreDefaultCellDataMapping">恢复默认映射</n-button>
+                  <n-button type="primary" :loading="savingCellDataSettings" @click="saveCellDataSettings">保存规则</n-button>
+                </n-space>
                 <n-form-item label="启用 CellData 数据源">
                   <n-switch v-model:value="cellDataRemoteForm.enabled" />
                 </n-form-item>
@@ -611,13 +667,47 @@
 
       </n-tabs>
     </n-card>
+
+    <n-modal
+      v-model:show="cellDataHelpVisible"
+      preset="card"
+      class="cell-data-help-modal"
+      title="扫描路径说明"
+      style="width: min(520px, calc(100vw - 32px))"
+    >
+      <n-scrollbar class="cell-data-help-scroll">
+        <section class="cell-data-help-section">
+          <h4>路径模板</h4>
+          <p>每行填写一个扫描目录。系统会在目录下继续识别 700M、2.6G 等子目录。</p>
+          <code>/网优日常优化数据文档/日常性能报表/{maxyear}年/300表</code>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>占位符</h4>
+          <p><strong>{maxyear}</strong>：扫描同级年份目录并取最大年份。</p>
+          <p><strong>{yyyy}</strong>：当前年份。</p>
+          <p><strong>{yyyymm}</strong>：当前年月。</p>
+          <p><strong>{yyyymmdd}</strong>：当前日期。</p>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>高级正则</h4>
+          <p><strong>年份目录正则</strong>：识别年份目录，默认匹配 2026年。</p>
+          <p><strong>文件名正则</strong>：筛选 ZIP 文件，默认匹配 Result_300_ 开头。</p>
+          <p><strong>时间戳正则</strong>：从 ZIP 文件名末尾提取文件时间。</p>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>多目录示例</h4>
+          <code>/网优日常优化数据文档/日常性能报表/{maxyear}年/300表</code>
+          <code>/网优日常优化数据文档/日常性能报表/{maxyear}年/cellinfo</code>
+        </section>
+      </n-scrollbar>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useDialog, useMessage, type SelectOption } from 'naive-ui';
-import { CloseOutline, CloudDownloadOutline, CloudUploadOutline } from '@vicons/ionicons5';
+import { CloseOutline, CloudDownloadOutline, CloudUploadOutline, InformationCircleOutline } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type {
@@ -658,6 +748,8 @@ const savingMysql = ref(false);
 const savingRemote = ref(false);
 const savingCellDataMysql = ref(false);
 const savingCellDataRemote = ref(false);
+const savingCellDataSettings = ref(false);
+const validatingCellDataSettings = ref(false);
 const savingBackend = ref(false);
 const savingMetrix = ref(false);
 const sourceType = ref<'ftp' | 'sftp' | 'metrix'>('sftp');
@@ -672,6 +764,10 @@ const newSheetFilter = ref('');
 const extractFields = ref<ExtractFieldConfig[]>([]);
 const fieldSearch = ref('');
 const newSchedulerDirectory = ref('');
+const newCellDataScanPath = ref('');
+const cellDataHelpVisible = ref(false);
+const cellDataScanPaths = ref<string[]>([]);
+const cellDataMappingText = ref('');
 const schedulerStatus = ref<RemoteSchedulerStatus | null>(null);
 const newExtractValues = reactive<Record<number, string>>({});
 
@@ -709,7 +805,7 @@ const cellDataRemoteForm = reactive<RemoteDataConfig>({
   port: 22,
   user: '',
   passwd: '',
-  remote_dir: '/CellData',
+  remote_dir: '/',
   passive: true,
   timeout: 30,
   auto_delete_source: false,
@@ -719,6 +815,12 @@ const cellDataRemoteForm = reactive<RemoteDataConfig>({
     expected_directories: [],
     week_offset: 0
   }
+});
+
+const cellDataRegexForm = reactive({
+  year_dir_regex: '(?P<year>\\\\d{4})年',
+  file_name_regex: '^Result_300_.*\\\\.zip$',
+  file_time_regex: '(?P<timestamp>\\\\d{14})(?=\\\\.zip$)'
 });
 
 const metrixForm = reactive<MetrixConfig>({
@@ -885,8 +987,13 @@ async function loadConfig() {
     mysqlForm.passwd = config.mysql.passwd || '';
     mysqlForm.dbname = config.mysql.dbname;
     Object.assign(remoteForm, normalizeRemoteConfig(config.remote_data));
-    Object.assign(cellDataRemoteForm, normalizeRemoteConfig(config.cell_data?.remote_data, '/CellData'));
+    Object.assign(cellDataRemoteForm, normalizeRemoteConfig(config.cell_data?.remote_data, '/'));
     Object.assign(cellDataMysqlForm, normalizeCellDataMysqlConfig(config.cell_data?.mysql));
+    cellDataScanPaths.value = normalizeCellDataScanPaths(config.cell_data?.scan_paths);
+    cellDataRegexForm.year_dir_regex = config.cell_data?.year_dir_regex || '(?P<year>\\\\d{4})年';
+    cellDataRegexForm.file_name_regex = config.cell_data?.file_name_regex || '^Result_300_.*\\\\.zip$';
+    cellDataRegexForm.file_time_regex = config.cell_data?.file_time_regex || '(?P<timestamp>\\\\d{14})(?=\\\\.zip$)';
+    cellDataMappingText.value = JSON.stringify(config.cell_data?.mapping || {}, null, 2);
     Object.assign(historyRetentionForm, normalizeHistoryRetentionConfig(config.history_retention));
     sheetFilters.value = [...config.sheet_filter];
     extractFields.value = normalizeExtractFields(config.extract_fields);
@@ -1021,7 +1128,7 @@ function getCellDataRemotePayload(): RemoteDataConfig {
     port: cellDataRemoteForm.port || (cellDataRemoteForm.protocol === 'sftp' ? 22 : 21),
     user: cellDataRemoteForm.user.trim(),
     passwd: cellDataRemoteForm.passwd || '',
-    remote_dir: cellDataRemoteForm.remote_dir.trim() || '/CellData',
+    remote_dir: cellDataRemoteForm.remote_dir.trim() || '/',
     passive: cellDataRemoteForm.passive,
     timeout: cellDataRemoteForm.timeout || 30,
     auto_delete_source: false,
@@ -1078,6 +1185,75 @@ async function saveCellDataRemote() {
     message.error(error instanceof Error ? error.message : '保存 CellData 远程数据源配置失败');
   } finally {
     savingCellDataRemote.value = false;
+  }
+}
+
+function addCellDataScanPath() {
+  const value = normalizeDirectoryText(newCellDataScanPath.value);
+  if (!value) return;
+  if (cellDataScanPaths.value.includes(value)) {
+    message.warning('该扫描路径已存在');
+    return;
+  }
+  cellDataScanPaths.value.push(value);
+  newCellDataScanPath.value = '';
+}
+
+function removeCellDataScanPath(index: number) {
+  cellDataScanPaths.value.splice(index, 1);
+}
+
+function getCellDataSettingsPayload() {
+  let mapping: Record<string, unknown>;
+  try {
+    mapping = JSON.parse(cellDataMappingText.value || '{}') as Record<string, unknown>;
+  } catch {
+    throw new Error('映射规则不是有效 JSON');
+  }
+  return {
+    scan_paths: normalizeCellDataScanPaths(cellDataScanPaths.value),
+    year_dir_regex: cellDataRegexForm.year_dir_regex,
+    file_name_regex: cellDataRegexForm.file_name_regex,
+    file_time_regex: cellDataRegexForm.file_time_regex,
+    mapping
+  };
+}
+
+async function validateCellDataSettings() {
+  validatingCellDataSettings.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/cell-data/settings/validate', getCellDataSettingsPayload());
+    message[result.success ? 'success' : 'error'](result.message || '校验完成');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '校验失败');
+  } finally {
+    validatingCellDataSettings.value = false;
+  }
+}
+
+async function restoreDefaultCellDataMapping() {
+  try {
+    const mapping = await apiGet<Record<string, unknown>>('/api/config/cell-data/mapping/default');
+    cellDataMappingText.value = JSON.stringify(mapping, null, 2);
+    message.success('已恢复默认映射');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '恢复默认映射失败');
+  }
+}
+
+async function saveCellDataSettings() {
+  savingCellDataSettings.value = true;
+  try {
+    const payload = getCellDataSettingsPayload();
+    const result = await apiPost<ApiMessage>('/api/config/cell-data/settings', payload);
+    cellDataScanPaths.value = normalizeCellDataScanPaths(payload.scan_paths);
+    cellDataMappingText.value = JSON.stringify(payload.mapping, null, 2);
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || 'CellData 规则已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存 CellData 规则失败');
+  } finally {
+    savingCellDataSettings.value = false;
   }
 }
 
@@ -1411,6 +1587,15 @@ function normalizeCellDataMysqlConfig(config: CellDataConfig['mysql'] | undefine
     passwd: config?.passwd || '',
     dbname: config?.dbname || 'celldata'
   };
+}
+
+function normalizeCellDataScanPaths(paths: string[] | undefined): string[] {
+  const normalized = uniqueStrings(paths || [])
+    .map(path => path.replace(/\\/g, '/').trim())
+    .filter(Boolean);
+  return normalized.length
+    ? normalized
+    : ['/网优日常优化数据文档/日常性能报表/{maxyear}年/300表'];
 }
 
 function normalizeDataMappingsConfig(config: DataMappingsConfig | undefined): DataMappingsConfig {

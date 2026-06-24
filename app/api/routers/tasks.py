@@ -13,6 +13,7 @@ from app.api.routers.task_runtime import (
 )
 from app.config import AppConfig
 from app.processor import DataProcessor, ProcessLogger
+from app.services.cell_data import refresh_cell_data
 from app.services.license import LicenseError, check_processing_allowed
 
 
@@ -168,6 +169,7 @@ def _task_finished(task_id: str) -> bool:
 
 def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_config: AppConfig) -> None:
     try:
+        refresh_cell_data(app_config, work_dir, logger)
         if app_config.warehouse_type == "metrix":
             import time
 

@@ -1,5 +1,5 @@
 {
-  "Update": "2026/06/25 02:26:49",
+  "Update": "2026/06/25 03:58:45",
   "SourceType": "sftp",
   "WarehouseType": "mysql",
   "MySQL_DBInfo": {
@@ -211,7 +211,7 @@
       "host": "",
       "port": 22,
       "user": "",
-      "remote_dir": "/CellData",
+      "remote_dir": "/",
       "passive": true,
       "timeout": 30,
       "auto_delete_source": false,
@@ -224,12 +224,18 @@
       "passwd": ""
     },
     "mysql": {
-      "host": "localhost",
+      "host": "127.0.0.1",
       "port": 3306,
       "user": "root",
       "dbname": "celldata",
       "passwd": "123456"
-    }
+    },
+    "scan_paths": [
+      "/网优日常优化数据文档/日常性能报表/{maxyear}年/300表"
+    ],
+    "year_dir_regex": "(?P<year>\\d{4})年",
+    "file_name_regex": "^Result_300_.*\\.zip$",
+    "file_time_regex": "(?P<timestamp>\\d{14})(?=\\.zip$)"
   },
   "HistoryRetention": {
     "enabled": true,

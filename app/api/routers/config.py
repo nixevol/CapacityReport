@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote
@@ -11,6 +12,7 @@ from app import state
 from app.config import (
     CellDataConfig,
     DataMappingsConfig,
+    DEFAULT_CELL_DATA_MAPPING,
     HistoryRetentionConfig,
     MetrixConfig,
     MySQLConfig,
@@ -103,6 +105,11 @@ async def update_cell_data_remote_config(config: dict[str, Any] = Body(...)):
     state.config.cell_data = CellDataConfig(
         remote_data=RemoteDataConfig.from_dict(config),
         mysql=current.mysql,
+        scan_paths=current.scan_paths,
+        year_dir_regex=current.year_dir_regex,
+        file_name_regex=current.file_name_regex,
+        file_time_regex=current.file_time_regex,
+        mapping=current.mapping,
     ).normalized()
     state.config.save()
     return {"success": True, "message": "CellData 远程数据源配置已更新", "update": state.config.update}
@@ -115,6 +122,11 @@ async def update_cell_data_mysql_config(config: dict[str, Any] = Body(...)):
     state.config.cell_data = CellDataConfig(
         remote_data=current.remote_data,
         mysql=MySQLConfig.from_dict(config, default_dbname="celldata"),
+        scan_paths=current.scan_paths,
+        year_dir_regex=current.year_dir_regex,
+        file_name_regex=current.file_name_regex,
+        file_time_regex=current.file_time_regex,
+        mapping=current.mapping,
     ).normalized()
     state.config.save()
     return {"success": True, "message": "CellData 数据库配置已更新", "update": state.config.update}
@@ -134,6 +146,36 @@ async def test_cell_data_remote_connection(config: dict[str, Any] | None = Body(
 async def test_cell_data_mysql_connection(config: dict[str, Any] | None = Body(None)):
     mysql_config = MySQLConfig.from_dict(config, default_dbname="celldata") if config else state.current_config().cell_data.mysql
     return _test_mysql_config(mysql_config)
+
+
+@router.post("/api/config/cell-data/settings")
+async def update_cell_data_settings(config: dict[str, Any] = Body(...)):
+    validation = _validate_cell_data_settings(config)
+    if not validation["success"]:
+        raise HTTPException(status_code=400, detail=validation["message"])
+    state.reload_config()
+    current = state.config.cell_data.normalized()
+    state.config.cell_data = CellDataConfig(
+        remote_data=current.remote_data,
+        mysql=current.mysql,
+        scan_paths=config.get("scan_paths", current.scan_paths),
+        year_dir_regex=str(config.get("year_dir_regex", current.year_dir_regex)),
+        file_name_regex=str(config.get("file_name_regex", current.file_name_regex)),
+        file_time_regex=str(config.get("file_time_regex", current.file_time_regex)),
+        mapping=config.get("mapping", current.mapping),
+    ).normalized()
+    state.config.save()
+    return {"success": True, "message": "CellData 规则已更新", "update": state.config.update}
+
+
+@router.post("/api/config/cell-data/settings/validate")
+async def validate_cell_data_settings(config: dict[str, Any] = Body(...)):
+    return _validate_cell_data_settings(config)
+
+
+@router.get("/api/config/cell-data/mapping/default")
+async def get_default_cell_data_mapping():
+    return DEFAULT_CELL_DATA_MAPPING
 
 
 @router.post("/api/config/history-retention")
@@ -253,4 +295,46 @@ def _test_mysql_config(config: MySQLConfig) -> dict[str, Any]:
         return {"success": True, "message": "连接成功"}
     except Exception as exc:
         return {"success": False, "message": str(exc)}
+
+
+def _validate_cell_data_settings(config: dict[str, Any]) -> dict[str, Any]:
+    scan_paths = config.get("scan_paths", [])
+    if not isinstance(scan_paths, list) or not any(str(path).strip() for path in scan_paths):
+        return {"success": False, "message": "请至少配置一个扫描路径"}
+
+    for key in ("year_dir_regex", "file_name_regex", "file_time_regex"):
+        try:
+            re.compile(str(config.get(key, "")))
+        except re.error as exc:
+            return {"success": False, "message": f"{key} 正则无效: {exc}"}
+
+    mapping = config.get("mapping")
+    if not isinstance(mapping, dict):
+        return {"success": False, "message": "映射规则必须是 JSON 对象"}
+    if not str(mapping.get("target_table", "")).strip():
+        return {"success": False, "message": "映射规则缺少 target_table"}
+    key_config = mapping.get("key")
+    if not isinstance(key_config, dict) or not key_config.get("field") or not key_config.get("expr"):
+        return {"success": False, "message": "映射规则缺少 key.field 或 key.expr"}
+    sources = mapping.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return {"success": False, "message": "映射规则至少需要一个 sources 项"}
+
+    for index, source in enumerate(sources, 1):
+        if not isinstance(source, dict):
+            return {"success": False, "message": f"sources 第 {index} 项必须是对象"}
+        if not source.get("band") or not source.get("file_prefix"):
+            return {"success": False, "message": f"sources 第 {index} 项缺少 band 或 file_prefix"}
+        fields = source.get("fields")
+        if not isinstance(fields, dict) or not fields:
+            return {"success": False, "message": f"sources 第 {index} 项缺少 fields"}
+        for target, rule in fields.items():
+            if not str(target).strip():
+                return {"success": False, "message": f"sources 第 {index} 项存在空目标字段"}
+            if isinstance(rule, str) and rule.strip():
+                continue
+            if isinstance(rule, dict) and "value" in rule:
+                continue
+            return {"success": False, "message": f"{target} 的映射规则无效"}
+    return {"success": True, "message": "映射规则有效"}
 

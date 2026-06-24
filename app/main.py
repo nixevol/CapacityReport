@@ -12,6 +12,7 @@ from app import state
 from app.api.routers import (
     auth,
     cache,
+    cell_data,
     config,
     database,
     health,
@@ -110,6 +111,7 @@ def register_routes(app: FastAPI) -> None:
         database.router,
         config.router,
         cache.router,
+        cell_data.router,
         script.router,
     ]
     for router in routers:
