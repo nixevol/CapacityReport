@@ -46,7 +46,7 @@ class MetrixConfig:
 
     Metrix appears in the UI as two connection types ("存储平台"/"数据库平台") that share the
     same base_url + token; storage_id is the file source, database_conn_id + target_database
-    are the warehouse. data_dir_to_table maps data sub-dirs to staging tables (Metrix mode only).
+    are the warehouse.
     """
     base_url: str = "http://host.docker.internal:8000"
     token: str = ""
@@ -54,18 +54,12 @@ class MetrixConfig:
     database_conn_id: str = ""
     target_database: str = ""
     recent_days: int = 7
-    data_dir_to_table: Dict[str, str] = field(default_factory=lambda: {"4G": "4G_UD", "5G": "5G_UD"})
 
     def normalized(self) -> "MetrixConfig":
         try:
             recent_days = max(int(self.recent_days), 1)
         except (TypeError, ValueError):
             recent_days = 7
-        mapping = {
-            str(k).strip(): str(v).strip()
-            for k, v in (self.data_dir_to_table or {}).items()
-            if str(k).strip() and str(v).strip()
-        }
         return MetrixConfig(
             base_url=str(self.base_url or "").strip(),
             token=str(self.token or "").strip(),
@@ -73,7 +67,6 @@ class MetrixConfig:
             database_conn_id=str(self.database_conn_id or "").strip(),
             target_database=str(self.target_database or "").strip(),
             recent_days=recent_days,
-            data_dir_to_table=mapping or {"4G": "4G_UD", "5G": "5G_UD"},
         )
 
     def to_dict(self, include_token: bool = False) -> Dict[str, Any]:
@@ -84,7 +77,6 @@ class MetrixConfig:
             "database_conn_id": n.database_conn_id,
             "target_database": n.target_database,
             "recent_days": n.recent_days,
-            "data_dir_to_table": n.data_dir_to_table,
         }
         if include_token:
             data["token"] = n.token
@@ -93,7 +85,6 @@ class MetrixConfig:
     @classmethod
     def from_dict(cls, data: Dict[str, Any] | None) -> "MetrixConfig":
         data = data or {}
-        mapping = data.get("data_dir_to_table")
         return cls(
             base_url=str(data.get("base_url", "http://host.docker.internal:8000")),
             token=str(data.get("token", "")),
@@ -101,7 +92,70 @@ class MetrixConfig:
             database_conn_id=str(data.get("database_conn_id", "")),
             target_database=str(data.get("target_database", "")),
             recent_days=data.get("recent_days", 7),
-            data_dir_to_table=mapping if isinstance(mapping, dict) else {"4G": "4G_UD", "5G": "5G_UD"},
+        ).normalized()
+
+
+@dataclass
+class DataMappingsConfig:
+    """Source directories mapped to staging tables."""
+    directories: List[Dict[str, str]] = field(
+        default_factory=lambda: [
+            {"path": "4G", "table": "4G_UD", "ready_rule": "daily"},
+            {"path": "5G", "table": "5G_UD", "ready_rule": "daily"},
+        ]
+    )
+    table_field_mappings: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+
+    def normalized(self) -> "DataMappingsConfig":
+        directories = []
+        seen = set()
+        for item in self.directories or []:
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get("path", "")).replace("\\", "/").strip().strip("/")
+            table = str(item.get("table", "")).strip()
+            ready_rule = str(item.get("ready_rule", "daily")).strip().lower()
+            if ready_rule not in {"daily", "auto"}:
+                ready_rule = "daily"
+            if not path or not table:
+                continue
+            key = (path, table, ready_rule)
+            if key in seen:
+                continue
+            seen.add(key)
+            directories.append({"path": path, "table": table, "ready_rule": ready_rule})
+
+        if not directories:
+            directories = [
+                {"path": "4G", "table": "4G_UD", "ready_rule": "daily"},
+                {"path": "5G", "table": "5G_UD", "ready_rule": "daily"},
+            ]
+
+        mappings = {}
+        for table_name, fields in (self.table_field_mappings or {}).items():
+            if isinstance(fields, list):
+                mappings[table_name] = [
+                    {k: v for k, v in f.items() if k in ("Source", "Target", "Type")}
+                    for f in fields
+                    if isinstance(f, dict) and "Source" in f and "Target" in f
+                ]
+
+        return DataMappingsConfig(directories=directories, table_field_mappings=mappings)
+
+    def to_dict(self) -> Dict[str, Any]:
+        normalized = self.normalized()
+        return {
+            "directories": normalized.directories,
+            "table_field_mappings": normalized.table_field_mappings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "DataMappingsConfig":
+        data = data or {}
+        directories = data.get("directories", [])
+        return cls(
+            directories=directories if isinstance(directories, list) else [],
+            table_field_mappings=data.get("table_field_mappings", {}) if isinstance(data.get("table_field_mappings"), dict) else {},
         ).normalized()
 
 
@@ -239,57 +293,6 @@ class RemoteDataConfig:
 
 
 @dataclass
-class RJDataConfig:
-    """RJ数据配置 - 周数据处理"""
-    enabled: bool = False
-    weekly_directories: List[str] = field(default_factory=list)
-    # 字段映射: {表名: [{Source, Target, Type}, ...]}
-    table_field_mappings: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
-
-    def normalized(self) -> "RJDataConfig":
-        directories = []
-        seen = set()
-        for d in self.weekly_directories or []:
-            normalized = str(d).replace("\\", "/").strip().strip("/")
-            if normalized and normalized not in seen:
-                directories.append(normalized)
-                seen.add(normalized)
-
-        # 标准化字段映射
-        mappings = {}
-        for table_name, fields in (self.table_field_mappings or {}).items():
-            if isinstance(fields, list):
-                mappings[table_name] = [
-                    {k: v for k, v in f.items() if k in ("Source", "Target", "Type")}
-                    for f in fields
-                    if isinstance(f, dict) and "Source" in f and "Target" in f
-                ]
-
-        return RJDataConfig(
-            enabled=bool(self.enabled),
-            weekly_directories=directories,
-            table_field_mappings=mappings,
-        )
-
-    def to_dict(self) -> Dict[str, Any]:
-        normalized = self.normalized()
-        return {
-            "enabled": normalized.enabled,
-            "weekly_directories": normalized.weekly_directories,
-            "table_field_mappings": normalized.table_field_mappings,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any] | None) -> "RJDataConfig":
-        data = data or {}
-        return cls(
-            enabled=bool(data.get("enabled", False)),
-            weekly_directories=data.get("weekly_directories", []) if isinstance(data.get("weekly_directories"), list) else [],
-            table_field_mappings=data.get("table_field_mappings", {}) if isinstance(data.get("table_field_mappings"), dict) else {},
-        ).normalized()
-
-
-@dataclass
 class HistoryRetentionConfig:
     enabled: bool = False
     keep_count: int = 20
@@ -341,9 +344,9 @@ class AppConfig:
     warehouse_type: str = "mysql"
     mysql: MySQLConfig = field(default_factory=MySQLConfig)
     metrix: MetrixConfig = field(default_factory=MetrixConfig)
+    data_mappings: DataMappingsConfig = field(default_factory=DataMappingsConfig)
     remote_data: RemoteDataConfig = field(default_factory=RemoteDataConfig)
     history_retention: HistoryRetentionConfig = field(default_factory=HistoryRetentionConfig)
-    rj_data: RJDataConfig = field(default_factory=RJDataConfig)
     sheet_filter: List[str] = field(default_factory=list)
     extract_fields: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -366,8 +369,8 @@ class AppConfig:
         )
         remote_config = RemoteDataConfig.from_dict(data.get("RemoteData"))
         metrix_config = MetrixConfig.from_dict(data.get("Metrix"))
+        data_mappings = DataMappingsConfig.from_dict(data.get("DataMappings"))
         history_retention = HistoryRetentionConfig.from_dict(data.get("HistoryRetention"))
-        rj_data = RJDataConfig.from_dict(data.get("RJData"))
 
         return cls(
             update=data.get("Update", ""),
@@ -375,9 +378,9 @@ class AppConfig:
             warehouse_type=_normalize_warehouse_type(data.get("WarehouseType")),
             mysql=mysql_config,
             metrix=metrix_config,
+            data_mappings=data_mappings,
             remote_data=remote_config,
             history_retention=history_retention,
-            rj_data=rj_data,
             sheet_filter=data.get("SheetFilter", []),
             extract_fields=data.get("ExtractField", [])
         )
@@ -404,9 +407,9 @@ class AppConfig:
                 "dbname": self.mysql.dbname
             },
             "Metrix": self.metrix.normalized().to_dict(include_token=True),
+            "DataMappings": self.data_mappings.normalized().to_dict(),
             "RemoteData": self.remote_data.normalized().to_dict(include_password=True),
             "HistoryRetention": self.history_retention.normalized().to_dict(),
-            "RJData": self.rj_data.normalized().to_dict(),
             "SheetFilter": self.sheet_filter,
             "ExtractField": self.extract_fields
         }
@@ -424,9 +427,9 @@ class AppConfig:
                 "dbname": self.mysql.dbname
             },
             "metrix": self.metrix.normalized().to_dict(),
+            "data_mappings": self.data_mappings.normalized().to_dict(),
             "remote_data": self.remote_data.normalized().to_dict(),
             "history_retention": self.history_retention.normalized().to_dict(),
-            "rj_data": self.rj_data.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
         }
@@ -445,9 +448,9 @@ class AppConfig:
                 "dbname": self.mysql.dbname
             },
             "metrix": self.metrix.normalized().to_dict(include_token=True),
+            "data_mappings": self.data_mappings.normalized().to_dict(),
             "remote_data": self.remote_data.normalized().to_dict(include_password=True),
             "history_retention": self.history_retention.normalized().to_dict(),
-            "rj_data": self.rj_data.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
         }

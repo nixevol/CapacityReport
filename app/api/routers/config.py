@@ -8,9 +8,9 @@ from fastapi.responses import Response
 
 from app import state
 from app.config import (
+    DataMappingsConfig,
     HistoryRetentionConfig,
     MetrixConfig,
-    RJDataConfig,
     RemoteDataConfig,
     SOURCE_TYPES,
     WAREHOUSE_TYPES,
@@ -78,6 +78,18 @@ async def update_metrix_config(config: dict[str, Any] = Body(...)):
     state.config.metrix = MetrixConfig.from_dict(config)
     state.config.save()
     return {"success": True, "message": "Metrix 连接配置已更新", "update": state.config.update}
+
+
+@router.post("/api/config/data-mappings")
+async def update_data_mappings_config(config: dict[str, Any] = Body(...)):
+    state.reload_config()
+    current = state.config.data_mappings.normalized()
+    payload = dict(config)
+    if "table_field_mappings" not in payload:
+        payload["table_field_mappings"] = current.table_field_mappings
+    state.config.data_mappings = DataMappingsConfig.from_dict(payload)
+    state.config.save()
+    return {"success": True, "message": "数据目录映射已更新", "update": state.config.update}
 
 
 @router.post("/api/config/history-retention")
@@ -149,6 +161,10 @@ def _apply_config_data(data: dict[str, Any]) -> None:
     if isinstance(metrix_data, dict):
         state.config.metrix = MetrixConfig.from_dict(metrix_data)
 
+    data_mappings = data.get("DataMappings")
+    if isinstance(data_mappings, dict):
+        state.config.data_mappings = DataMappingsConfig.from_dict(data_mappings)
+
     mysql_data = data.get("MySQL_DBInfo")
     if isinstance(mysql_data, dict):
         for key in ("host", "port", "user", "passwd", "dbname"):
@@ -169,6 +185,3 @@ def _apply_config_data(data: dict[str, Any]) -> None:
     if isinstance(history_retention, dict):
         state.config.history_retention = HistoryRetentionConfig.from_dict(history_retention)
 
-    rj_data = data.get("RJData")
-    if isinstance(rj_data, dict):
-        state.config.rj_data = RJDataConfig.from_dict(rj_data)

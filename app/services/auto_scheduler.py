@@ -24,8 +24,8 @@ FAILURE_RESULTS = {"scan_failed", "trigger_failed", "source_cleanup_failed", "fa
 
 
 @dataclass(frozen=True)
-class RJDirectoryReadyStatus:
-    """RJ 数据目录就绪状态，按最新文件自动识别日粒度或周粒度。"""
+class AutoDirectoryReadyStatus:
+    """自动粒度目录就绪状态，按最新文件自动识别日粒度或周粒度。"""
     directory: str
     ready: bool
     granularity: str | None = None
@@ -115,7 +115,12 @@ class AutoScheduler:
         app_config = state.current_config()
         config = app_config.remote_data.normalized()
         scheduler = config.auto_scheduler.normalized()
-        rj_config = app_config.rj_data.normalized()
+        data_mappings = app_config.data_mappings.normalized()
+        auto_directories = [
+            item["path"]
+            for item in data_mappings.directories
+            if item.get("ready_rule") == "auto"
+        ]
         target_days = required_week_days(scheduler.week_offset)
         ready_flag = self._read_ready_flag()
 
@@ -127,9 +132,7 @@ class AutoScheduler:
                 "expected_directories": scheduler.expected_directories,
                 "week_offset": scheduler.week_offset,
                 "auto_delete_source": config.auto_delete_source,
-                "rj_data_enabled": rj_config.enabled,
-                "rj_directories": rj_config.weekly_directories,
-                "rj_weekly_directories": rj_config.weekly_directories,
+                "auto_ready_directories": auto_directories,
                 "next_check_at": self._format_dt(self._next_check_at),
                 "last_check_at": self._format_dt(self._last_check_at),
                 "last_result": self._last_result,
@@ -188,15 +191,19 @@ class AutoScheduler:
 
         target_days = required_week_days(scheduler.week_offset)
         downloader = make_source_downloader(app_config)
-        rj_config = app_config.rj_data.normalized()
-        rj_directories = set(rj_config.weekly_directories) if rj_config.enabled else set()
+        data_mappings = app_config.data_mappings.normalized()
+        auto_directories = {
+            item["path"]
+            for item in data_mappings.directories
+            if item.get("ready_rule") == "auto"
+        }
 
-        # 检查现有7天目录（4G/5G数据），RJ 目录单独按粒度判断，避免被普通7天规则误拦。
+        # 自动粒度目录单独判断，避免被普通 7 天规则误拦。
         directory_status = self._check_remote_ready(
             downloader,
             scheduler,
             target_days,
-            excluded_directories=rj_directories,
+            excluded_directories=auto_directories,
         )
 
         error_count = sum(1 for item in directory_status.values() if item.error)
@@ -210,37 +217,37 @@ class AutoScheduler:
 
         active_status = [item for item in directory_status.values() if not item.skipped]
         skipped_count = len(directory_status) - len(active_status)
-        daily_ready = bool(active_status) and all(item.ready for item in active_status)
 
-        # 检查 RJ 数据目录，按最新文件自动判断日粒度或周粒度。
-        rj_status = self._check_rj_ready(downloader, target_days)
-        rj_error_count = sum(1 for item in rj_status.values() if item.error)
-        self._set_combined_directory_status(directory_status, rj_status)
-        if rj_error_count:
+        # 检查自动粒度目录，按最新文件自动判断日粒度或周粒度。
+        auto_status = self._check_auto_ready(downloader, target_days, sorted(auto_directories))
+        auto_error_count = sum(1 for item in auto_status.values() if item.error)
+        self._set_combined_directory_status(directory_status, auto_status)
+        if auto_error_count:
             return self._finish_check(
                 "scan_failed",
-                f"RJ 远程目录扫描失败，{rj_error_count}/{len(rj_status)} 个目录无法访问或扫描失败",
+                f"自动粒度远程目录扫描失败，{auto_error_count}/{len(auto_status)} 个目录无法访问或扫描失败",
                 manual,
             )
 
-        active_rj_status = [item for item in rj_status.values() if not item.skipped]
-        rj_ready = all(item.ready for item in active_rj_status)
-        rj_status_text = ""
+        active_auto_status = [item for item in auto_status.values() if not item.skipped]
+        daily_ready = all(item.ready for item in active_status) if active_status else not directory_status and bool(active_auto_status)
+        auto_ready = all(item.ready for item in active_auto_status)
+        auto_status_text = ""
 
-        if active_rj_status:
-            rj_ready_count = sum(1 for item in active_rj_status if item.ready)
-            rj_total = len(active_rj_status)
-            if not rj_ready:
-                rj_status_text = f"，RJ 数据 {rj_ready_count}/{rj_total} 个有效目录就绪"
+        if active_auto_status:
+            auto_ready_count = sum(1 for item in active_auto_status if item.ready)
+            auto_total = len(active_auto_status)
+            if not auto_ready:
+                auto_status_text = f"，自动粒度数据 {auto_ready_count}/{auto_total} 个有效目录就绪"
 
         # 两个条件都满足才触发
-        if daily_ready and rj_ready:
-            self._mark_ready(target_days, directory_status, rj_status)
+        if daily_ready and auto_ready:
+            self._mark_ready(target_days, directory_status, auto_status)
             skipped_text = f"，已跳过 {skipped_count} 个停推目录" if skipped_count else ""
-            rj_text = "，RJ 数据已就绪" if active_rj_status else ""
+            auto_text = "，自动粒度数据已就绪" if active_auto_status else ""
             return self._finish_check(
                 "marked_ready",
-                f"远程数据已满足目标周 7 天{skipped_text}{rj_text}，已写入就绪标识，下次检查将自动处理",
+                f"远程数据已满足目标周 7 天{skipped_text}{auto_text}，已写入就绪标识，下次检查将自动处理",
                 manual,
             )
 
@@ -254,7 +261,7 @@ class AutoScheduler:
         if not active_status:
             return self._finish_check(
                 "waiting",
-                f"远程普通日数据未发现有效目录，无法触发处理{rj_status_text}",
+                f"远程普通日数据未发现有效目录，无法触发处理{auto_status_text}",
                 manual,
             )
 
@@ -262,7 +269,7 @@ class AutoScheduler:
         skipped_text = f"，跳过 {skipped_count} 个停推目录" if skipped_count else ""
         return self._finish_check(
             "waiting",
-            f"远程数据未就绪，{ready_count}/{len(active_status)} 个有效目录满足目标周 7 天{skipped_text}{rj_status_text}",
+            f"远程数据未就绪，{ready_count}/{len(active_status)} 个有效目录满足目标周 7 天{skipped_text}{auto_status_text}",
             manual,
         )
 
@@ -380,40 +387,40 @@ class AutoScheduler:
             file_count=len(files),
         )
 
-    def _check_rj_ready(
+    def _check_auto_ready(
         self,
         downloader: RemoteDataDownloader,
         target_days: list[date],
-    ) -> dict[str, RJDirectoryReadyStatus]:
-        """检查 RJ 数据目录是否就绪，自动识别目录最新文件是日粒度还是周粒度。"""
-        rj_config = state.current_config().rj_data.normalized()
-        if not rj_config.enabled:
+        directories: list[str],
+    ) -> dict[str, AutoDirectoryReadyStatus]:
+        """检查自动粒度目录是否就绪，自动识别目录最新文件是日粒度还是周粒度。"""
+        if not directories:
             return {}
 
-        result: dict[str, RJDirectoryReadyStatus] = {}
+        result: dict[str, AutoDirectoryReadyStatus] = {}
 
-        for directory in rj_config.weekly_directories:
-            result[directory] = self._check_single_rj_directory(downloader, directory, target_days)
+        for directory in directories:
+            result[directory] = self._check_single_auto_directory(downloader, directory, target_days)
 
         return result
 
-    def _check_single_rj_directory(
+    def _check_single_auto_directory(
         self,
         downloader: RemoteDataDownloader,
         directory: str,
         target_days: list[date],
-    ) -> RJDirectoryReadyStatus:
-        """检查单个 RJ 目录是否包含目标周数据。"""
+    ) -> AutoDirectoryReadyStatus:
+        """检查单个自动粒度目录是否包含目标周数据。"""
         files = self._safe_list_remote_zip_files(downloader, directory)
         if files is None:
-            return RJDirectoryReadyStatus(
+            return AutoDirectoryReadyStatus(
                 directory=directory,
                 ready=False,
                 error="远程目录不存在或无法访问",
             )
 
         if not files:
-            return RJDirectoryReadyStatus(
+            return AutoDirectoryReadyStatus(
                 directory=directory,
                 ready=True,
                 file_count=0,
@@ -427,7 +434,7 @@ class AutoScheduler:
             if (date_range := parse_file_date_range(remote_file.name))
         ]
         if not parsed_files:
-            return RJDirectoryReadyStatus(
+            return AutoDirectoryReadyStatus(
                 directory=directory,
                 ready=False,
                 found_days=[],
@@ -452,7 +459,7 @@ class AutoScheduler:
         missing = [item for item in target_days if item not in found]
 
         if granularity == "daily":
-            return RJDirectoryReadyStatus(
+            return AutoDirectoryReadyStatus(
                 directory=directory,
                 ready=not missing,
                 granularity=granularity,
@@ -465,7 +472,7 @@ class AutoScheduler:
         for remote_file in files:
             date_range = parse_file_date_range(remote_file.name)
             if date_range and date_range.covers_all(required):
-                return RJDirectoryReadyStatus(
+                return AutoDirectoryReadyStatus(
                     directory=directory,
                     ready=True,
                     granularity=granularity,
@@ -475,7 +482,7 @@ class AutoScheduler:
                     file_count=len(files),
                 )
 
-        return RJDirectoryReadyStatus(
+        return AutoDirectoryReadyStatus(
             directory=directory,
             ready=False,
             granularity=granularity,
@@ -523,7 +530,7 @@ class AutoScheduler:
         self,
         target_days: list[date],
         directory_status: dict[str, DirectoryReadyStatus],
-        rj_status: dict[str, RJDirectoryReadyStatus] | None = None,
+        auto_status: dict[str, AutoDirectoryReadyStatus] | None = None,
     ) -> None:
         READY_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -536,14 +543,10 @@ class AutoScheduler:
                 for name, item in directory_status.items()
             },
         }
-        if rj_status:
-            payload["rj_directories"] = {
+        if auto_status:
+            payload["auto_directories"] = {
                 name: item.to_dict()
-                for name, item in rj_status.items()
-            }
-            payload["rj_weekly_directories"] = {
-                name: item.to_dict()
-                for name, item in rj_status.items()
+                for name, item in auto_status.items()
             }
         READY_FLAG.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -619,7 +622,7 @@ class AutoScheduler:
     def _set_combined_directory_status(
         self,
         directory_status: dict[str, DirectoryReadyStatus],
-        rj_status: dict[str, RJDirectoryReadyStatus],
+        auto_status: dict[str, AutoDirectoryReadyStatus],
     ) -> None:
         with self._status_lock:
             combined = {
@@ -629,7 +632,7 @@ class AutoScheduler:
             combined.update(
                 {
                     name: item.to_dict()
-                    for name, item in rj_status.items()
+                    for name, item in auto_status.items()
                 }
             )
             self._directory_status = combined

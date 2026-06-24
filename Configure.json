@@ -29,13 +29,14 @@
     "enabled": true,
     "keep_count": 1
   },
-  "RJData": {
-    "enabled": true,
-    "weekly_directories": [
-      "RJ/2.6G/2.6RJGD",
-      "RJ/2.6G/2.6RJYD",
-      "RJ/700M/700RJGD",
-      "RJ/700M/700RJYD"
+  "DataMappings": {
+    "directories": [
+      {"path": "4G", "table": "4G_UD", "ready_rule": "daily"},
+      {"path": "5G", "table": "5G_UD", "ready_rule": "daily"},
+      {"path": "RJ/2.6G/2.6RJGD", "table": "2_6GRJGD", "ready_rule": "auto"},
+      {"path": "RJ/2.6G/2.6RJYD", "table": "2_6GRJYD", "ready_rule": "auto"},
+      {"path": "RJ/700M/700RJGD", "table": "700MRJGD", "ready_rule": "auto"},
+      {"path": "RJ/700M/700RJYD", "table": "700MRJYD", "ready_rule": "auto"}
     ],
     "table_field_mappings": {
       "2_6GRJGD": [

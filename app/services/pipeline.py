@@ -11,12 +11,6 @@ from app.processor import ProcessLogger
 from app.services.csv_processor import CsvProcessor
 from app.services.platform import make_client
 
-RJ_DIR_TO_TABLE = {
-    "2.6RJGD": "2_6GRJGD",
-    "2.6RJYD": "2_6GRJYD",
-    "700RJGD": "700MRJGD",
-    "700RJYD": "700MRJYD",
-}
 RESULT_TABLES = ["4G_结果表", "5G_结果表"]
 
 
@@ -34,18 +28,13 @@ def validate_metrix(metrix: MetrixConfig) -> None:
 
 def build_processor_config(app_config: AppConfig) -> dict:
     metrix = app_config.metrix.normalized()
-    rj = app_config.rj_data.normalized()
+    mappings = app_config.data_mappings.normalized()
     return {
         "recent_days": metrix.recent_days,
         "sheet_filter": list(app_config.sheet_filter),
-        "data_dir_to_table": dict(metrix.data_dir_to_table),
+        "directories": list(mappings.directories),
         "extract_fields": app_config.extract_fields,
-        "rj": {
-            "enabled": rj.enabled,
-            "weekly_directories": rj.weekly_directories,
-            "dir_to_table": RJ_DIR_TO_TABLE,
-            "table_field_mappings": rj.table_field_mappings,
-        },
+        "table_field_mappings": mappings.table_field_mappings,
     }
 
 

@@ -1483,14 +1483,13 @@ select {
 }
 
 .settings-rules-grid {
+  display: grid;
   grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.4fr);
   grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   height: 100%;
   min-height: 0;
-  padding-right: 6px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   scrollbar-color: var(--td-scrollbar-color) transparent;
   scrollbar-width: thin;
 }
@@ -1509,8 +1508,20 @@ select {
   background: transparent;
 }
 
-.settings-rules-grid > .work-card {
+.settings-rules-grid > .work-card,
+.settings-rules-side > .work-card {
   min-width: 0;
+}
+
+.settings-rules-side {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 18px;
+  padding-right: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .settings-security-panel {
@@ -1530,6 +1541,23 @@ select {
   flex-wrap: wrap;
   gap: 8px;
   min-height: 28px;
+}
+
+.directory-mapping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.directory-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 104px auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.directory-ready-select {
+  width: 112px;
 }
 
 .form-hint {
@@ -1991,6 +2019,8 @@ select {
   }
 
   .field-mapping-card {
+    grid-row: auto;
+    grid-column: auto;
     height: min(760px, calc(100vh - 260px));
     min-height: 520px;
   }

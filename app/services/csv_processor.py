@@ -41,13 +41,9 @@ class CsvProcessor:
         self.log = log
         self.recent_days = int(config.get("recent_days", 7))
         self.sheet_filter = set(config.get("sheet_filter", []))
-        self.data_dir_to_table = {k.upper(): v for k, v in (config.get("data_dir_to_table") or {}).items()}
+        self.directories = _build_directory_mappings(config.get("directories") or [])
         self.field_map, self.type_map = _build_global_map(config.get("extract_fields", []))
-        rj = config.get("rj") or {}
-        self.rj_enabled = bool(rj.get("enabled"))
-        self.rj_weekly_dirs = list(rj.get("weekly_directories") or [])
-        self.rj_dir_to_table = dict(rj.get("dir_to_table") or {})
-        self.rj_maps = _build_rj_maps(rj.get("table_field_mappings") or {})
+        self.table_maps = _build_table_maps(config.get("table_field_mappings") or {})
         self.out_dir = self.work_dir / ".out"
 
     def process(self) -> dict[str, Path]:
@@ -99,8 +95,10 @@ class CsvProcessor:
             return {}
         self.out_dir.mkdir(parents=True, exist_ok=True)
         result: dict[str, Path] = {}
-        for table, directory in data_dirs.items():
-            csv_files = self._filter_recent(list(self._scan(directory, (".csv",))), "CSV", root=directory)
+        for table, directories in data_dirs.items():
+            csv_files: list[Path] = []
+            for directory in directories:
+                csv_files.extend(self._filter_recent(list(self._scan(directory, (".csv",))), "CSV", root=directory))
             if not csv_files:
                 continue
             field_map, type_map = self._maps_for_table(table)
@@ -185,30 +183,17 @@ class CsvProcessor:
         return out[union]
 
     # --- directory detection --------------------------------------------
-    def _find_data_dirs(self) -> dict[str, Path]:
-        data_dirs: dict[str, Path] = {}
-        target_names = set(self.data_dir_to_table.keys())
-        for sub in self.work_dir.rglob("*"):
-            if sub.is_dir() and sub.name.upper() in target_names:
-                table = self.data_dir_to_table[sub.name.upper()]
-                data_dirs.setdefault(table, sub)
-        if self.rj_enabled:
-            self._find_rj_dirs(data_dirs)
+    def _find_data_dirs(self) -> dict[str, list[Path]]:
+        data_dirs: dict[str, list[Path]] = {}
+        for item in self.directories:
+            directory = self.work_dir / item["path"]
+            if directory.exists() and directory.is_dir():
+                _add_data_dir(data_dirs, item["table"], directory)
         return data_dirs
 
-    def _find_rj_dirs(self, data_dirs: dict[str, Path]) -> None:
-        for weekly in self.rj_weekly_dirs:
-            path = self.work_dir / weekly
-            if path.exists() and path.is_dir() and path.name in self.rj_dir_to_table:
-                data_dirs.setdefault(self.rj_dir_to_table[path.name], path)
-        if not any(table in data_dirs for table in self.rj_dir_to_table.values()):
-            for sub in self.work_dir.rglob("*"):
-                if sub.is_dir() and sub.name in self.rj_dir_to_table:
-                    data_dirs.setdefault(self.rj_dir_to_table[sub.name], sub)
-
     def _maps_for_table(self, table: str):
-        if table in self.rj_maps:
-            return self.rj_maps[table]
+        if table in self.table_maps:
+            return self.table_maps[table]
         return self.field_map, self.type_map
 
     # --- helpers ---------------------------------------------------------
@@ -257,7 +242,32 @@ def _build_global_map(extract_fields: list[dict]) -> tuple[dict[str, str], dict[
     return field_map, type_map
 
 
-def _build_rj_maps(table_field_mappings: dict) -> dict[str, tuple[dict[str, str], dict[str, str]]]:
+def _build_directory_mappings(items: list[dict]) -> list[dict[str, str]]:
+    mappings: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "")).replace("\\", "/").strip().strip("/")
+        table = str(item.get("table", "")).strip()
+        if not path or not table:
+            continue
+        key = (path, table)
+        if key in seen:
+            continue
+        seen.add(key)
+        mappings.append({"path": path, "table": table})
+    return mappings
+
+
+def _add_data_dir(data_dirs: dict[str, list[Path]], table: str, directory: Path) -> None:
+    existing = data_dirs.setdefault(table, [])
+    resolved = directory.resolve()
+    if all(path.resolve() != resolved for path in existing):
+        existing.append(directory)
+
+
+def _build_table_maps(table_field_mappings: dict) -> dict[str, tuple[dict[str, str], dict[str, str]]]:
     maps: dict[str, tuple[dict[str, str], dict[str, str]]] = {}
     for table, fields in table_field_mappings.items():
         field_map: dict[str, str] = {}

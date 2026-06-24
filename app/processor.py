@@ -123,21 +123,18 @@ class DataProcessor:
         self._field_map, self._type_map = self._build_field_map()
         self._apply_sql_script_type_hints()
 
-        # 预编译RJ字段映射
-        self._rj_field_maps: Dict[str, Tuple[Dict[str, str], Dict[str, str]]] = {}
-        self._build_rj_field_maps()
+        # 预编译按表字段映射
+        self._table_field_maps: Dict[str, Tuple[Dict[str, str], Dict[str, str]]] = {}
+        self._build_table_field_maps()
 
         # LOAD DATA INFILE 支持状态（在首次使用时检测）
         self._load_data_supported: Optional[bool] = None
         self._load_data_checked = False
 
-    def _build_rj_field_maps(self) -> None:
-        """预构建RJ表的字段映射"""
-        rj_config = self.config.rj_data.normalized()
-        if not rj_config.enabled:
-            return
-
-        for table_name, fields in rj_config.table_field_mappings.items():
+    def _build_table_field_maps(self) -> None:
+        """预构建按表覆盖的字段映射"""
+        mappings = self.config.data_mappings.normalized().table_field_mappings
+        for table_name, fields in mappings.items():
             field_map = {}
             type_map = {}
             for field_def in fields:
@@ -147,7 +144,7 @@ class DataProcessor:
                 if source and target:
                     field_map[source] = target
                     type_map[target] = field_type
-            self._rj_field_maps[table_name] = (field_map, type_map)
+            self._table_field_maps[table_name] = (field_map, type_map)
     
     def _build_field_map(self) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
@@ -186,9 +183,8 @@ class DataProcessor:
             field_map: {源字段名: 目标字段名}
             type_map: {目标字段名: 字段类型}
         """
-        # 检查是否是RJ表（使用预构建的缓存）
-        if table_name in self._rj_field_maps:
-            return self._rj_field_maps[table_name]
+        if table_name in self._table_field_maps:
+            return self._table_field_maps[table_name]
 
         # 使用全局映射
         return self._field_map, self._type_map
@@ -520,7 +516,7 @@ class DataProcessor:
             keep_default_na=False   # 不使用默认的 NA 值
         )
 
-        # 获取字段映射（RJ表使用专用映射，其他表使用全局映射）
+        # 获取字段映射（按表配置优先，其他表使用全局映射）
         field_map, type_map = self._get_field_map_for_table(table_name)
 
         # 快速字段匹配（使用预编译的映射表）
@@ -829,84 +825,28 @@ class DataProcessor:
             .str.replace(' ', '', regex=False)
         )
     
-    # RJ目录名到表名的映射
-    RJ_DIR_TO_TABLE = {
-        "2.6RJGD": "2_6GRJGD",
-        "2.6RJYD": "2_6GRJYD",
-        "700RJGD": "700MRJGD",
-        "700RJYD": "700MRJYD",
-    }
-
-    def _find_data_directories(self) -> Dict[str, Path]:
+    def _find_data_directories(self) -> Dict[str, List[Path]]:
         """
-        查找包含数据文件的目录，返回 {表名: 目录路径}
-        支持 4G/5G 和 RJ 数据目录
+        查找包含数据文件的目录，返回 {表名: [目录路径]}
         """
-        data_dirs = {}
-        target_names = {'4G', '5G', '4g', '5g'}
-
+        data_dirs: Dict[str, List[Path]] = {}
         self.logger.info(f"开始查找数据目录，工作目录: {self.work_dir}")
 
-        # 递归查找所有名为 4G 或 5G 的目录
-        found_dirs = []
-        for subdir in self.work_dir.rglob('*'):
-            if subdir.is_dir() and subdir.name in target_names:
-                found_dirs.append(subdir)
-
-        self.logger.info(f"找到 {len(found_dirs)} 个候选目录")
-
-        for subdir in found_dirs:
-            table_name = f"{subdir.name.upper()}_UD"
-            if table_name not in data_dirs:
-                data_dirs[table_name] = subdir
-                self.logger.info(f"发现数据目录: {subdir.relative_to(self.work_dir)} -> 表: {table_name}")
-
-        # 查找 RJ 数据目录
-        rj_config = self.config.rj_data.normalized()
-        if rj_config.enabled:
-            self._find_rj_data_directories(data_dirs)
-
-        if not data_dirs:
-            self.logger.warning("未找到 4G/5G 目录，使用直接子目录")
-            for subdir in self.work_dir.iterdir():
-                if subdir.is_dir():
-                    table_name = f"{subdir.name}_UD"
-                    data_dirs[table_name] = subdir
-                    self.logger.info(f"使用直接子目录: {subdir.relative_to(self.work_dir)} -> 表: {table_name}")
+        for item in self.config.data_mappings.normalized().directories:
+            subdir = self.work_dir / item["path"]
+            if subdir.exists() and subdir.is_dir():
+                self._add_data_directory(data_dirs, item["table"], subdir)
+                self.logger.info(f"发现数据目录: {subdir.relative_to(self.work_dir)} -> 表: {item['table']}")
 
         return data_dirs
 
-    def _find_rj_data_directories(self, data_dirs: Dict[str, Path]) -> None:
-        """查找RJ数据目录"""
-        self.logger.info("查找RJ数据目录...")
+    @staticmethod
+    def _add_data_directory(data_dirs: Dict[str, List[Path]], table_name: str, directory: Path) -> None:
+        existing = data_dirs.setdefault(table_name, [])
+        resolved = directory.resolve()
+        if all(path.resolve() != resolved for path in existing):
+            existing.append(directory)
 
-        # RJ目录结构: RJ/2.6G/2.6RJGD, RJ/2.6G/2.6RJYD 等
-        # 只搜索工作目录下的特定路径，避免全量递归
-        rj_config = self.config.rj_data.normalized()
-        for weekly_dir in rj_config.weekly_directories:
-            # 构建本地路径: work_dir / RJ/2.6G/2.6RJGD
-            rj_path = self.work_dir / weekly_dir
-            if rj_path.exists() and rj_path.is_dir():
-                dir_name = rj_path.name
-                if dir_name in self.RJ_DIR_TO_TABLE:
-                    table_name = self.RJ_DIR_TO_TABLE[dir_name]
-                    if table_name not in data_dirs:
-                        data_dirs[table_name] = rj_path
-                        self.logger.info(f"发现RJ数据目录: {rj_path.relative_to(self.work_dir)} -> 表: {table_name}")
-
-        # 兜底: 如果配置的路径不存在，尝试从工作目录中查找
-        if not any(k in data_dirs for k in self.RJ_DIR_TO_TABLE.values()):
-            self.logger.info("配置的RJ路径不存在，尝试从工作目录中查找...")
-            for rj_dir in self.work_dir.rglob('*'):
-                if not rj_dir.is_dir():
-                    continue
-                dir_name = rj_dir.name
-                if dir_name in self.RJ_DIR_TO_TABLE:
-                    table_name = self.RJ_DIR_TO_TABLE[dir_name]
-                    if table_name not in data_dirs:
-                        data_dirs[table_name] = rj_dir
-                        self.logger.info(f"发现RJ数据目录: {rj_dir.relative_to(self.work_dir)} -> 表: {table_name}")
-    
     def _process_csv_files(self):
         """处理所有 CSV 文件（使用 LOAD DATA INFILE + 连接复用）"""
         self.logger.info("正在处理 CSV 文件并上传到数据库...")
@@ -919,14 +859,17 @@ class DataProcessor:
             return
         
         # 按目录分组处理，使用连接复用
-        for table_name, subdir in data_dirs.items():
-            self.logger.info(f"处理目录: {subdir.relative_to(self.work_dir)} -> 表: {table_name}")
+        for table_name, subdirs in data_dirs.items():
+            directory_names = ", ".join(str(subdir.relative_to(self.work_dir)) for subdir in subdirs)
+            self.logger.info(f"处理目录: {directory_names} -> 表: {table_name}")
             
             # 删除旧表
             self.db.drop_table(table_name)
             
             # 处理该目录下的所有 CSV
-            csv_files = self._filter_recent_files(list(self._scan_files(subdir, ['.csv'])), "CSV", root=subdir)
+            csv_files: list[Path] = []
+            for subdir in subdirs:
+                csv_files.extend(self._filter_recent_files(list(self._scan_files(subdir, ['.csv'])), "CSV", root=subdir))
             self.logger.info(f"找到 {len(csv_files)} 个 CSV 文件")
             
             total_rows = 0

@@ -694,3 +694,12 @@
 - 现状确认：`pipeline.py`/`warehouse.py` 所有 `run_script` 调用本就只传 `content`（报表 SQL 来自 `read_report_sql()` 读取本地 `ReportScript.sql`），从不传 `script_id`，行为已正确。
 - 改动：`app/services/platform.py::run_script` 删除一直未被调用的 `script_id` 参数与对应 body 分支，方法只构造 `content`，从代码层面杜绝走平台库内脚本那条路；签名由 `(conn_id, script_id=None, content="", ...)` 改为 `(conn_id, content="", ...)`，现有调用全用 `content=` 关键字、`conn_id` 位置参，未受影响。
 - 验证：`python -m compileall app` 通过；全仓 `app` 内除该行注释外无 `script_id` 引用。
+
+## 2026-06-24：数据目录映射统一为 DataMappings
+
+- 背景：UD 与 RJ 在处理阶段本质都是「源目录 -> 暂存表」。此前 UD 使用 `UDData.directories`，RJ 使用 `RJData.weekly_directories` + 代码内置目录名到表名映射，概念重复且前端容易继续堆卡片。
+- 配置：删除 `UDData` / `RJData` 两套配置，改为顶层 `DataMappings`。`DataMappings.directories` 每行结构为 `{path, table, ready_rule}`，`ready_rule=daily` 表示目标周每日 7 天检查，`ready_rule=auto` 表示按目录最新 ZIP 自动识别日粒度或周粒度；RJ 原字段映射并入 `DataMappings.table_field_mappings`，按目标表名覆盖全局字段映射。`MetrixConfig` 仍只保留平台连接信息。
+- 处理链路：直连 MySQL 的 `DataProcessor` 与 Metrix 仓库模式的 `CsvProcessor` 都只读取 `DataMappings.directories`。一个表可对应多个目录：每个目录先按最近日期筛选 CSV，再合并导入同一张暂存表（Metrix 模式写 `.out/{table}.csv`，MySQL 模式逐文件导入同表）。表级字段映射存在时优先使用 `DataMappings.table_field_mappings[table]`，否则使用全局 `ExtractField`。
+- 自动调度：原 RJ 专用检查改为通用自动粒度检查。`ready_rule=auto` 的目录会从普通每日扫描中排除，并单独按最新 ZIP 判断日/周粒度；如果配置里只有自动粒度目录，只要这些目录就绪也可触发调度。
+- 前端：设置页「规则映射」左侧独立滚动配置栏中只保留一个「数据目录映射」卡片，每行可编辑目录、暂存表与就绪规则，并保存到 `/api/config/data-mappings`。后续新增目录类映射继续加同一张表，不再新增配置卡片。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物与 Python 缓存已清理。

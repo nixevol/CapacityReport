@@ -98,9 +98,9 @@ export interface AppConfig {
     dbname: string;
   };
   metrix: MetrixConfig;
+  data_mappings: DataMappingsConfig;
   remote_data: RemoteDataConfig;
   history_retention: HistoryRetentionConfig;
-  rj_data?: RJDataConfig;
   sheet_filter: string[];
   extract_fields: Array<Record<string, unknown>>;
 }
@@ -112,12 +112,16 @@ export interface MetrixConfig {
   database_conn_id: string;
   target_database: string;
   recent_days: number;
-  data_dir_to_table: Record<string, string>;
 }
 
-export interface RJDataConfig {
-  enabled: boolean;
-  weekly_directories: string[];
+export interface DataDirectoryMapping {
+  path: string;
+  table: string;
+  ready_rule: 'daily' | 'auto';
+}
+
+export interface DataMappingsConfig {
+  directories: DataDirectoryMapping[];
   table_field_mappings: Record<string, Array<Record<string, unknown>>>;
 }
 

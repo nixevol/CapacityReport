@@ -337,36 +337,73 @@
 
         <n-tab-pane name="rules" tab="规则映射">
           <div class="settings-rules-grid">
-            <n-card title="Sheet 过滤规则" size="small" class="work-card">
-              <n-space vertical>
-                <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
-                <div class="filter-tags">
-                  <n-tag
-                    v-for="(filter, index) in sheetFilters"
-                    :key="`${filter}-${index}`"
-                    closable
-                    @close="removeSheetFilter(index)"
-                  >
-                    {{ filter }}
-                  </n-tag>
-                  <n-empty v-if="sheetFilters.length === 0" size="small" description="暂无过滤规则" />
-                </div>
-                <n-input-group>
-                  <n-input
-                    v-model:value="newSheetFilter"
-                    placeholder="输入需要跳过的 Sheet 关键词"
-                    @keydown.enter.prevent="addSheetFilter"
-                  />
-                  <n-button @click="addSheetFilter">添加</n-button>
-                </n-input-group>
-              </n-space>
-
-              <template #footer>
-                <n-space justify="end">
-                  <n-button type="primary" :loading="savingSheetFilter" @click="saveSheetFilter">保存规则</n-button>
+            <div class="settings-rules-side">
+              <n-card title="数据目录映射" size="small" class="work-card">
+                <n-space vertical>
+                  <p class="form-hint">每行配置一个源目录到暂存表的映射。就绪规则选择“每日7天”时按目标周 7 天检查；选择“自动日/周”时按目录最新文件自动识别日粒度或周粒度。</p>
+                  <div class="directory-mapping-list">
+                    <div
+                      v-for="(item, index) in dataMappingsForm.directories"
+                      :key="`${item.path}-${item.table}-${item.ready_rule}-${index}`"
+                      class="directory-mapping-row"
+                    >
+                      <n-input v-model:value="item.path" size="small" placeholder="目录，例如 4G 或 RJ/700M/700RJYD" />
+                      <n-input v-model:value="item.table" size="small" placeholder="暂存表，例如 4G_UD" />
+                      <n-select v-model:value="item.ready_rule" size="small" :options="readyRuleOptions" />
+                      <n-button quaternary circle size="small" type="error" @click="removeDirectoryMapping(index)">
+                        <template #icon>
+                          <n-icon><CloseOutline /></n-icon>
+                        </template>
+                      </n-button>
+                    </div>
+                    <n-empty v-if="dataMappingsForm.directories.length === 0" size="small" description="暂无目录映射" />
+                  </div>
+                  <n-input-group>
+                    <n-input v-model:value="newDirectoryMapping.path" placeholder="目录路径" @keydown.enter.prevent="addDirectoryMapping" />
+                    <n-input v-model:value="newDirectoryMapping.table" placeholder="暂存表名" @keydown.enter.prevent="addDirectoryMapping" />
+                    <n-select v-model:value="newDirectoryMapping.ready_rule" class="directory-ready-select" :options="readyRuleOptions" />
+                    <n-button @click="addDirectoryMapping">添加</n-button>
+                  </n-input-group>
                 </n-space>
-              </template>
-            </n-card>
+
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingDirectoryMappings" @click="saveDirectoryMappings">保存目录映射</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+
+              <n-card title="Sheet 过滤规则" size="small" class="work-card">
+                <n-space vertical>
+                  <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
+                  <div class="filter-tags">
+                    <n-tag
+                      v-for="(filter, index) in sheetFilters"
+                      :key="`${filter}-${index}`"
+                      closable
+                      @close="removeSheetFilter(index)"
+                    >
+                      {{ filter }}
+                    </n-tag>
+                    <n-empty v-if="sheetFilters.length === 0" size="small" description="暂无过滤规则" />
+                  </div>
+                  <n-input-group>
+                    <n-input
+                      v-model:value="newSheetFilter"
+                      placeholder="输入需要跳过的 Sheet 关键词"
+                      @keydown.enter.prevent="addSheetFilter"
+                    />
+                    <n-button @click="addSheetFilter">添加</n-button>
+                  </n-input-group>
+                </n-space>
+
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingSheetFilter" @click="saveSheetFilter">保存规则</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+            </div>
 
             <n-card size="small" class="work-card field-mapping-card">
               <template #header>
@@ -494,6 +531,8 @@ import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type {
   ApiMessage,
   AppConfig,
+  DataDirectoryMapping,
+  DataMappingsConfig,
   HistoryRetentionConfig,
   MetrixConfig,
   RemoteAutoSchedulerConfig,
@@ -526,6 +565,7 @@ const savingBackend = ref(false);
 const savingMetrix = ref(false);
 const sourceType = ref<'ftp' | 'sftp' | 'metrix'>('sftp');
 const warehouseType = ref<'mysql' | 'metrix'>('mysql');
+const savingDirectoryMappings = ref(false);
 const savingHistoryRetention = ref(false);
 const savingSheetFilter = ref(false);
 const savingExtractFields = ref(false);
@@ -571,8 +611,21 @@ const metrixForm = reactive<MetrixConfig>({
   storage_id: '',
   database_conn_id: '',
   target_database: '',
-  recent_days: 7,
-  data_dir_to_table: { '4G': '4G_UD', '5G': '5G_UD' }
+  recent_days: 7
+});
+
+const dataMappingsForm = reactive<DataMappingsConfig>({
+  directories: [
+    { path: '4G', table: '4G_UD', ready_rule: 'daily' },
+    { path: '5G', table: '5G_UD', ready_rule: 'daily' }
+  ],
+  table_field_mappings: {}
+});
+
+const newDirectoryMapping = reactive<DataDirectoryMapping>({
+  path: '',
+  table: '',
+  ready_rule: 'daily'
 });
 
 const historyRetentionForm = reactive<HistoryRetentionConfig>({
@@ -599,6 +652,10 @@ const remoteProtocolOptions: SelectOption[] = [
 const schedulerWeekOptions: SelectOption[] = [
   { label: '上周', value: 0 },
   { label: '上上周', value: -1 }
+];
+const readyRuleOptions: SelectOption[] = [
+  { label: '每日7天', value: 'daily' },
+  { label: '自动日/周', value: 'auto' }
 ];
 
 const visibleFieldMappings = computed(() => {
@@ -696,8 +753,8 @@ async function loadConfig() {
       metrixForm.database_conn_id = config.metrix.database_conn_id || '';
       metrixForm.target_database = config.metrix.target_database || '';
       metrixForm.recent_days = Number(config.metrix.recent_days) || 7;
-      metrixForm.data_dir_to_table = config.metrix.data_dir_to_table || { '4G': '4G_UD', '5G': '5G_UD' };
     }
+    Object.assign(dataMappingsForm, normalizeDataMappingsConfig(config.data_mappings));
     mysqlForm.host = config.mysql.host;
     mysqlForm.port = config.mysql.port;
     mysqlForm.user = config.mysql.user;
@@ -821,6 +878,51 @@ async function saveRemote() {
     message.error(error instanceof Error ? error.message : '保存远程数据源配置失败');
   } finally {
     savingRemote.value = false;
+  }
+}
+
+function addDirectoryMapping() {
+  const path = normalizeDirectoryText(newDirectoryMapping.path);
+  const table = newDirectoryMapping.table.trim();
+  const readyRule = newDirectoryMapping.ready_rule === 'auto' ? 'auto' : 'daily';
+  if (!path || !table) {
+    message.warning('请填写目录路径和暂存表名');
+    return;
+  }
+  const exists = dataMappingsForm.directories.some(
+    item => normalizeDirectoryText(item.path) === path && item.table.trim() === table && item.ready_rule === readyRule
+  );
+  if (exists) {
+    message.warning('该目录映射已存在');
+    return;
+  }
+  dataMappingsForm.directories.push({ path, table, ready_rule: readyRule });
+  newDirectoryMapping.path = '';
+  newDirectoryMapping.table = '';
+  newDirectoryMapping.ready_rule = 'daily';
+}
+
+function removeDirectoryMapping(index: number) {
+  dataMappingsForm.directories.splice(index, 1);
+}
+
+async function saveDirectoryMappings() {
+  const config = normalizeDataMappingsConfig(dataMappingsForm);
+  if (config.directories.length === 0) {
+    message.warning('请至少保留一个数据目录映射');
+    return;
+  }
+
+  savingDirectoryMappings.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/data-mappings', config);
+    Object.assign(dataMappingsForm, config);
+    configUpdate.value = result.update || configUpdate.value;
+    message.success('数据目录映射已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存数据目录映射失败');
+  } finally {
+    savingDirectoryMappings.value = false;
   }
 }
 
@@ -1069,6 +1171,31 @@ function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteData
     timeout: config?.timeout || 30,
     auto_delete_source: Boolean(config?.auto_delete_source) || autoScheduler.enabled,
     auto_scheduler: autoScheduler
+  };
+}
+
+function normalizeDataMappingsConfig(config: DataMappingsConfig | undefined): DataMappingsConfig {
+  const directories: DataDirectoryMapping[] = [];
+  const seen = new Set<string>();
+  for (const item of config?.directories || []) {
+    const path = normalizeDirectoryText(item.path || '');
+    const table = String(item.table || '').trim();
+    const readyRule = item.ready_rule === 'auto' ? 'auto' : 'daily';
+    if (!path || !table) continue;
+    const key = `${path}\n${table}\n${readyRule}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    directories.push({ path, table, ready_rule: readyRule });
+  }
+  if (directories.length === 0) {
+    directories.push(
+      { path: '4G', table: '4G_UD', ready_rule: 'daily' },
+      { path: '5G', table: '5G_UD', ready_rule: 'daily' }
+    );
+  }
+  return {
+    directories,
+    table_field_mappings: config?.table_field_mappings || {}
   };
 }
 
