@@ -711,3 +711,9 @@
 - 后端接口：新增 `/api/config/cell-data/remote`、`/api/config/cell-data/mysql` 保存接口，以及 `/api/config/cell-data/remote/test`、`/api/config/cell-data/mysql/test` 测试接口；测试逻辑分别复用 `RemoteDataDownloader` 和独立 PyMySQL `SELECT 1`。
 - 前端：系统设置「数据库」页新增「CellData 数据库配置」卡片；「远程数据源」页新增「CellData 数据源」卡片；「数据源 / 仓库」页说明 CellData 为独立辅助数据源，不影响主数据源/仓库选择。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物与 Python 缓存已清理。
+
+## 2026-06-24：精简系统设置与历史页文案
+
+- 设置页说明文案去掉开发实现细节，只保留用户填写配置所需的短提示：主数据源/仓库、Metrix 连接、CellData 数据库/远程源、远程数据源、自动调度、目录映射、Sheet 过滤和字段映射等位置均已压缩。
+- 历史删除确认中的“缓存文件”改为“相关文件”，避免把内部存储实现暴露给用户。
+- 验证：`frontend` `npm run build` 通过；构建产物已清理。

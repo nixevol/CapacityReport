@@ -22,7 +22,7 @@
                       <n-radio-button value="metrix">Metrix 数据库平台</n-radio-button>
                     </n-radio-group>
                   </n-form-item>
-                  <p class="form-hint">两侧可独立选择：源用 FTP/SFTP 或 Metrix 存储平台；仓库用本地 MySQL 或 Metrix 数据库平台。CellData 是后续处理使用的辅助数据源，独立配置，不影响这里的主数据源/仓库选择。</p>
+                  <p class="form-hint">主数据源和数据仓库可独立选择；CellData 单独配置。</p>
                 </n-form>
                 <template #footer>
                   <n-space justify="end">
@@ -63,7 +63,7 @@
                       </n-form-item>
                     </n-gi>
                   </n-grid>
-                  <p class="form-hint">仅当数据源或仓库选择 Metrix 时使用。存储平台用 storage_id，数据库平台用 database_conn_id，二者共用地址与 Token。</p>
+                  <p class="form-hint">填写 Metrix 平台连接信息。</p>
                 </n-form>
                 <template #footer>
                   <n-space justify="end">
@@ -147,7 +147,7 @@
                       </n-form-item>
                     </n-gi>
                   </n-grid>
-                  <p class="form-hint">后续处理会从该库复制 CellData 所需表到临时处理区，产出结果后再清理。通常可与主 MySQL 相同，也可以指向独立 CellData 数据库。</p>
+                  <p class="form-hint">填写 CellData 数据库连接；可与主数据库相同。</p>
                 </n-form>
 
                 <template #footer>
@@ -178,7 +178,7 @@
                       </n-form-item>
                     </n-gi>
                   </n-grid>
-                  <p class="form-hint">关闭后不自动删除处理历史；启用后会在任务结束时自动清理，设置为 0 表示不保留历史，否则只保留最近指定次数的处理历史。</p>
+                  <p class="form-hint">设置任务历史保留数量；0 表示不保留。</p>
                 </n-form>
 
                 <template #footer>
@@ -244,7 +244,7 @@
                     />
                   </n-form-item>
                 </div>
-                <p class="form-hint">自动化执行会递归下载该目录下的全部文件和文件夹到本地缓存，再按现有处理流程入库和执行脚本；自动删除源文件只会在处理成功后删除远程文件，保留目录结构。</p>
+                <p class="form-hint">填写容量数据来源；可选择处理成功后删除源文件。</p>
               </n-form>
 
               <template #footer>
@@ -296,7 +296,7 @@
                 <n-form-item label="启用 CellData 数据源">
                   <n-switch v-model:value="cellDataRemoteForm.enabled" />
                 </n-form-item>
-                <p class="form-hint">用于后续 CellData 存储、提取、处理和入库流程；当前只保存连接信息并支持连接测试，不参与现有容量报表处理链路。</p>
+                <p class="form-hint">填写 CellData 文件来源。</p>
               </n-form>
 
               <template #footer>
@@ -369,7 +369,7 @@
                     </div>
                   </div>
                 </n-form-item>
-                <p class="form-hint">自动调度依赖远程自动化；关闭远程自动化时会自动关闭调度。启用调度后会按文件名日期检查目标自然周 7 天，并强制开启处理成功后删除源文件。</p>
+                <p class="form-hint">启用后按目标周检查文件完整性，满足条件后自动处理。</p>
               </n-form>
 
               <div class="scheduler-status-panel">
@@ -432,7 +432,7 @@
             <div class="settings-rules-side">
               <n-card title="数据目录映射" size="small" class="work-card">
                 <n-space vertical>
-                  <p class="form-hint">每行配置一个源目录到暂存表的映射。就绪规则选择“每日7天”时按目标周 7 天检查；选择“自动日/周”时按目录最新文件自动识别日粒度或周粒度。</p>
+                  <p class="form-hint">配置源目录对应的暂存表和检查规则。</p>
                   <div class="directory-mapping-list">
                     <div
                       v-for="(item, index) in dataMappingsForm.directories"
@@ -467,7 +467,7 @@
 
               <n-card title="Sheet 过滤规则" size="small" class="work-card">
                 <n-space vertical>
-                  <p class="form-hint">匹配这些关键词的 Sheet 将被跳过处理</p>
+                  <p class="form-hint">这些 Sheet 会跳过。</p>
                   <div class="filter-tags">
                     <n-tag
                       v-for="(filter, index) in sheetFilters"
@@ -513,7 +513,7 @@
                       placeholder="搜索字段..."
                     />
                   </div>
-                  <p class="form-hint">定义 Excel 列名到数据库字段的映射规则，提取来源匹配任意一个即可</p>
+                  <p class="form-hint">把源文件列名映射为数据库字段。</p>
                 </div>
               </template>
 

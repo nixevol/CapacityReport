@@ -405,7 +405,7 @@ async function copyDetailLogs() {
 function confirmDelete(recordId: string) {
   dialog.warning({
     title: '删除历史记录',
-    content: `确认删除任务 ${recordId} 及其缓存文件？`,
+    content: `确认删除任务 ${recordId} 及相关文件？`,
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: () => deleteRecord(recordId)
@@ -429,7 +429,7 @@ async function deleteRecord(recordId: string) {
 function confirmClear() {
   dialog.warning({
     title: '清空历史记录',
-    content: '确认清空全部历史记录和缓存文件？',
+    content: '确认清空全部历史记录和相关文件？',
     positiveText: '清空',
     negativeText: '取消',
     onPositiveClick: clearHistory
