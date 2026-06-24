@@ -794,7 +794,9 @@
 ## 2026-06-25：CellData 扫描路径回到数据源卡片
 
 - 扫描路径属于文件来源配置，已移回 CellData 数据源卡片中展示和维护；「规则设置」弹窗只保留高级正则与映射 JSON，避免弹窗承担过多基础配置。
-- 验证：`frontend` `npm run build` 通过；构建产物已清理。
+- CellData 数据源不再展示“远程目录”，连接根目录固定为 `/`；实际文件位置完全由扫描路径控制。
+- 扫描路径占位符支持 `{maxyear}`、`{maxmonth}`、`{maxday}`、`{yyyy}`、`{yyyymm}`、`{yyyymmdd}`，并提供对应年份/月/日目录正则配置。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过；构建产物与 Python 缓存已清理。
 
 ## 2026-06-25：优化 CellData 扫描路径排版
 
