@@ -774,7 +774,9 @@
                 <n-button size="small" @click="addCellDataMappingField(sourceIndex)">添加字段</n-button>
               </div>
             </div>
-            <n-button size="small" @click="addCellDataMappingSource">添加来源</n-button>
+            <div class="cell-data-mapping-actions">
+              <n-button size="small" @click="addCellDataMappingSource">添加来源</n-button>
+            </div>
           </div>
         </section>
       </div>

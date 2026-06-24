@@ -1640,16 +1640,24 @@ select {
 }
 
 .cell-data-settings-body {
-  display: grid;
+  display: flex;
+  height: min(68vh, 680px);
+  min-height: 0;
+  flex-direction: column;
   gap: 14px;
-  max-height: 68vh;
-  overflow-y: auto;
   padding-right: 4px;
+  overflow: hidden;
 }
 
 .cell-data-settings-section {
   display: grid;
+  flex: 0 0 auto;
   gap: 8px;
+  min-height: 0;
+}
+
+.cell-data-settings-section:last-child {
+  flex: 1 1 auto;
 }
 
 .cell-data-section-title {
@@ -1668,10 +1676,14 @@ select {
 }
 
 .cell-data-mapping-form,
-.cell-data-source-list,
 .cell-data-source-card {
   display: grid;
   gap: 10px;
+}
+
+.cell-data-mapping-form {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .cell-data-mapping-key {
@@ -1685,6 +1697,19 @@ select {
   background: var(--td-bg-color-secondarycontainer);
   border: 1px solid var(--td-border-color-light);
   border-radius: var(--td-radius-default);
+}
+
+.cell-data-source-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cell-data-mapping-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .cell-data-source-header,
