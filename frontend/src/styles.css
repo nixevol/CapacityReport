@@ -1547,7 +1547,7 @@ select {
 }
 
 .settings-remote-panel {
-  grid-template-columns: minmax(720px, 1fr);
+  grid-template-columns: repeat(2, minmax(420px, 1fr));
 }
 
 .settings-scheduler-panel {
@@ -1624,6 +1624,34 @@ select {
   color: var(--td-text-color-primary);
   background: var(--td-bg-color-secondarycontainer);
   border-radius: var(--td-radius-small);
+}
+
+.cell-data-settings-body {
+  display: grid;
+  gap: 14px;
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cell-data-settings-section {
+  display: grid;
+  gap: 8px;
+}
+
+.cell-data-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cell-data-json-editor {
+  height: 360px;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid var(--td-border-color-light);
+  border-radius: var(--td-radius-default);
 }
 
 .settings-rules-grid {
@@ -2156,6 +2184,10 @@ select {
     align-items: start;
     overflow-x: hidden;
     overflow-y: auto;
+  }
+
+  .settings-remote-panel {
+    grid-template-columns: 1fr;
   }
 
   .settings-tabs .n-tab-pane {

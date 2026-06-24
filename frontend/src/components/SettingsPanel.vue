@@ -293,62 +293,6 @@
                 <n-form-item label="远程目录">
                   <n-input v-model:value="cellDataRemoteForm.remote_dir" placeholder="/" />
                 </n-form-item>
-                <n-form-item label="扫描路径">
-                  <div class="cell-data-path-editor">
-                    <div class="cell-data-path-header">
-                      <span class="form-hint">支持路径模板和多目录组合</span>
-                      <n-button quaternary circle size="small" title="查看说明" @click="cellDataHelpVisible = true">
-                        <template #icon>
-                          <n-icon><InformationCircleOutline /></n-icon>
-                        </template>
-                      </n-button>
-                    </div>
-                    <div class="cell-data-path-list">
-                      <div v-for="(path, index) in cellDataScanPaths" :key="`${path}-${index}`" class="cell-data-path-row">
-                        <n-input v-model:value="cellDataScanPaths[index]" size="small" placeholder="/.../{maxyear}年/300表" />
-                        <n-button quaternary circle size="small" type="error" @click="removeCellDataScanPath(index)">
-                          <template #icon>
-                            <n-icon><CloseOutline /></n-icon>
-                          </template>
-                        </n-button>
-                      </div>
-                    </div>
-                    <n-input-group>
-                      <n-input v-model:value="newCellDataScanPath" placeholder="扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
-                      <n-button @click="addCellDataScanPath">添加</n-button>
-                    </n-input-group>
-                  </div>
-                </n-form-item>
-                <n-grid :cols="12" :x-gap="12">
-                  <n-gi :span="4">
-                    <n-form-item label="年份目录正则">
-                      <n-input v-model:value="cellDataRegexForm.year_dir_regex" />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="4">
-                    <n-form-item label="文件名正则">
-                      <n-input v-model:value="cellDataRegexForm.file_name_regex" />
-                    </n-form-item>
-                  </n-gi>
-                  <n-gi :span="4">
-                    <n-form-item label="时间戳正则">
-                      <n-input v-model:value="cellDataRegexForm.file_time_regex" />
-                    </n-form-item>
-                  </n-gi>
-                </n-grid>
-                <n-form-item label="映射规则 JSON">
-                  <n-input
-                    v-model:value="cellDataMappingText"
-                    type="textarea"
-                    :autosize="{ minRows: 8, maxRows: 16 }"
-                    spellcheck="false"
-                  />
-                </n-form-item>
-                <n-space justify="end" size="small">
-                  <n-button :loading="validatingCellDataSettings" @click="validateCellDataSettings">校验 JSON</n-button>
-                  <n-button @click="restoreDefaultCellDataMapping">恢复默认映射</n-button>
-                  <n-button type="primary" :loading="savingCellDataSettings" @click="saveCellDataSettings">保存规则</n-button>
-                </n-space>
                 <n-form-item label="启用 CellData 数据源">
                   <n-switch v-model:value="cellDataRemoteForm.enabled" />
                 </n-form-item>
@@ -359,6 +303,7 @@
                 <n-space justify="end">
                   <n-button type="primary" :loading="savingCellDataRemote" @click="saveCellDataRemote">保存配置</n-button>
                   <n-button :loading="testingCellDataRemote" @click="testCellDataRemote">测试连接</n-button>
+                  <n-button @click="openCellDataSettingsModal">规则设置</n-button>
                 </n-space>
               </template>
             </n-card>
@@ -701,13 +646,95 @@
         </section>
       </n-scrollbar>
     </n-modal>
+
+    <n-modal
+      v-model:show="cellDataSettingsVisible"
+      preset="card"
+      class="cell-data-settings-modal"
+      title="CellData 规则设置"
+      style="width: min(860px, calc(100vw - 32px))"
+      @after-enter="layoutCellDataEditor"
+      @after-leave="disposeCellDataEditor"
+    >
+      <div class="cell-data-settings-body">
+        <section class="cell-data-settings-section">
+          <div class="cell-data-section-title">
+            <strong>扫描路径</strong>
+            <n-button quaternary circle size="small" title="查看说明" @click="cellDataHelpVisible = true">
+              <template #icon>
+                <n-icon><InformationCircleOutline /></n-icon>
+              </template>
+            </n-button>
+          </div>
+          <div class="cell-data-path-list">
+            <div v-for="(path, index) in cellDataScanPaths" :key="`${path}-${index}`" class="cell-data-path-row">
+              <n-input v-model:value="cellDataScanPaths[index]" size="small" placeholder="/.../{maxyear}年/300表" />
+              <n-button quaternary circle size="small" type="error" @click="removeCellDataScanPath(index)">
+                <template #icon>
+                  <n-icon><CloseOutline /></n-icon>
+                </template>
+              </n-button>
+            </div>
+          </div>
+          <n-input-group>
+            <n-input v-model:value="newCellDataScanPath" placeholder="扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
+            <n-button @click="addCellDataScanPath">添加</n-button>
+          </n-input-group>
+        </section>
+
+        <section class="cell-data-settings-section">
+          <div class="cell-data-section-title">
+            <strong>高级匹配</strong>
+          </div>
+          <n-grid :cols="12" :x-gap="12">
+            <n-gi :span="4">
+              <n-form-item label="年份目录正则">
+                <n-input v-model:value="cellDataRegexForm.year_dir_regex" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="4">
+              <n-form-item label="文件名正则">
+                <n-input v-model:value="cellDataRegexForm.file_name_regex" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="4">
+              <n-form-item label="时间戳正则">
+                <n-input v-model:value="cellDataRegexForm.file_time_regex" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+        </section>
+
+        <section class="cell-data-settings-section">
+          <div class="cell-data-section-title">
+            <strong>映射规则 JSON</strong>
+            <n-space size="small">
+              <n-button size="small" @click="formatCellDataMapping">格式化</n-button>
+              <n-button size="small" :loading="validatingCellDataSettings" @click="validateCellDataSettings">校验</n-button>
+              <n-button size="small" @click="restoreDefaultCellDataMapping">恢复默认</n-button>
+            </n-space>
+          </div>
+          <div ref="cellDataEditorHost" class="cell-data-json-editor"></div>
+        </section>
+      </div>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="cellDataSettingsVisible = false">取消</n-button>
+          <n-button type="primary" :loading="savingCellDataSettings" @click="saveCellDataSettings">保存规则</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useDialog, useMessage, type SelectOption } from 'naive-ui';
 import { CloseOutline, CloudDownloadOutline, CloudUploadOutline, InformationCircleOutline } from '@vicons/ionicons5';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import 'monaco-editor/esm/vs/language/json/monaco.contribution';
 
 import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type {
@@ -731,6 +758,16 @@ interface ExtractFieldConfig {
   Extract: string[];
   [key: string]: unknown;
 }
+
+type MonacoGlobal = typeof globalThis & {
+  MonacoEnvironment?: {
+    getWorker: (_moduleId: string, _label: string) => Worker;
+  };
+};
+
+(globalThis as MonacoGlobal).MonacoEnvironment = {
+  getWorker: () => new editorWorker()
+};
 
 const message = useMessage();
 const dialog = useDialog();
@@ -766,8 +803,11 @@ const fieldSearch = ref('');
 const newSchedulerDirectory = ref('');
 const newCellDataScanPath = ref('');
 const cellDataHelpVisible = ref(false);
+const cellDataSettingsVisible = ref(false);
 const cellDataScanPaths = ref<string[]>([]);
 const cellDataMappingText = ref('');
+const cellDataEditorHost = ref<HTMLDivElement | null>(null);
+const cellDataEditor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 const schedulerStatus = ref<RemoteSchedulerStatus | null>(null);
 const newExtractValues = reactive<Record<number, string>>({});
 
@@ -963,6 +1003,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   resetPageHeader();
+  disposeCellDataEditor();
 });
 
 async function loadConfig() {
@@ -1206,7 +1247,7 @@ function removeCellDataScanPath(index: number) {
 function getCellDataSettingsPayload() {
   let mapping: Record<string, unknown>;
   try {
-    mapping = JSON.parse(cellDataMappingText.value || '{}') as Record<string, unknown>;
+    mapping = JSON.parse(getCellDataMappingText() || '{}') as Record<string, unknown>;
   } catch {
     throw new Error('映射规则不是有效 JSON');
   }
@@ -1234,7 +1275,7 @@ async function validateCellDataSettings() {
 async function restoreDefaultCellDataMapping() {
   try {
     const mapping = await apiGet<Record<string, unknown>>('/api/config/cell-data/mapping/default');
-    cellDataMappingText.value = JSON.stringify(mapping, null, 2);
+    setCellDataMappingText(JSON.stringify(mapping, null, 2));
     message.success('已恢复默认映射');
   } catch (error) {
     message.error(error instanceof Error ? error.message : '恢复默认映射失败');
@@ -1247,7 +1288,7 @@ async function saveCellDataSettings() {
     const payload = getCellDataSettingsPayload();
     const result = await apiPost<ApiMessage>('/api/config/cell-data/settings', payload);
     cellDataScanPaths.value = normalizeCellDataScanPaths(payload.scan_paths);
-    cellDataMappingText.value = JSON.stringify(payload.mapping, null, 2);
+    setCellDataMappingText(JSON.stringify(payload.mapping, null, 2));
     configUpdate.value = result.update || configUpdate.value;
     message.success(result.message || 'CellData 规则已保存');
   } catch (error) {
@@ -1255,6 +1296,71 @@ async function saveCellDataSettings() {
   } finally {
     savingCellDataSettings.value = false;
   }
+}
+
+function openCellDataSettingsModal() {
+  cellDataSettingsVisible.value = true;
+  void nextTick(createCellDataEditor);
+}
+
+function createCellDataEditor() {
+  if (!cellDataEditorHost.value || cellDataEditor.value) {
+    layoutCellDataEditor();
+    return;
+  }
+  cellDataEditor.value = monaco.editor.create(cellDataEditorHost.value, {
+    value: cellDataMappingText.value || '{}',
+    language: 'json',
+    theme: currentEditorTheme(),
+    fontSize: 13,
+    fontFamily: "Consolas, 'Courier New', monospace",
+    minimap: { enabled: false },
+    automaticLayout: true,
+    scrollBeyondLastLine: false,
+    wordWrap: 'on',
+    tabSize: 2,
+    insertSpaces: true,
+    formatOnPaste: true,
+    formatOnType: true
+  });
+}
+
+function disposeCellDataEditor() {
+  if (cellDataEditor.value) {
+    cellDataMappingText.value = cellDataEditor.value.getValue();
+    cellDataEditor.value.dispose();
+    cellDataEditor.value = null;
+  }
+}
+
+function layoutCellDataEditor() {
+  void nextTick(() => cellDataEditor.value?.layout());
+}
+
+function getCellDataMappingText(): string {
+  return cellDataEditor.value?.getValue() ?? cellDataMappingText.value;
+}
+
+function setCellDataMappingText(value: string) {
+  cellDataMappingText.value = value;
+  if (cellDataEditor.value) {
+    cellDataEditor.value.setValue(value);
+  }
+}
+
+async function formatCellDataMapping() {
+  try {
+    const formatted = JSON.stringify(JSON.parse(getCellDataMappingText() || '{}'), null, 2);
+    setCellDataMappingText(formatted);
+    await nextTick();
+    await cellDataEditor.value?.getAction('editor.action.formatDocument')?.run();
+  } catch {
+    message.error('映射规则不是有效 JSON');
+  }
+}
+
+function currentEditorTheme(): string {
+  return document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs';
 }
 
 function addDirectoryMapping() {
