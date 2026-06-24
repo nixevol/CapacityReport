@@ -724,3 +724,9 @@
 - 后端数据库接口新增 `database_source` 参数，`main` 保持原有直连 MySQL / Metrix 仓库逻辑，`cell_data` 使用 `CellData.MySQL_DBInfo` 创建独立 MySQL 仓库。表列表、表结构、分页数据、清空、删除、删除全部、执行 SQL 和导出均按该参数选择数据库。
 - CellData 数据库当前只支持直连 MySQL 配置；Metrix 仓库模式只影响主数据库。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物与 Python 缓存已清理。
+
+## 2026-06-25：数据管理数据库选择改为弹窗列表
+
+- 数据管理页不再用下拉框切换数据库，改为表标题旁的图标按钮打开「选择数据库」弹窗；弹窗内为固定高度列表，超出高度滚动。
+- 选择项仍来自主数据库与 CellData 数据库配置，后续新增更多数据库时继续扩展同一列表，不占用侧栏宽度。
+- 验证：`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物已清理。

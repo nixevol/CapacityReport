@@ -5,13 +5,19 @@
         <div class="database-table-pane-header">
           <div class="database-source-header">
             <h2>表</h2>
-            <n-select
-              v-model:value="selectedDatabaseSource"
+            <span class="database-source-name">{{ selectedDatabaseSourceLabel }}</span>
+            <n-button
+              quaternary
+              circle
               size="small"
-              class="database-source-select"
-              :options="databaseSourceOptions"
-              @update:value="switchDatabaseSource"
-            />
+              aria-label="切换数据库"
+              title="切换数据库"
+              @click="databaseSourceModalVisible = true"
+            >
+              <template #icon>
+                <n-icon><ServerOutline /></n-icon>
+              </template>
+            </n-button>
           </div>
           <n-button
             quaternary
@@ -224,17 +230,40 @@
       </div>
     </template>
   </n-modal>
+
+  <n-modal
+    v-model:show="databaseSourceModalVisible"
+    preset="card"
+    class="database-source-modal"
+    title="选择数据库"
+    style="width: min(420px, calc(100vw - 32px))"
+  >
+    <n-scrollbar class="database-source-options">
+      <button
+        v-for="option in databaseSourceOptions"
+        :key="String(option.value)"
+        type="button"
+        class="database-source-option"
+        :class="{ active: selectedDatabaseSource === option.value }"
+        @click="switchDatabaseSource(String(option.value))"
+      >
+        <span>{{ option.label }}</span>
+        <span v-if="selectedDatabaseSource === option.value" class="database-source-current">当前</span>
+      </button>
+    </n-scrollbar>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
-import type { DataTableColumns, DropdownOption, SelectOption } from 'naive-ui';
+import type { DataTableColumns, DropdownOption } from 'naive-ui';
 import {
   ChevronForwardOutline,
   CloudDownloadOutline,
   RefreshOutline,
+  ServerOutline,
   TrashOutline
 } from '@vicons/ionicons5';
 
@@ -246,13 +275,18 @@ import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 type RowData = Record<string, unknown>;
 type DownloadFormat = 'csv' | 'xlsx';
 type DatabaseSource = 'main' | 'cell_data';
+interface DatabaseSourceOption {
+  label: string;
+  value: DatabaseSource;
+}
 
 const COLUMN_MIN_WIDTH = 140;
 const message = useMessage();
 const dialog = useDialog();
 const databaseInfo = ref<DatabaseInfo | null>(null);
 const selectedDatabaseSource = ref<DatabaseSource>('main');
-const databaseSourceOptions = ref<SelectOption[]>([
+const databaseSourceModalVisible = ref(false);
+const databaseSourceOptions = ref<DatabaseSourceOption[]>([
   { label: '主数据库', value: 'main' },
   { label: 'CellData', value: 'cell_data' }
 ]);
@@ -275,6 +309,9 @@ const columnSchemaExpanded = ref(false);
 let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
+const selectedDatabaseSourceLabel = computed(() => (
+  databaseSourceOptions.value.find(option => option.value === selectedDatabaseSource.value)?.label || '主数据库'
+));
 const downloading = computed(() => Boolean(downloadingFormat.value));
 const exportButtonText = computed(() => (
   downloadingFormat.value ? `导出 ${downloadingFormat.value.toUpperCase()}...` : '导出'
@@ -417,7 +454,10 @@ async function loadTables() {
 }
 
 function switchDatabaseSource(value: string) {
-  selectedDatabaseSource.value = value === 'cell_data' ? 'cell_data' : 'main';
+  const nextSource: DatabaseSource = value === 'cell_data' ? 'cell_data' : 'main';
+  databaseSourceModalVisible.value = false;
+  if (selectedDatabaseSource.value === nextSource) return;
+  selectedDatabaseSource.value = nextSource;
   resetTableState();
   void testConnection();
   void loadTables();
@@ -732,8 +772,48 @@ function formatCell(value: unknown): string {
   gap: 8px;
 }
 
-.database-source-select {
-  width: 150px;
+.database-source-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--td-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.database-source-options {
+  max-height: 320px;
+}
+
+.database-source-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--td-text-color-primary);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--td-border-color-light);
+  cursor: pointer;
+}
+
+.database-source-option:hover {
+  background: var(--td-bg-color-container-hover);
+}
+
+.database-source-option.active {
+  color: var(--td-brand-color);
+  font-weight: 600;
+  background: var(--td-brand-color-light);
+}
+
+.database-source-current {
+  flex: 0 0 auto;
+  font-size: 12px;
 }
 
 .database-table-list-wrap {
