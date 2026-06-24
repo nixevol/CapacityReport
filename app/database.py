@@ -5,14 +5,15 @@ import pymysql
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.config import AppConfig
+from app.config import AppConfig, MySQLConfig
 
 
 class DatabaseManager:
     """数据库管理器"""
     
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, mysql_config: MySQLConfig | None = None):
         self.config = config
+        self.mysql_config = (mysql_config or config.mysql).normalized()
     
     @contextmanager
     def get_connection(self):
@@ -26,7 +27,7 @@ class DatabaseManager:
         
         如果需要高性能的短连接操作，请使用 engine 属性（连接池）
         """
-        mysql = self.config.mysql
+        mysql = self.mysql_config
         conn = pymysql.connect(
             host=mysql.host,
             port=mysql.port,
@@ -46,7 +47,7 @@ class DatabaseManager:
     @contextmanager
     def get_fast_connection(self):
         """获取高性能 PyMySQL 连接（用于批量插入）"""
-        mysql = self.config.mysql
+        mysql = self.mysql_config
         conn = pymysql.connect(
             host=mysql.host,
             port=mysql.port,

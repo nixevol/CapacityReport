@@ -717,3 +717,10 @@
 - 设置页说明文案去掉开发实现细节，只保留用户填写配置所需的短提示：主数据源/仓库、Metrix 连接、CellData 数据库/远程源、远程数据源、自动调度、目录映射、Sheet 过滤和字段映射等位置均已压缩。
 - 历史删除确认中的“缓存文件”改为“相关文件”，避免把内部存储实现暴露给用户。
 - 验证：`frontend` `npm run build` 通过；构建产物已清理。
+
+## 2026-06-25：数据管理支持切换主数据库与 CellData 数据库
+
+- 数据管理页左侧表列表新增数据库选择，可在主数据库与 CellData 数据库之间切换；选项名称跟随系统设置里的主仓库库名和 `CellData.MySQL_DBInfo.dbname`。
+- 后端数据库接口新增 `database_source` 参数，`main` 保持原有直连 MySQL / Metrix 仓库逻辑，`cell_data` 使用 `CellData.MySQL_DBInfo` 创建独立 MySQL 仓库。表列表、表结构、分页数据、清空、删除、删除全部、执行 SQL 和导出均按该参数选择数据库。
+- CellData 数据库当前只支持直连 MySQL 配置；Metrix 仓库模式只影响主数据库。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物与 Python 缓存已清理。

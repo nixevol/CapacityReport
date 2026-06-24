@@ -12,7 +12,7 @@ from app.config import CACHE_DIR
 from app.database import DatabaseManager
 from app.services.platform import make_client
 from app.utils.files import remove_file_safely
-from app.warehouse import make_warehouse
+from app.warehouse import make_cell_data_warehouse, make_warehouse
 
 
 router = APIRouter(tags=["database"])
@@ -42,6 +42,9 @@ def _make_sheet_name(table_name: str, used_names: set[str]) -> str:
     return sheet_name
 
 
+DatabaseSource = str
+
+
 def _dataframe_from_table(db: DatabaseManager, table_name: str) -> pd.DataFrame:
     result = db.query_table(table_name, page=1, page_size=1000000)
     table_info = db.get_table_info(table_name)
@@ -49,21 +52,26 @@ def _dataframe_from_table(db: DatabaseManager, table_name: str) -> pd.DataFrame:
     return pd.DataFrame(result["data"], columns=columns)
 
 
-def _db():
+def _db(database_source: DatabaseSource = "main"):
     """Direct MySQL DatabaseManager, or a Metrix-backed warehouse with the same interface."""
-    return make_warehouse(state.current_config())
+    config = state.current_config()
+    if database_source == "cell_data":
+        return make_cell_data_warehouse(config)
+    if database_source != "main":
+        raise HTTPException(status_code=400, detail="不支持的数据库来源")
+    return make_warehouse(config)
 
 
 @router.post("/api/database/test")
-def test_database():
-    db = _db()
+def test_database(database_source: DatabaseSource = Body("main", embed=True)):
+    db = _db(database_source)
     success, message = db.test_connection()
     return {"success": success, "message": message}
 
 
 @router.get("/api/database/info")
-def get_database_info():
-    db = _db()
+def get_database_info(database_source: DatabaseSource = "main"):
+    db = _db(database_source)
     try:
         return {"success": True, **db.get_server_info()}
     except Exception as exc:
@@ -72,8 +80,8 @@ def get_database_info():
 
 @router.get("/api/database/tables")
 @router.post("/api/database/tables")
-def get_tables():
-    db = _db()
+def get_tables(database_source: DatabaseSource = Body("main", embed=True)):
+    db = _db(database_source)
     try:
         return {"tables": db.get_tables()}
     except Exception as exc:
@@ -81,8 +89,11 @@ def get_tables():
 
 
 @router.post("/api/database/table/info")
-def get_table_info(table_name: str = Body(..., embed=True)):
-    db = _db()
+def get_table_info(
+    table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+):
+    db = _db(database_source)
     try:
         return db.get_table_info(table_name)
     except Exception as exc:
@@ -92,12 +103,13 @@ def get_table_info(table_name: str = Body(..., embed=True)):
 @router.post("/api/database/table/data")
 def query_table_data(
     table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
     page: int = Body(1),
     page_size: int = Body(50),
     order_by: Optional[str] = Body(None),
     order_dir: str = Body("ASC"),
 ):
-    db = _db()
+    db = _db(database_source)
     try:
         return db.query_table(table_name, page, page_size, order_by=order_by, order_dir=order_dir)
     except Exception as exc:
@@ -107,13 +119,14 @@ def query_table_data(
 @router.post("/api/database/table/query")
 def query_table_with_filter(
     table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
     page: int = Body(1),
     page_size: int = Body(50),
     filters: Optional[dict[str, str]] = Body(None),
     order_by: Optional[str] = Body(None),
     order_dir: str = Body("ASC"),
 ):
-    db = _db()
+    db = _db(database_source)
     try:
         return db.query_table(
             table_name,
@@ -128,8 +141,11 @@ def query_table_with_filter(
 
 
 @router.post("/api/database/table/truncate")
-def truncate_table(table_name: str = Body(..., embed=True)):
-    db = _db()
+def truncate_table(
+    table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+):
+    db = _db(database_source)
     try:
         db.truncate_table(table_name)
         return {"success": True, "message": f"表 {table_name} 已清空"}
@@ -138,8 +154,11 @@ def truncate_table(table_name: str = Body(..., embed=True)):
 
 
 @router.post("/api/database/table/drop")
-def drop_table(table_name: str = Body(..., embed=True)):
-    db = _db()
+def drop_table(
+    table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+):
+    db = _db(database_source)
     try:
         db.drop_table(table_name)
         return {"success": True, "message": f"表 {table_name} 已删除"}
@@ -148,8 +167,8 @@ def drop_table(table_name: str = Body(..., embed=True)):
 
 
 @router.post("/api/database/table/drop-all")
-def drop_all_tables():
-    db = _db()
+def drop_all_tables(database_source: DatabaseSource = Body("main", embed=True)):
+    db = _db(database_source)
     try:
         result = db.drop_all_tables()
         return {
@@ -163,8 +182,11 @@ def drop_all_tables():
 
 
 @router.post("/api/database/execute")
-def execute_sql(sql: str = Body(..., embed=True)):
-    db = _db()
+def execute_sql(
+    sql: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+):
+    db = _db(database_source)
     try:
         success, result = db.execute_sql(sql)
         if success:
@@ -182,6 +204,7 @@ def execute_sql(sql: str = Body(..., embed=True)):
 def download_table(
     table_name: Optional[str] = Body(None, embed=True),
     table_names: Optional[list[str]] = Body(None, embed=True),
+    database_source: DatabaseSource = Body("main"),
     file_format: str = Body("csv", alias="format"),
 ):
     if file_format not in {"csv", "xlsx"}:
@@ -194,10 +217,10 @@ def download_table(
         raise HTTPException(status_code=400, detail="CSV 每次只能导出一张表")
 
     config = state.current_config()
-    if config.warehouse_type == "metrix":
+    if database_source == "main" and config.warehouse_type == "metrix":
         return _download_via_metrix(config, requested_tables, file_format)
 
-    db = _db()
+    db = _db(database_source)
     try:
         available_tables = set(db.get_tables())
         missing_tables = [name for name in requested_tables if name not in available_tables]

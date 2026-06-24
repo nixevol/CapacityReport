@@ -1,13 +1,13 @@
 {
-  "Update": "2026/06/24 23:16:46",
+  "Update": "2026/06/25 02:26:49",
   "SourceType": "sftp",
   "WarehouseType": "mysql",
   "MySQL_DBInfo": {
     "host": "127.0.0.1",
     "port": 3306,
     "user": "root",
-    "passwd": "123456",
-    "dbname": "CapacityReport"
+    "dbname": "CapacityReport",
+    "passwd": "123456"
   },
   "Metrix": {
     "base_url": "http://host.docker.internal:8000",
@@ -203,6 +203,33 @@
       "week_offset": 0
     },
     "passwd": "242520"
+  },
+  "CellData": {
+    "remote_data": {
+      "enabled": false,
+      "protocol": "sftp",
+      "host": "",
+      "port": 22,
+      "user": "",
+      "remote_dir": "/CellData",
+      "passive": true,
+      "timeout": 30,
+      "auto_delete_source": false,
+      "auto_scheduler": {
+        "enabled": false,
+        "check_interval_hours": 1,
+        "expected_directories": [],
+        "week_offset": 0
+      },
+      "passwd": ""
+    },
+    "mysql": {
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "dbname": "celldata",
+      "passwd": "123456"
+    }
   },
   "HistoryRetention": {
     "enabled": true,

@@ -3,7 +3,16 @@
     <aside class="database-sidebar-pane">
       <section class="database-table-pane">
         <div class="database-table-pane-header">
-          <h2>表</h2>
+          <div class="database-source-header">
+            <h2>表</h2>
+            <n-select
+              v-model:value="selectedDatabaseSource"
+              size="small"
+              class="database-source-select"
+              :options="databaseSourceOptions"
+              @update:value="switchDatabaseSource"
+            />
+          </div>
           <n-button
             quaternary
             circle
@@ -221,7 +230,7 @@
 import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
-import type { DataTableColumns, DropdownOption } from 'naive-ui';
+import type { DataTableColumns, DropdownOption, SelectOption } from 'naive-ui';
 import {
   ChevronForwardOutline,
   CloudDownloadOutline,
@@ -230,17 +239,23 @@ import {
 } from '@vicons/ionicons5';
 
 import { apiGet, apiPost, download } from '../api/client';
-import type { ApiMessage, DatabaseInfo, TableData, TableInfo } from '../types';
+import type { ApiMessage, AppConfig, DatabaseInfo, TableData, TableInfo } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 type RowData = Record<string, unknown>;
 type DownloadFormat = 'csv' | 'xlsx';
+type DatabaseSource = 'main' | 'cell_data';
 
 const COLUMN_MIN_WIDTH = 140;
 const message = useMessage();
 const dialog = useDialog();
 const databaseInfo = ref<DatabaseInfo | null>(null);
+const selectedDatabaseSource = ref<DatabaseSource>('main');
+const databaseSourceOptions = ref<SelectOption[]>([
+  { label: '主数据库', value: 'main' },
+  { label: 'CellData', value: 'cell_data' }
+]);
 const tables = ref<string[]>([]);
 const selectedTable = ref<string | null>(null);
 const tableInfo = ref<TableInfo | null>(null);
@@ -320,6 +335,7 @@ onMounted(() => {
       }
     ]
   });
+  void loadDatabaseSourceOptions();
   void testConnection();
   void loadTables();
 });
@@ -339,15 +355,36 @@ onBeforeUnmount(() => {
 async function testConnection() {
   testing.value = true;
   try {
-    const result = await apiPost<ApiMessage>('/api/database/test');
+    const result = await apiPost<ApiMessage>('/api/database/test', {
+      database_source: selectedDatabaseSource.value
+    });
     if (!result.success) {
       message.error(result.message || '数据库连接测试失败');
     }
-    databaseInfo.value = await apiGet<DatabaseInfo>('/api/database/info');
+    databaseInfo.value = await apiGet<DatabaseInfo>(`/api/database/info?database_source=${selectedDatabaseSource.value}`);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '数据库连接测试失败');
   } finally {
     testing.value = false;
+  }
+}
+
+async function loadDatabaseSourceOptions() {
+  try {
+    const config = await apiGet<AppConfig>('/api/config');
+    const mainName = config.warehouse_type === 'metrix'
+      ? (config.metrix.target_database || 'Metrix')
+      : (config.mysql.dbname || '主数据库');
+    const cellName = config.cell_data?.mysql?.dbname || 'CellData';
+    databaseSourceOptions.value = [
+      { label: `主数据库：${mainName}`, value: 'main' },
+      { label: `CellData：${cellName}`, value: 'cell_data' }
+    ];
+  } catch {
+    databaseSourceOptions.value = [
+      { label: '主数据库', value: 'main' },
+      { label: 'CellData', value: 'cell_data' }
+    ];
   }
 }
 
@@ -357,7 +394,9 @@ async function loadTables() {
   const currentToken = ++tableLoadToken;
   loadingTables.value = true;
   try {
-    const result = await apiGet<{ tables: string[] }>('/api/database/tables');
+    const result = await apiPost<{ tables: string[] }>('/api/database/tables', {
+      database_source: selectedDatabaseSource.value
+    });
     if (currentToken !== tableLoadToken) return;
     tables.value = result.tables;
     if (selectedTable.value && !tables.value.includes(selectedTable.value)) {
@@ -375,6 +414,13 @@ async function loadTables() {
       loadingTables.value = false;
     }
   }
+}
+
+function switchDatabaseSource(value: string) {
+  selectedDatabaseSource.value = value === 'cell_data' ? 'cell_data' : 'main';
+  resetTableState();
+  void testConnection();
+  void loadTables();
 }
 
 function resetTableState() {
@@ -404,7 +450,10 @@ async function reloadTable() {
 
 async function loadTableInfo(table: string) {
   try {
-    tableInfo.value = await apiPost<TableInfo>('/api/database/table/info', { table_name: table });
+    tableInfo.value = await apiPost<TableInfo>('/api/database/table/info', {
+      table_name: table,
+      database_source: selectedDatabaseSource.value
+    });
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载表结构失败');
   }
@@ -416,6 +465,7 @@ async function loadTableData() {
   try {
     const result = await apiPost<TableData>('/api/database/table/data', {
       table_name: selectedTable.value,
+      database_source: selectedDatabaseSource.value,
       page: page.value,
       page_size: pageSize.value
     });
@@ -489,7 +539,11 @@ async function downloadSelectedCsv() {
   try {
     const result = await download(
       '/api/download',
-      { table_name: selectedCsvTable.value, format: 'csv' },
+      {
+        table_name: selectedCsvTable.value,
+        database_source: selectedDatabaseSource.value,
+        format: 'csv'
+      },
       filename
     );
     if (result.saved) {
@@ -512,7 +566,11 @@ async function downloadSelectedXlsx() {
   try {
     const result = await download(
       '/api/download',
-      { table_names: selectedXlsxTables.value, format: 'xlsx' },
+      {
+        table_names: selectedXlsxTables.value,
+        database_source: selectedDatabaseSource.value,
+        format: 'xlsx'
+      },
       filename
     );
     if (result.saved) {
@@ -540,7 +598,10 @@ function confirmTruncate() {
 async function truncateTable() {
   if (!selectedTable.value) return;
   try {
-    await apiPost('/api/database/table/truncate', { table_name: selectedTable.value });
+    await apiPost('/api/database/table/truncate', {
+      table_name: selectedTable.value,
+      database_source: selectedDatabaseSource.value
+    });
     message.success('数据表已清空');
     await reloadTable();
   } catch (error) {
@@ -562,7 +623,10 @@ function confirmDrop() {
 async function dropTable() {
   if (!selectedTable.value) return;
   try {
-    await apiPost('/api/database/table/drop', { table_name: selectedTable.value });
+    await apiPost('/api/database/table/drop', {
+      table_name: selectedTable.value,
+      database_source: selectedDatabaseSource.value
+    });
     message.success('数据表已删除');
     selectedTable.value = null;
     tableInfo.value = null;
@@ -588,7 +652,9 @@ function confirmDropAll() {
 
 async function dropAllTables() {
   try {
-    const result = await apiPost<ApiMessage & { dropped_count?: number }>('/api/database/table/drop-all');
+    const result = await apiPost<ApiMessage & { dropped_count?: number }>('/api/database/table/drop-all', {
+      database_source: selectedDatabaseSource.value
+    });
     message.success(result.message || `已删除 ${result.dropped_count || 0} 张表`);
     selectedTable.value = null;
     tableInfo.value = null;
@@ -656,6 +722,18 @@ function formatCell(value: unknown): string {
   font-size: 15px;
   font-weight: 600;
   line-height: 22px;
+}
+
+.database-source-header {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+.database-source-select {
+  width: 150px;
 }
 
 .database-table-list-wrap {

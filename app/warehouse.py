@@ -22,6 +22,10 @@ def make_warehouse(config: AppConfig):
     return DatabaseManager(config)
 
 
+def make_cell_data_warehouse(config: AppConfig):
+    return DatabaseManager(config, config.cell_data.normalized().mysql)
+
+
 def _quote_ident(name: str) -> str:
     return "`" + str(name).replace("`", "``") + "`"
 
