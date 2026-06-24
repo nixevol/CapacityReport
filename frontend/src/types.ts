@@ -151,6 +151,8 @@ export interface CellDataConfig {
   };
   scan_paths: string[];
   year_dir_regex: string;
+  month_dir_regex: string;
+  day_dir_regex: string;
   file_name_regex: string;
   file_time_regex: string;
   mapping: Record<string, unknown>;

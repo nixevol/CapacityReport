@@ -107,6 +107,8 @@ async def update_cell_data_remote_config(config: dict[str, Any] = Body(...)):
         mysql=current.mysql,
         scan_paths=current.scan_paths,
         year_dir_regex=current.year_dir_regex,
+        month_dir_regex=current.month_dir_regex,
+        day_dir_regex=current.day_dir_regex,
         file_name_regex=current.file_name_regex,
         file_time_regex=current.file_time_regex,
         mapping=current.mapping,
@@ -124,6 +126,8 @@ async def update_cell_data_mysql_config(config: dict[str, Any] = Body(...)):
         mysql=MySQLConfig.from_dict(config, default_dbname="celldata"),
         scan_paths=current.scan_paths,
         year_dir_regex=current.year_dir_regex,
+        month_dir_regex=current.month_dir_regex,
+        day_dir_regex=current.day_dir_regex,
         file_name_regex=current.file_name_regex,
         file_time_regex=current.file_time_regex,
         mapping=current.mapping,
@@ -160,6 +164,8 @@ async def update_cell_data_settings(config: dict[str, Any] = Body(...)):
         mysql=current.mysql,
         scan_paths=config.get("scan_paths", current.scan_paths),
         year_dir_regex=str(config.get("year_dir_regex", current.year_dir_regex)),
+        month_dir_regex=str(config.get("month_dir_regex", current.month_dir_regex)),
+        day_dir_regex=str(config.get("day_dir_regex", current.day_dir_regex)),
         file_name_regex=str(config.get("file_name_regex", current.file_name_regex)),
         file_time_regex=str(config.get("file_time_regex", current.file_time_regex)),
         mapping=config.get("mapping", current.mapping),
@@ -302,7 +308,7 @@ def _validate_cell_data_settings(config: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(scan_paths, list) or not any(str(path).strip() for path in scan_paths):
         return {"success": False, "message": "请至少配置一个扫描路径"}
 
-    for key in ("year_dir_regex", "file_name_regex", "file_time_regex"):
+    for key in ("year_dir_regex", "month_dir_regex", "day_dir_regex", "file_name_regex", "file_time_regex"):
         try:
             re.compile(str(config.get(key, "")))
         except re.error as exc:

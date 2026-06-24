@@ -56,6 +56,8 @@ class CellDataProcessor:
         self.logger = logger
         self.downloader = RemoteDataDownloader(self.config.remote_data, self._log)
         self.year_dir_re = re.compile(self.config.year_dir_regex)
+        self.month_dir_re = re.compile(self.config.month_dir_regex)
+        self.day_dir_re = re.compile(self.config.day_dir_regex)
         self.file_name_re = re.compile(self.config.file_name_regex)
         self.file_time_re = re.compile(self.config.file_time_regex)
 
@@ -135,26 +137,27 @@ class CellDataProcessor:
         path = self._replace_date_placeholders(str(template).replace("\\", "/").strip())
         if not path.startswith("/"):
             path = self._join_remote_path(self.config.remote_data.remote_dir, path)
-        if "{maxyear}" not in path:
-            return path
-
         parts = [part for part in path.split("/") if part]
-        maxyear_index = next((index for index, part in enumerate(parts) if "{maxyear}" in part), -1)
-        if maxyear_index < 0:
-            return path
-        parent = "/" + "/".join(parts[:maxyear_index]) if maxyear_index else "/"
-        year_segment = parts[maxyear_index]
-        years: list[int] = []
-        for entry in self._list_dir(parent):
-            if entry["type"] != "directory":
+        replacements = [
+            ("{maxyear}", "year", self.year_dir_re, "年份"),
+            ("{maxmonth}", "month", self.month_dir_re, "月份"),
+            ("{maxday}", "day", self.day_dir_re, "日期"),
+        ]
+        for token, group_name, pattern, label in replacements:
+            token_index = next((index for index, part in enumerate(parts) if token in part), -1)
+            if token_index < 0:
                 continue
-            match = self.year_dir_re.search(str(entry["name"]))
-            if match:
-                years.append(int(match.group("year")))
-        if not years:
-            raise RuntimeError(f"未找到年份目录: {parent}")
-        max_year = str(max(years))
-        parts[maxyear_index] = year_segment.replace("{maxyear}", max_year)
+            parent = "/" + "/".join(parts[:token_index]) if token_index else "/"
+            values: list[int] = []
+            for entry in self._list_dir(parent):
+                if entry["type"] != "directory":
+                    continue
+                match = pattern.search(str(entry["name"]))
+                if match:
+                    values.append(int(match.group(group_name)))
+            if not values:
+                raise RuntimeError(f"未找到{label}目录: {parent}")
+            parts[token_index] = parts[token_index].replace(token, str(max(values)))
         return "/" + "/".join(parts)
 
     def _replace_date_placeholders(self, path: str) -> str:

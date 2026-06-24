@@ -234,6 +234,8 @@
       "/网优日常优化数据文档/日常性能报表/{maxyear}年/300表"
     ],
     "year_dir_regex": "(?P<year>\\d{4})年",
+    "month_dir_regex": "(?P<month>\\d{1,2})月",
+    "day_dir_regex": "(?P<day>\\d{1,2})日",
     "file_name_regex": "^Result_300_.*\\.zip$",
     "file_time_regex": "(?P<timestamp>\\d{14})(?=\\.zip$)"
   },

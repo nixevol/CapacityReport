@@ -290,8 +290,31 @@
                     </n-form-item>
                   </n-gi>
                 </n-grid>
-                <n-form-item label="远程目录">
-                  <n-input v-model:value="cellDataRemoteForm.remote_dir" placeholder="/" />
+                <n-form-item label="扫描路径">
+                  <div class="cell-data-path-editor">
+                    <div class="cell-data-path-header">
+                      <span class="form-hint">支持路径模板和多目录组合</span>
+                      <n-button quaternary circle size="small" title="查看说明" @click="cellDataHelpVisible = true">
+                        <template #icon>
+                          <n-icon><InformationCircleOutline /></n-icon>
+                        </template>
+                      </n-button>
+                    </div>
+                    <div class="cell-data-path-list">
+                      <div v-for="(path, index) in cellDataScanPaths" :key="`${path}-${index}`" class="cell-data-path-row">
+                        <n-input v-model:value="cellDataScanPaths[index]" size="small" placeholder="/.../{maxyear}年/300表" />
+                        <n-button quaternary circle size="small" type="error" @click="removeCellDataScanPath(index)">
+                          <template #icon>
+                            <n-icon><CloseOutline /></n-icon>
+                          </template>
+                        </n-button>
+                      </div>
+                    </div>
+                    <n-input-group>
+                      <n-input v-model:value="newCellDataScanPath" placeholder="扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
+                      <n-button @click="addCellDataScanPath">添加</n-button>
+                    </n-input-group>
+                  </div>
                 </n-form-item>
                 <n-form-item label="启用 CellData 数据源">
                   <n-switch v-model:value="cellDataRemoteForm.enabled" />
@@ -629,6 +652,8 @@
         <section class="cell-data-help-section">
           <h4>占位符</h4>
           <p><strong>{maxyear}</strong>：扫描同级年份目录并取最大年份。</p>
+          <p><strong>{maxmonth}</strong>：扫描同级月份目录并取最大月份。</p>
+          <p><strong>{maxday}</strong>：扫描同级日期目录并取最大日期。</p>
           <p><strong>{yyyy}</strong>：当前年份。</p>
           <p><strong>{yyyymm}</strong>：当前年月。</p>
           <p><strong>{yyyymmdd}</strong>：当前日期。</p>
@@ -659,31 +684,6 @@
       <div class="cell-data-settings-body">
         <section class="cell-data-settings-section">
           <div class="cell-data-section-title">
-            <strong>扫描路径</strong>
-            <n-button quaternary circle size="small" title="查看说明" @click="cellDataHelpVisible = true">
-              <template #icon>
-                <n-icon><InformationCircleOutline /></n-icon>
-              </template>
-            </n-button>
-          </div>
-          <div class="cell-data-path-list">
-            <div v-for="(path, index) in cellDataScanPaths" :key="`${path}-${index}`" class="cell-data-path-row">
-              <n-input v-model:value="cellDataScanPaths[index]" size="small" placeholder="/.../{maxyear}年/300表" />
-              <n-button quaternary circle size="small" type="error" @click="removeCellDataScanPath(index)">
-                <template #icon>
-                  <n-icon><CloseOutline /></n-icon>
-                </template>
-              </n-button>
-            </div>
-          </div>
-          <n-input-group>
-            <n-input v-model:value="newCellDataScanPath" placeholder="扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
-            <n-button @click="addCellDataScanPath">添加</n-button>
-          </n-input-group>
-        </section>
-
-        <section class="cell-data-settings-section">
-          <div class="cell-data-section-title">
             <strong>高级匹配</strong>
           </div>
           <n-grid :cols="12" :x-gap="12">
@@ -693,11 +693,21 @@
               </n-form-item>
             </n-gi>
             <n-gi :span="4">
+              <n-form-item label="月份目录正则">
+                <n-input v-model:value="cellDataRegexForm.month_dir_regex" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="4">
+              <n-form-item label="日期目录正则">
+                <n-input v-model:value="cellDataRegexForm.day_dir_regex" />
+              </n-form-item>
+            </n-gi>
+            <n-gi :span="6">
               <n-form-item label="文件名正则">
                 <n-input v-model:value="cellDataRegexForm.file_name_regex" />
               </n-form-item>
             </n-gi>
-            <n-gi :span="4">
+            <n-gi :span="6">
               <n-form-item label="时间戳正则">
                 <n-input v-model:value="cellDataRegexForm.file_time_regex" />
               </n-form-item>
@@ -859,6 +869,8 @@ const cellDataRemoteForm = reactive<RemoteDataConfig>({
 
 const cellDataRegexForm = reactive({
   year_dir_regex: '(?P<year>\\\\d{4})年',
+  month_dir_regex: '(?P<month>\\\\d{1,2})月',
+  day_dir_regex: '(?P<day>\\\\d{1,2})日',
   file_name_regex: '^Result_300_.*\\\\.zip$',
   file_time_regex: '(?P<timestamp>\\\\d{14})(?=\\\\.zip$)'
 });
@@ -1032,6 +1044,8 @@ async function loadConfig() {
     Object.assign(cellDataMysqlForm, normalizeCellDataMysqlConfig(config.cell_data?.mysql));
     cellDataScanPaths.value = normalizeCellDataScanPaths(config.cell_data?.scan_paths);
     cellDataRegexForm.year_dir_regex = config.cell_data?.year_dir_regex || '(?P<year>\\\\d{4})年';
+    cellDataRegexForm.month_dir_regex = config.cell_data?.month_dir_regex || '(?P<month>\\\\d{1,2})月';
+    cellDataRegexForm.day_dir_regex = config.cell_data?.day_dir_regex || '(?P<day>\\\\d{1,2})日';
     cellDataRegexForm.file_name_regex = config.cell_data?.file_name_regex || '^Result_300_.*\\\\.zip$';
     cellDataRegexForm.file_time_regex = config.cell_data?.file_time_regex || '(?P<timestamp>\\\\d{14})(?=\\\\.zip$)';
     cellDataMappingText.value = JSON.stringify(config.cell_data?.mapping || {}, null, 2);
@@ -1254,6 +1268,8 @@ function getCellDataSettingsPayload() {
   return {
     scan_paths: normalizeCellDataScanPaths(cellDataScanPaths.value),
     year_dir_regex: cellDataRegexForm.year_dir_regex,
+    month_dir_regex: cellDataRegexForm.month_dir_regex,
+    day_dir_regex: cellDataRegexForm.day_dir_regex,
     file_name_regex: cellDataRegexForm.file_name_regex,
     file_time_regex: cellDataRegexForm.file_time_regex,
     mapping

@@ -784,3 +784,14 @@
 - 远程数据源页只保留容量数据源与 CellData 数据源两张连接配置卡片，宽屏下并排展示；CellData 的扫描路径、正则和映射 JSON 收纳到「规则设置」弹窗。
 - CellData 规则弹窗包含扫描路径列表、路径说明入口、高级正则和 Monaco JSON 编辑器，支持格式化、校验、恢复默认映射和保存规则。
 - 验证：`frontend` `npm run build` 通过；构建产物已清理。
+
+## 2026-06-25：精简 CellData 数据源路径配置
+
+- CellData 数据源卡片去掉“远程目录”输入，连接根目录固定走 `/`；实际数据位置统一由「规则设置」中的扫描路径模板决定，避免两个路径概念混淆。
+- 扫描路径占位符扩展支持 `{maxmonth}`、`{maxday}`，并新增 `month_dir_regex`、`day_dir_regex` 高级正则配置；说明弹窗同步补充相关说明。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过；构建产物与 Python 缓存已清理。
+
+## 2026-06-25：CellData 扫描路径回到数据源卡片
+
+- 扫描路径属于文件来源配置，已移回 CellData 数据源卡片中展示和维护；「规则设置」弹窗只保留高级正则与映射 JSON，避免弹窗承担过多基础配置。
+- 验证：`frontend` `npm run build` 通过；构建产物已清理。

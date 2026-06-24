@@ -80,6 +80,8 @@ DEFAULT_CELL_DATA_SCAN_PATHS = [
     "/网优日常优化数据文档/日常性能报表/{maxyear}年/300表",
 ]
 DEFAULT_CELL_DATA_YEAR_DIR_REGEX = r"(?P<year>\d{4})年"
+DEFAULT_CELL_DATA_MONTH_DIR_REGEX = r"(?P<month>\d{1,2})月"
+DEFAULT_CELL_DATA_DAY_DIR_REGEX = r"(?P<day>\d{1,2})日"
 DEFAULT_CELL_DATA_FILE_NAME_REGEX = r"^Result_300_.*\.zip$"
 DEFAULT_CELL_DATA_FILE_TIME_REGEX = r"(?P<timestamp>\d{14})(?=\.zip$)"
 DEFAULT_CELL_DATA_MAPPING: Dict[str, Any] = {
@@ -435,6 +437,8 @@ class CellDataConfig:
     mysql: MySQLConfig = field(default_factory=lambda: MySQLConfig(dbname="celldata"))
     scan_paths: List[str] = field(default_factory=lambda: list(DEFAULT_CELL_DATA_SCAN_PATHS))
     year_dir_regex: str = DEFAULT_CELL_DATA_YEAR_DIR_REGEX
+    month_dir_regex: str = DEFAULT_CELL_DATA_MONTH_DIR_REGEX
+    day_dir_regex: str = DEFAULT_CELL_DATA_DAY_DIR_REGEX
     file_name_regex: str = DEFAULT_CELL_DATA_FILE_NAME_REGEX
     file_time_regex: str = DEFAULT_CELL_DATA_FILE_TIME_REGEX
     mapping: Dict[str, Any] = field(default_factory=lambda: deepcopy(DEFAULT_CELL_DATA_MAPPING))
@@ -456,6 +460,8 @@ class CellDataConfig:
             mysql=self.mysql.normalized(),
             scan_paths=scan_paths,
             year_dir_regex=str(self.year_dir_regex or DEFAULT_CELL_DATA_YEAR_DIR_REGEX).strip() or DEFAULT_CELL_DATA_YEAR_DIR_REGEX,
+            month_dir_regex=str(self.month_dir_regex or DEFAULT_CELL_DATA_MONTH_DIR_REGEX).strip() or DEFAULT_CELL_DATA_MONTH_DIR_REGEX,
+            day_dir_regex=str(self.day_dir_regex or DEFAULT_CELL_DATA_DAY_DIR_REGEX).strip() or DEFAULT_CELL_DATA_DAY_DIR_REGEX,
             file_name_regex=str(self.file_name_regex or DEFAULT_CELL_DATA_FILE_NAME_REGEX).strip() or DEFAULT_CELL_DATA_FILE_NAME_REGEX,
             file_time_regex=str(self.file_time_regex or DEFAULT_CELL_DATA_FILE_TIME_REGEX).strip() or DEFAULT_CELL_DATA_FILE_TIME_REGEX,
             mapping=mapping,
@@ -468,6 +474,8 @@ class CellDataConfig:
             "mysql": normalized.mysql.to_dict(include_password=include_password),
             "scan_paths": normalized.scan_paths,
             "year_dir_regex": normalized.year_dir_regex,
+            "month_dir_regex": normalized.month_dir_regex,
+            "day_dir_regex": normalized.day_dir_regex,
             "file_name_regex": normalized.file_name_regex,
             "file_time_regex": normalized.file_time_regex,
             "mapping": normalized.mapping,
@@ -484,6 +492,8 @@ class CellDataConfig:
             mysql=MySQLConfig.from_dict(mysql_data, default_dbname="celldata") if isinstance(mysql_data, dict) else default.mysql,
             scan_paths=data.get("scan_paths", default.scan_paths) if isinstance(data.get("scan_paths", default.scan_paths), list) else default.scan_paths,
             year_dir_regex=str(data.get("year_dir_regex", default.year_dir_regex)),
+            month_dir_regex=str(data.get("month_dir_regex", default.month_dir_regex)),
+            day_dir_regex=str(data.get("day_dir_regex", default.day_dir_regex)),
             file_name_regex=str(data.get("file_name_regex", default.file_name_regex)),
             file_time_regex=str(data.get("file_time_regex", default.file_time_regex)),
             mapping=data.get("mapping", default.mapping) if isinstance(data.get("mapping", default.mapping), dict) else default.mapping,
