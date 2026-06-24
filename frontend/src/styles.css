@@ -1579,9 +1579,10 @@ select {
 .cell-data-path-editor,
 .cell-data-path-list {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .cell-data-path-header {
@@ -1589,12 +1590,24 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  color: var(--td-text-color-placeholder);
+  font-size: 12px;
+  line-height: 20px;
 }
 
 .cell-data-path-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.cell-data-path-add {
+  width: 100%;
+}
+
+.cell-data-path-row .n-input,
+.cell-data-path-add .n-input {
+  min-width: 0;
 }
 
 .cell-data-help-scroll {

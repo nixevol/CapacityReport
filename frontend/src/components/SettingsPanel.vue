@@ -293,7 +293,7 @@
                 <n-form-item label="扫描路径">
                   <div class="cell-data-path-editor">
                     <div class="cell-data-path-header">
-                      <span class="form-hint">支持路径模板和多目录组合</span>
+                      <span>支持路径模板和多目录组合</span>
                       <n-button quaternary circle size="small" title="查看说明" @click="cellDataHelpVisible = true">
                         <template #icon>
                           <n-icon><InformationCircleOutline /></n-icon>
@@ -310,8 +310,8 @@
                         </n-button>
                       </div>
                     </div>
-                    <n-input-group>
-                      <n-input v-model:value="newCellDataScanPath" placeholder="扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
+                    <n-input-group class="cell-data-path-add">
+                      <n-input v-model:value="newCellDataScanPath" placeholder="添加扫描路径模板" @keydown.enter.prevent="addCellDataScanPath" />
                       <n-button @click="addCellDataScanPath">添加</n-button>
                     </n-input-group>
                   </div>
