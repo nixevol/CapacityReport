@@ -570,6 +570,12 @@ select {
   margin-top: 12px;
 }
 
+.upload-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .remote-run-trigger {
   display: inline-flex;
 }
@@ -581,7 +587,6 @@ select {
   justify-content: center;
   flex-direction: column;
   gap: 10px;
-  margin-top: 16px;
   padding: 24px 18px;
   text-align: center;
   background: var(--td-bg-color-container);
@@ -2188,6 +2193,10 @@ select {
   .history-page-body,
   .settings-workspace {
     padding: 16px;
+  }
+
+  .upload-card-grid {
+    grid-template-columns: 1fr;
   }
 
   .history-item {

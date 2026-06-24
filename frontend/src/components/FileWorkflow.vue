@@ -1,139 +1,139 @@
 <template>
   <div class="upload-page-body">
-    <section
-      v-if="!taskInProgress"
-      class="upload-zone"
-      :class="{ dragover: isDragging, disabled: working }"
-      role="button"
-      tabindex="0"
-      :aria-disabled="working"
-      @click="openFilePicker"
-      @keydown.enter.prevent="openFilePicker"
-      @keydown.space.prevent="openFilePicker"
-      @dragenter.prevent.stop="onDragEnter"
-      @dragover.prevent.stop="onDragOver"
-      @dragleave="onDragLeave"
-      @drop.prevent.stop="onDrop"
-    >
-      <span class="upload-card-label">容量数据</span>
-      <n-button
-        quaternary
-        circle
-        size="small"
-        class="upload-help-button"
-        aria-label="查看容量数据说明"
-        title="查看说明"
-        @click.stop="capacityHelpVisible = true"
+    <div v-if="!taskInProgress" class="upload-card-grid">
+      <section
+        class="upload-zone"
+        :class="{ dragover: isDragging, disabled: working }"
+        role="button"
+        tabindex="0"
+        :aria-disabled="working"
+        @click="openFilePicker"
+        @keydown.enter.prevent="openFilePicker"
+        @keydown.space.prevent="openFilePicker"
+        @dragenter.prevent.stop="onDragEnter"
+        @dragover.prevent.stop="onDragOver"
+        @dragleave="onDragLeave"
+        @drop.prevent.stop="onDrop"
       >
-        <template #icon>
-          <n-icon><InformationCircleOutline /></n-icon>
-        </template>
-      </n-button>
-      <div class="upload-icon">
-        <n-icon size="24"><FolderOpenOutline /></n-icon>
-      </div>
-      <h3>拖拽文件夹或文件到这里</h3>
-      <p>支持 .zip, .xlsx, .xls, .csv 格式</p>
-      <div class="upload-zone-actions">
-        <span class="upload-hint">或者点击选择文件</span>
-        <n-tooltip trigger="hover" placement="bottom">
-          <template #trigger>
-            <span class="remote-run-trigger" @click.stop @keydown.stop>
-              <n-button
-                type="primary"
-                secondary
-                :loading="remoteStarting"
-                :disabled="working || remoteStarting"
-                @click.stop="startRemoteProcessing"
-              >
-                <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
-                远程下载并处理
-              </n-button>
-            </span>
+        <span class="upload-card-label">容量数据</span>
+        <n-button
+          quaternary
+          circle
+          size="small"
+          class="upload-help-button"
+          aria-label="查看容量数据说明"
+          title="查看说明"
+          @click.stop="capacityHelpVisible = true"
+        >
+          <template #icon>
+            <n-icon><InformationCircleOutline /></n-icon>
           </template>
-          从已配置的 FTP/SFTP 目录下载数据自动处理。
-        </n-tooltip>
-      </div>
-      <input
-        ref="fileInput"
-        class="hidden-input"
-        type="file"
-        multiple
-        accept=".zip,.xlsx,.xls,.csv"
-        @change="pickFiles"
-      />
-      <input
-        ref="folderInput"
-        class="hidden-input"
-        type="file"
-        multiple
-        webkitdirectory
-        directory
-        @change="pickFiles"
-      />
-    </section>
+        </n-button>
+        <div class="upload-icon">
+          <n-icon size="24"><FolderOpenOutline /></n-icon>
+        </div>
+        <h3>拖拽文件夹或文件到这里</h3>
+        <p>支持 .zip, .xlsx, .xls, .csv 格式</p>
+        <div class="upload-zone-actions">
+          <span class="upload-hint">或者点击选择文件</span>
+          <n-tooltip trigger="hover" placement="bottom">
+            <template #trigger>
+              <span class="remote-run-trigger" @click.stop @keydown.stop>
+                <n-button
+                  type="primary"
+                  secondary
+                  :loading="remoteStarting"
+                  :disabled="working || remoteStarting"
+                  @click.stop="startRemoteProcessing"
+                >
+                  <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+                  远程下载并处理
+                </n-button>
+              </span>
+            </template>
+            从已配置的 FTP/SFTP 目录下载数据自动处理。
+          </n-tooltip>
+        </div>
+        <input
+          ref="fileInput"
+          class="hidden-input"
+          type="file"
+          multiple
+          accept=".zip,.xlsx,.xls,.csv"
+          @change="pickFiles"
+        />
+        <input
+          ref="folderInput"
+          class="hidden-input"
+          type="file"
+          multiple
+          webkitdirectory
+          directory
+          @change="pickFiles"
+        />
+      </section>
 
-    <section
-      v-if="!taskInProgress"
-      class="cell-data-upload-zone"
-      :class="{ dragover: isCellDataDragging, disabled: cellDataStarting }"
-      role="button"
-      tabindex="0"
-      :aria-disabled="cellDataStarting"
-      @click="cellDataFolderInput?.click()"
-      @keydown.enter.prevent="cellDataFolderInput?.click()"
-      @keydown.space.prevent="cellDataFolderInput?.click()"
-      @dragenter.prevent.stop="onCellDataDragEnter"
-      @dragover.prevent.stop="onCellDataDragOver"
-      @dragleave="onCellDataDragLeave"
-      @drop.prevent.stop="onCellDataDrop"
-    >
-      <span class="upload-card-label">CellData</span>
-      <n-button
-        quaternary
-        circle
-        size="small"
-        class="upload-help-button"
-        aria-label="查看 CellData 文件说明"
-        title="查看说明"
-        @click.stop="cellDataHelpVisible = true"
+      <section
+        class="cell-data-upload-zone"
+        :class="{ dragover: isCellDataDragging, disabled: cellDataStarting }"
+        role="button"
+        tabindex="0"
+        :aria-disabled="cellDataStarting"
+        @click="cellDataFolderInput?.click()"
+        @keydown.enter.prevent="cellDataFolderInput?.click()"
+        @keydown.space.prevent="cellDataFolderInput?.click()"
+        @dragenter.prevent.stop="onCellDataDragEnter"
+        @dragover.prevent.stop="onCellDataDragOver"
+        @dragleave="onCellDataDragLeave"
+        @drop.prevent.stop="onCellDataDrop"
       >
-        <template #icon>
-          <n-icon><InformationCircleOutline /></n-icon>
-        </template>
-      </n-button>
-      <div class="upload-icon">
-        <n-icon size="24"><FolderOpenOutline /></n-icon>
-      </div>
-      <div class="cell-data-upload-text">
-        <h3>拖拽文件夹到这里</h3>
-        <p>包含 700M、2.6G 等目录</p>
-      </div>
-      <div class="upload-zone-actions">
-        <span class="upload-hint">或者点击选择文件夹</span>
-        <n-space size="small" @click.stop @keydown.stop>
-          <n-button
-            type="primary"
-            secondary
-            :loading="cellDataStarting"
-            :disabled="working || remoteStarting || cellDataStarting"
-            @click="startCellDataProcessing"
-          >
-            <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
-            远程刷新
-          </n-button>
-        </n-space>
-      </div>
-      <input
-        ref="cellDataFolderInput"
-        class="hidden-input"
-        type="file"
-        multiple
-        webkitdirectory
-        directory
-        @change="pickCellDataFiles"
-      />
-    </section>
+        <span class="upload-card-label">CellData</span>
+        <n-button
+          quaternary
+          circle
+          size="small"
+          class="upload-help-button"
+          aria-label="查看 CellData 文件说明"
+          title="查看说明"
+          @click.stop="cellDataHelpVisible = true"
+        >
+          <template #icon>
+            <n-icon><InformationCircleOutline /></n-icon>
+          </template>
+        </n-button>
+        <div class="upload-icon">
+          <n-icon size="24"><FolderOpenOutline /></n-icon>
+        </div>
+        <div class="cell-data-upload-text">
+          <h3>拖拽文件夹到这里</h3>
+          <p>包含 700M、2.6G 等目录</p>
+        </div>
+        <div class="upload-zone-actions">
+          <span class="upload-hint">或者点击选择文件夹</span>
+          <n-space size="small" @click.stop @keydown.stop>
+            <n-button
+              type="primary"
+              secondary
+              :loading="cellDataStarting"
+              :disabled="working || remoteStarting || cellDataStarting"
+              @click="startCellDataProcessing"
+            >
+              <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+              远程下载并处理
+            </n-button>
+          </n-space>
+        </div>
+        <input
+          ref="cellDataFolderInput"
+          class="hidden-input"
+          type="file"
+          multiple
+          webkitdirectory
+          directory
+          @change="pickCellDataFiles"
+        />
+      </section>
+    </div>
 
     <div v-if="!taskInProgress && files.length > 0" class="file-list">
       <div class="file-list-header">
@@ -273,6 +273,10 @@
         <section class="cell-data-help-section">
           <h4>远程处理</h4>
           <p>使用系统设置中的数据源配置下载并处理。</p>
+        </section>
+        <section class="cell-data-help-section">
+          <h4>CellData</h4>
+          <p>启用 CellData 数据源时，处理容量数据前会先刷新 CellData。</p>
         </section>
       </n-scrollbar>
     </n-modal>
