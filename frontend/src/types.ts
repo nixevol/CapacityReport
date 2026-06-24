@@ -100,6 +100,7 @@ export interface AppConfig {
   metrix: MetrixConfig;
   data_mappings: DataMappingsConfig;
   remote_data: RemoteDataConfig;
+  cell_data: CellDataConfig;
   history_retention: HistoryRetentionConfig;
   sheet_filter: string[];
   extract_fields: Array<Record<string, unknown>>;
@@ -137,6 +138,17 @@ export interface RemoteDataConfig {
   timeout: number;
   auto_delete_source: boolean;
   auto_scheduler: RemoteAutoSchedulerConfig;
+}
+
+export interface CellDataConfig {
+  remote_data: RemoteDataConfig;
+  mysql: {
+    host: string;
+    port: number;
+    user: string;
+    passwd?: string;
+    dbname: string;
+  };
 }
 
 export interface RemoteAutoSchedulerConfig {

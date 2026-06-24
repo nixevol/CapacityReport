@@ -3,18 +3,22 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
+import pymysql
 from fastapi import APIRouter, Body, HTTPException, UploadFile, File
 from fastapi.responses import Response
 
 from app import state
 from app.config import (
+    CellDataConfig,
     DataMappingsConfig,
     HistoryRetentionConfig,
     MetrixConfig,
+    MySQLConfig,
     RemoteDataConfig,
     SOURCE_TYPES,
     WAREHOUSE_TYPES,
 )
+from app.services.remote_download import RemoteDataDownloader
 
 
 router = APIRouter(tags=["config"])
@@ -92,6 +96,46 @@ async def update_data_mappings_config(config: dict[str, Any] = Body(...)):
     return {"success": True, "message": "数据目录映射已更新", "update": state.config.update}
 
 
+@router.post("/api/config/cell-data/remote")
+async def update_cell_data_remote_config(config: dict[str, Any] = Body(...)):
+    state.reload_config()
+    current = state.config.cell_data.normalized()
+    state.config.cell_data = CellDataConfig(
+        remote_data=RemoteDataConfig.from_dict(config),
+        mysql=current.mysql,
+    ).normalized()
+    state.config.save()
+    return {"success": True, "message": "CellData 远程数据源配置已更新", "update": state.config.update}
+
+
+@router.post("/api/config/cell-data/mysql")
+async def update_cell_data_mysql_config(config: dict[str, Any] = Body(...)):
+    state.reload_config()
+    current = state.config.cell_data.normalized()
+    state.config.cell_data = CellDataConfig(
+        remote_data=current.remote_data,
+        mysql=MySQLConfig.from_dict(config, default_dbname="celldata"),
+    ).normalized()
+    state.config.save()
+    return {"success": True, "message": "CellData 数据库配置已更新", "update": state.config.update}
+
+
+@router.post("/api/config/cell-data/remote/test")
+async def test_cell_data_remote_connection(config: dict[str, Any] | None = Body(None)):
+    try:
+        remote_config = RemoteDataConfig.from_dict(config) if config else state.current_config().cell_data.remote_data
+        RemoteDataDownloader(remote_config).test_connection()
+        return {"success": True, "message": "CellData 远程服务器连接成功"}
+    except Exception as exc:
+        return {"success": False, "message": f"连接失败: {exc}"}
+
+
+@router.post("/api/config/cell-data/mysql/test")
+async def test_cell_data_mysql_connection(config: dict[str, Any] | None = Body(None)):
+    mysql_config = MySQLConfig.from_dict(config, default_dbname="celldata") if config else state.current_config().cell_data.mysql
+    return _test_mysql_config(mysql_config)
+
+
 @router.post("/api/config/history-retention")
 async def update_history_retention(config: dict[str, Any] = Body(...)):
     state.reload_config()
@@ -167,9 +211,7 @@ def _apply_config_data(data: dict[str, Any]) -> None:
 
     mysql_data = data.get("MySQL_DBInfo")
     if isinstance(mysql_data, dict):
-        for key in ("host", "port", "user", "passwd", "dbname"):
-            if key in mysql_data:
-                setattr(state.config.mysql, key, mysql_data[key])
+        state.config.mysql = MySQLConfig.from_dict(mysql_data)
 
     if "SheetFilter" in data:
         state.config.sheet_filter = data["SheetFilter"] if isinstance(data["SheetFilter"], list) else []
@@ -181,7 +223,34 @@ def _apply_config_data(data: dict[str, Any]) -> None:
     if isinstance(remote_data, dict):
         state.config.remote_data = RemoteDataConfig.from_dict(remote_data)
 
+    cell_data = data.get("CellData")
+    if isinstance(cell_data, dict):
+        state.config.cell_data = CellDataConfig.from_dict(cell_data)
+
     history_retention = data.get("HistoryRetention")
     if isinstance(history_retention, dict):
         state.config.history_retention = HistoryRetentionConfig.from_dict(history_retention)
+
+
+def _test_mysql_config(config: MySQLConfig) -> dict[str, Any]:
+    normalized = config.normalized()
+    try:
+        conn = pymysql.connect(
+            host=normalized.host,
+            port=normalized.port,
+            user=normalized.user,
+            password=normalized.passwd,
+            database=normalized.dbname,
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10,
+        )
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+        finally:
+            conn.close()
+        return {"success": True, "message": "连接成功"}
+    except Exception as exc:
+        return {"success": False, "message": str(exc)}
 

@@ -33,6 +33,42 @@ class MySQLConfig:
     passwd: str = ""
     dbname: str = "CapacityReport"
 
+    def normalized(self) -> "MySQLConfig":
+        try:
+            port = int(self.port or 3306)
+        except (TypeError, ValueError):
+            port = 3306
+        return MySQLConfig(
+            host=str(self.host or "").strip() or "localhost",
+            port=port,
+            user=str(self.user or "").strip(),
+            passwd=self.passwd or "",
+            dbname=str(self.dbname or "").strip(),
+        )
+
+    def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
+        normalized = self.normalized()
+        data = {
+            "host": normalized.host,
+            "port": normalized.port,
+            "user": normalized.user,
+            "dbname": normalized.dbname,
+        }
+        if include_password:
+            data["passwd"] = normalized.passwd
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None, default_dbname: str = "CapacityReport") -> "MySQLConfig":
+        data = data or {}
+        return cls(
+            host=str(data.get("host", "localhost")),
+            port=data.get("port", 3306),
+            user=str(data.get("user", "root")),
+            passwd=str(data.get("passwd", "")),
+            dbname=str(data.get("dbname", default_dbname)),
+        ).normalized()
+
 
 # Source backends: direct FTP/SFTP, or Metrix storage platform.
 SOURCE_TYPES = ("ftp", "sftp", "metrix")
@@ -293,6 +329,43 @@ class RemoteDataConfig:
 
 
 @dataclass
+class CellDataConfig:
+    """CellData side data source and database connection used by later processing steps."""
+    remote_data: RemoteDataConfig = field(
+        default_factory=lambda: RemoteDataConfig(
+            enabled=False,
+            protocol="sftp",
+            remote_dir="/CellData",
+        )
+    )
+    mysql: MySQLConfig = field(default_factory=lambda: MySQLConfig(dbname="celldata"))
+
+    def normalized(self) -> "CellDataConfig":
+        return CellDataConfig(
+            remote_data=self.remote_data.normalized(),
+            mysql=self.mysql.normalized(),
+        )
+
+    def to_dict(self, include_password: bool = False) -> Dict[str, Any]:
+        normalized = self.normalized()
+        return {
+            "remote_data": normalized.remote_data.to_dict(include_password=include_password),
+            "mysql": normalized.mysql.to_dict(include_password=include_password),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any] | None) -> "CellDataConfig":
+        data = data or {}
+        default = cls()
+        remote_data = data.get("RemoteData") or data.get("remote_data")
+        mysql_data = data.get("MySQL_DBInfo") or data.get("mysql")
+        return cls(
+            remote_data=RemoteDataConfig.from_dict(remote_data) if isinstance(remote_data, dict) else default.remote_data,
+            mysql=MySQLConfig.from_dict(mysql_data, default_dbname="celldata") if isinstance(mysql_data, dict) else default.mysql,
+        ).normalized()
+
+
+@dataclass
 class HistoryRetentionConfig:
     enabled: bool = False
     keep_count: int = 20
@@ -346,6 +419,7 @@ class AppConfig:
     metrix: MetrixConfig = field(default_factory=MetrixConfig)
     data_mappings: DataMappingsConfig = field(default_factory=DataMappingsConfig)
     remote_data: RemoteDataConfig = field(default_factory=RemoteDataConfig)
+    cell_data: CellDataConfig = field(default_factory=CellDataConfig)
     history_retention: HistoryRetentionConfig = field(default_factory=HistoryRetentionConfig)
     sheet_filter: List[str] = field(default_factory=list)
     extract_fields: List[Dict[str, Any]] = field(default_factory=list)
@@ -359,17 +433,11 @@ class AppConfig:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        mysql_data = data.get("MySQL_DBInfo", {})
-        mysql_config = MySQLConfig(
-            host=mysql_data.get("host", "localhost"),
-            port=mysql_data.get("port", 3306),
-            user=mysql_data.get("user", "root"),
-            passwd=mysql_data.get("passwd", ""),
-            dbname=mysql_data.get("dbname", "CapacityReport")
-        )
+        mysql_config = MySQLConfig.from_dict(data.get("MySQL_DBInfo"))
         remote_config = RemoteDataConfig.from_dict(data.get("RemoteData"))
         metrix_config = MetrixConfig.from_dict(data.get("Metrix"))
         data_mappings = DataMappingsConfig.from_dict(data.get("DataMappings"))
+        cell_data = CellDataConfig.from_dict(data.get("CellData"))
         history_retention = HistoryRetentionConfig.from_dict(data.get("HistoryRetention"))
 
         return cls(
@@ -380,6 +448,7 @@ class AppConfig:
             metrix=metrix_config,
             data_mappings=data_mappings,
             remote_data=remote_config,
+            cell_data=cell_data,
             history_retention=history_retention,
             sheet_filter=data.get("SheetFilter", []),
             extract_fields=data.get("ExtractField", [])
@@ -399,16 +468,11 @@ class AppConfig:
             "Update": self.update,
             "SourceType": self.source_type,
             "WarehouseType": self.warehouse_type,
-            "MySQL_DBInfo": {
-                "host": self.mysql.host,
-                "port": self.mysql.port,
-                "user": self.mysql.user,
-                "passwd": self.mysql.passwd,
-                "dbname": self.mysql.dbname
-            },
+            "MySQL_DBInfo": self.mysql.normalized().to_dict(include_password=True),
             "Metrix": self.metrix.normalized().to_dict(include_token=True),
             "DataMappings": self.data_mappings.normalized().to_dict(),
             "RemoteData": self.remote_data.normalized().to_dict(include_password=True),
+            "CellData": self.cell_data.normalized().to_dict(include_password=True),
             "HistoryRetention": self.history_retention.normalized().to_dict(),
             "SheetFilter": self.sheet_filter,
             "ExtractField": self.extract_fields
@@ -420,15 +484,11 @@ class AppConfig:
             "update": self.update,
             "source_type": self.source_type,
             "warehouse_type": self.warehouse_type,
-            "mysql": {
-                "host": self.mysql.host,
-                "port": self.mysql.port,
-                "user": self.mysql.user,
-                "dbname": self.mysql.dbname
-            },
+            "mysql": self.mysql.normalized().to_dict(),
             "metrix": self.metrix.normalized().to_dict(),
             "data_mappings": self.data_mappings.normalized().to_dict(),
             "remote_data": self.remote_data.normalized().to_dict(),
+            "cell_data": self.cell_data.normalized().to_dict(),
             "history_retention": self.history_retention.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields
@@ -440,16 +500,11 @@ class AppConfig:
             "update": self.update,
             "source_type": self.source_type,
             "warehouse_type": self.warehouse_type,
-            "mysql": {
-                "host": self.mysql.host,
-                "port": self.mysql.port,
-                "user": self.mysql.user,
-                "passwd": self.mysql.passwd,
-                "dbname": self.mysql.dbname
-            },
+            "mysql": self.mysql.normalized().to_dict(include_password=True),
             "metrix": self.metrix.normalized().to_dict(include_token=True),
             "data_mappings": self.data_mappings.normalized().to_dict(),
             "remote_data": self.remote_data.normalized().to_dict(include_password=True),
+            "cell_data": self.cell_data.normalized().to_dict(include_password=True),
             "history_retention": self.history_retention.normalized().to_dict(),
             "sheet_filter": self.sheet_filter,
             "extract_fields": self.extract_fields

@@ -703,3 +703,11 @@
 - 自动调度：原 RJ 专用检查改为通用自动粒度检查。`ready_rule=auto` 的目录会从普通每日扫描中排除，并单独按最新 ZIP 判断日/周粒度；如果配置里只有自动粒度目录，只要这些目录就绪也可触发调度。
 - 前端：设置页「规则映射」左侧独立滚动配置栏中只保留一个「数据目录映射」卡片，每行可编辑目录、暂存表与就绪规则，并保存到 `/api/config/data-mappings`。后续新增目录类映射继续加同一张表，不再新增配置卡片。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物与 Python 缓存已清理。
+
+## 2026-06-24：新增 CellData 远程源与数据库配置入口
+
+- 背景：后续需要引入 CellData 自动化处理，处理完成报表 SQL 后还会从 CellData 数据库表匹配数据并写入结果表。本轮先只落配置与界面，不接入实际提取/处理/入库流水线。
+- 配置：新增顶层 `CellData` 配置块，包含 `RemoteData`（FTP/SFTP 连接，默认远程目录 `/CellData`，不参与现有自动调度）与 `MySQL_DBInfo`（默认库名 `celldata`）。CellData 数据库可与主仓库 MySQL 相同，也可指向独立数据库。
+- 后端接口：新增 `/api/config/cell-data/remote`、`/api/config/cell-data/mysql` 保存接口，以及 `/api/config/cell-data/remote/test`、`/api/config/cell-data/mysql/test` 测试接口；测试逻辑分别复用 `RemoteDataDownloader` 和独立 PyMySQL `SELECT 1`。
+- 前端：系统设置「数据库」页新增「CellData 数据库配置」卡片；「远程数据源」页新增「CellData 数据源」卡片；「数据源 / 仓库」页说明 CellData 为独立辅助数据源，不影响主数据源/仓库选择。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build` 通过（仅既有大 chunk 提示）；构建产物与 Python 缓存已清理。

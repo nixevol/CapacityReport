@@ -22,7 +22,7 @@
                       <n-radio-button value="metrix">Metrix 数据库平台</n-radio-button>
                     </n-radio-group>
                   </n-form-item>
-                  <p class="form-hint">两侧可独立选择：源用 FTP/SFTP 或 Metrix 存储平台；仓库用本地 MySQL 或 Metrix 数据库平台。选 Metrix 时在下方填写连接；选 FTP/SFTP 或 MySQL 时在对应标签页填写。源目录在「远程数据源」标签页的「远程目录」。</p>
+                  <p class="form-hint">两侧可独立选择：源用 FTP/SFTP 或 Metrix 存储平台；仓库用本地 MySQL 或 Metrix 数据库平台。CellData 是后续处理使用的辅助数据源，独立配置，不影响这里的主数据源/仓库选择。</p>
                 </n-form>
                 <template #footer>
                   <n-space justify="end">
@@ -114,6 +114,46 @@
                   <n-space justify="end">
                     <n-button type="primary" :loading="savingMysql" @click="saveMysql">保存配置</n-button>
                     <n-button :loading="testingDb" @click="testDatabase">测试连接</n-button>
+                  </n-space>
+                </template>
+              </n-card>
+
+              <n-card title="CellData 数据库配置" size="small" class="work-card">
+                <n-form label-placement="top">
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="8">
+                      <n-form-item label="主机地址">
+                        <n-input v-model:value="cellDataMysqlForm.host" placeholder="localhost" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="4">
+                      <n-form-item label="端口">
+                        <n-input-number v-model:value="cellDataMysqlForm.port" class="full-width" :min="1" :max="65535" />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <n-form-item label="数据库名">
+                    <n-input v-model:value="cellDataMysqlForm.dbname" placeholder="celldata" />
+                  </n-form-item>
+                  <n-grid :cols="12" :x-gap="12">
+                    <n-gi :span="6">
+                      <n-form-item label="用户名">
+                        <n-input v-model:value="cellDataMysqlForm.user" placeholder="root" />
+                      </n-form-item>
+                    </n-gi>
+                    <n-gi :span="6">
+                      <n-form-item label="密码">
+                        <n-input v-model:value="cellDataMysqlForm.passwd" type="password" show-password-on="click" />
+                      </n-form-item>
+                    </n-gi>
+                  </n-grid>
+                  <p class="form-hint">后续处理会从该库复制 CellData 所需表到临时处理区，产出结果后再清理。通常可与主 MySQL 相同，也可以指向独立 CellData 数据库。</p>
+                </n-form>
+
+                <template #footer>
+                  <n-space justify="end">
+                    <n-button type="primary" :loading="savingCellDataMysql" @click="saveCellDataMysql">保存配置</n-button>
+                    <n-button :loading="testingCellDataDb" @click="testCellDataDatabase">测试连接</n-button>
                   </n-space>
                 </template>
               </n-card>
@@ -211,6 +251,58 @@
                 <n-space justify="end">
                   <n-button type="primary" :loading="savingRemote" @click="saveRemote">保存配置</n-button>
                   <n-button :loading="testingRemote" @click="testRemote">测试连接</n-button>
+                </n-space>
+              </template>
+            </n-card>
+
+            <n-card title="CellData 数据源" size="small" class="work-card settings-remote-card">
+              <n-form label-placement="top">
+                <div class="remote-connection-row">
+                  <n-form-item label="协议">
+                    <n-select
+                      v-model:value="cellDataRemoteForm.protocol"
+                      :options="remoteProtocolOptions"
+                      @update:value="updateCellDataRemoteProtocol"
+                    />
+                  </n-form-item>
+                  <n-form-item label="服务器地址">
+                    <n-input v-model:value="cellDataRemoteForm.host" placeholder="192.168.1.10" />
+                  </n-form-item>
+                  <n-form-item label="端口">
+                    <n-input-number v-model:value="cellDataRemoteForm.port" class="full-width" :min="1" :max="65535" />
+                  </n-form-item>
+                  <n-form-item label="超时秒数">
+                    <n-input-number v-model:value="cellDataRemoteForm.timeout" class="full-width" :min="1" :max="600" />
+                  </n-form-item>
+                  <n-form-item label="FTP 被动模式" class="remote-passive-field">
+                    <n-switch v-model:value="cellDataRemoteForm.passive" :disabled="cellDataRemoteForm.protocol !== 'ftp'" />
+                  </n-form-item>
+                </div>
+                <n-grid :cols="12" :x-gap="12">
+                  <n-gi :span="6">
+                    <n-form-item label="用户名">
+                      <n-input v-model:value="cellDataRemoteForm.user" placeholder="remote user" />
+                    </n-form-item>
+                  </n-gi>
+                  <n-gi :span="6">
+                    <n-form-item label="密码">
+                      <n-input v-model:value="cellDataRemoteForm.passwd" type="password" show-password-on="click" />
+                    </n-form-item>
+                  </n-gi>
+                </n-grid>
+                <n-form-item label="远程目录">
+                  <n-input v-model:value="cellDataRemoteForm.remote_dir" placeholder="/CellData" />
+                </n-form-item>
+                <n-form-item label="启用 CellData 数据源">
+                  <n-switch v-model:value="cellDataRemoteForm.enabled" />
+                </n-form-item>
+                <p class="form-hint">用于后续 CellData 存储、提取、处理和入库流程；当前只保存连接信息并支持连接测试，不参与现有容量报表处理链路。</p>
+              </n-form>
+
+              <template #footer>
+                <n-space justify="end">
+                  <n-button type="primary" :loading="savingCellDataRemote" @click="saveCellDataRemote">保存配置</n-button>
+                  <n-button :loading="testingCellDataRemote" @click="testCellDataRemote">测试连接</n-button>
                 </n-space>
               </template>
             </n-card>
@@ -531,6 +623,7 @@ import { apiGet, apiPost, downloadGet, upload } from '../api/client';
 import type {
   ApiMessage,
   AppConfig,
+  CellDataConfig,
   DataDirectoryMapping,
   DataMappingsConfig,
   HistoryRetentionConfig,
@@ -557,10 +650,14 @@ const configUpdateText = computed(() => `更新时间：${configUpdate.value || 
 const loading = ref(false);
 const testingDb = ref(false);
 const testingRemote = ref(false);
+const testingCellDataDb = ref(false);
+const testingCellDataRemote = ref(false);
 const loadingSchedulerStatus = ref(false);
 const triggeringScheduler = ref(false);
 const savingMysql = ref(false);
 const savingRemote = ref(false);
+const savingCellDataMysql = ref(false);
+const savingCellDataRemote = ref(false);
 const savingBackend = ref(false);
 const savingMetrix = ref(false);
 const sourceType = ref<'ftp' | 'sftp' | 'metrix'>('sftp');
@@ -605,6 +702,25 @@ const remoteForm = reactive<RemoteDataConfig>({
   }
 });
 
+const cellDataRemoteForm = reactive<RemoteDataConfig>({
+  enabled: false,
+  protocol: 'sftp',
+  host: '',
+  port: 22,
+  user: '',
+  passwd: '',
+  remote_dir: '/CellData',
+  passive: true,
+  timeout: 30,
+  auto_delete_source: false,
+  auto_scheduler: {
+    enabled: false,
+    check_interval_hours: 1,
+    expected_directories: [],
+    week_offset: 0
+  }
+});
+
 const metrixForm = reactive<MetrixConfig>({
   base_url: 'http://host.docker.internal:8000',
   token: '',
@@ -626,6 +742,14 @@ const newDirectoryMapping = reactive<DataDirectoryMapping>({
   path: '',
   table: '',
   ready_rule: 'daily'
+});
+
+const cellDataMysqlForm = reactive({
+  host: '',
+  port: 3306 as number | null,
+  user: '',
+  passwd: '',
+  dbname: 'celldata'
 });
 
 const historyRetentionForm = reactive<HistoryRetentionConfig>({
@@ -761,6 +885,8 @@ async function loadConfig() {
     mysqlForm.passwd = config.mysql.passwd || '';
     mysqlForm.dbname = config.mysql.dbname;
     Object.assign(remoteForm, normalizeRemoteConfig(config.remote_data));
+    Object.assign(cellDataRemoteForm, normalizeRemoteConfig(config.cell_data?.remote_data, '/CellData'));
+    Object.assign(cellDataMysqlForm, normalizeCellDataMysqlConfig(config.cell_data?.mysql));
     Object.assign(historyRetentionForm, normalizeHistoryRetentionConfig(config.history_retention));
     sheetFilters.value = [...config.sheet_filter];
     extractFields.value = normalizeExtractFields(config.extract_fields);
@@ -779,6 +905,15 @@ function updateRemoteProtocol(value: string) {
   }
   if (value === 'ftp' && (!remoteForm.port || remoteForm.port === 22)) {
     remoteForm.port = 21;
+  }
+}
+
+function updateCellDataRemoteProtocol(value: string) {
+  if (value === 'sftp' && (!cellDataRemoteForm.port || cellDataRemoteForm.port === 21)) {
+    cellDataRemoteForm.port = 22;
+  }
+  if (value === 'ftp' && (!cellDataRemoteForm.port || cellDataRemoteForm.port === 22)) {
+    cellDataRemoteForm.port = 21;
   }
 }
 
@@ -839,6 +974,27 @@ async function saveMysql() {
   }
 }
 
+async function saveCellDataMysql() {
+  if (!cellDataMysqlForm.host || !cellDataMysqlForm.user || !cellDataMysqlForm.dbname) {
+    message.warning('请填写完整 CellData 数据库配置');
+    return;
+  }
+
+  savingCellDataMysql.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/cell-data/mysql', {
+      ...cellDataMysqlForm,
+      port: cellDataMysqlForm.port || 3306
+    });
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || 'CellData 数据库配置已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存 CellData 数据库配置失败');
+  } finally {
+    savingCellDataMysql.value = false;
+  }
+}
+
 function getRemotePayload(): RemoteDataConfig {
   enforceRemoteSchedulerRules();
   const autoScheduler = normalizeAutoSchedulerConfig(remoteForm.auto_scheduler);
@@ -857,9 +1013,38 @@ function getRemotePayload(): RemoteDataConfig {
   };
 }
 
+function getCellDataRemotePayload(): RemoteDataConfig {
+  return {
+    ...cellDataRemoteForm,
+    protocol: cellDataRemoteForm.protocol,
+    host: cellDataRemoteForm.host.trim(),
+    port: cellDataRemoteForm.port || (cellDataRemoteForm.protocol === 'sftp' ? 22 : 21),
+    user: cellDataRemoteForm.user.trim(),
+    passwd: cellDataRemoteForm.passwd || '',
+    remote_dir: cellDataRemoteForm.remote_dir.trim() || '/CellData',
+    passive: cellDataRemoteForm.passive,
+    timeout: cellDataRemoteForm.timeout || 30,
+    auto_delete_source: false,
+    auto_scheduler: {
+      enabled: false,
+      check_interval_hours: 1,
+      expected_directories: [],
+      week_offset: 0
+    }
+  };
+}
+
 function validateRemoteForm(): boolean {
   if (!remoteForm.host || !remoteForm.user || !remoteForm.remote_dir) {
     message.warning('请填写完整远程数据源配置');
+    return false;
+  }
+  return true;
+}
+
+function validateCellDataRemoteForm(): boolean {
+  if (!cellDataRemoteForm.host || !cellDataRemoteForm.user || !cellDataRemoteForm.remote_dir) {
+    message.warning('请填写完整 CellData 远程数据源配置');
     return false;
   }
   return true;
@@ -878,6 +1063,21 @@ async function saveRemote() {
     message.error(error instanceof Error ? error.message : '保存远程数据源配置失败');
   } finally {
     savingRemote.value = false;
+  }
+}
+
+async function saveCellDataRemote() {
+  if (!validateCellDataRemoteForm()) return;
+
+  savingCellDataRemote.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/cell-data/remote', getCellDataRemotePayload());
+    configUpdate.value = result.update || configUpdate.value;
+    message.success(result.message || 'CellData 远程数据源配置已保存');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存 CellData 远程数据源配置失败');
+  } finally {
+    savingCellDataRemote.value = false;
   }
 }
 
@@ -985,6 +1185,20 @@ async function testRemote() {
   }
 }
 
+async function testCellDataRemote() {
+  if (!validateCellDataRemoteForm()) return;
+
+  testingCellDataRemote.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/cell-data/remote/test', getCellDataRemotePayload());
+    message[result.success ? 'success' : 'error'](result.message || 'CellData 远程连接测试完成');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'CellData 远程连接测试失败');
+  } finally {
+    testingCellDataRemote.value = false;
+  }
+}
+
 async function testDatabase() {
   testingDb.value = true;
   try {
@@ -994,6 +1208,21 @@ async function testDatabase() {
     message.error(error instanceof Error ? error.message : '数据库连接测试失败');
   } finally {
     testingDb.value = false;
+  }
+}
+
+async function testCellDataDatabase() {
+  testingCellDataDb.value = true;
+  try {
+    const result = await apiPost<ApiMessage>('/api/config/cell-data/mysql/test', {
+      ...cellDataMysqlForm,
+      port: cellDataMysqlForm.port || 3306
+    });
+    message[result.success ? 'success' : 'error'](result.message || 'CellData 数据库连接测试完成');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'CellData 数据库连接测试失败');
+  } finally {
+    testingCellDataDb.value = false;
   }
 }
 
@@ -1156,7 +1385,7 @@ async function uploadConfigFile(event: Event) {
   }
 }
 
-function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteDataConfig {
+function normalizeRemoteConfig(config: RemoteDataConfig | undefined, defaultRemoteDir = '/'): RemoteDataConfig {
   const protocol = config?.protocol === 'ftp' ? 'ftp' : 'sftp';
   const autoScheduler = normalizeAutoSchedulerConfig(config?.auto_scheduler);
   return {
@@ -1166,11 +1395,21 @@ function normalizeRemoteConfig(config: RemoteDataConfig | undefined): RemoteData
     port: config?.port || (protocol === 'sftp' ? 22 : 21),
     user: config?.user || '',
     passwd: config?.passwd || '',
-    remote_dir: config?.remote_dir || '/',
+    remote_dir: config?.remote_dir || defaultRemoteDir,
     passive: config?.passive ?? true,
     timeout: config?.timeout || 30,
     auto_delete_source: Boolean(config?.auto_delete_source) || autoScheduler.enabled,
     auto_scheduler: autoScheduler
+  };
+}
+
+function normalizeCellDataMysqlConfig(config: CellDataConfig['mysql'] | undefined) {
+  return {
+    host: config?.host || 'localhost',
+    port: config?.port || 3306,
+    user: config?.user || 'root',
+    passwd: config?.passwd || '',
+    dbname: config?.dbname || 'celldata'
   };
 }
 
