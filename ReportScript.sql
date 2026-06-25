@@ -22,6 +22,9 @@ DROP TABLE IF EXISTS `5G_MAX`;
 DROP TABLE IF EXISTS `5G_MAX_IDX`;
 DROP TABLE IF EXISTS `5G日均流量`;
 DROP TABLE IF EXISTS `5G_结果表`;
+DROP TABLE IF EXISTS `_rj_yd`;
+DROP TABLE IF EXISTS `_rj_gd`;
+DROP TABLE IF EXISTS `rj`;
 
 UPDATE `4G_UD` SET
 	`上下行总流量_GB` = IFNULL(`上下行总流量_GB`,0),
@@ -506,3 +509,74 @@ UPDATE `5G_结果表` SET
 `小区下行RLC SDU字节数(MByte)` = IFNULL(`小区下行RLC SDU字节数(MByte)`,0),
 `小区上行RLC SDU字节数(MByte)` = IFNULL(`小区上行RLC SDU字节数(MByte)`,0),
 `单Flow流量(MB)` = IFNULL(`单Flow流量(MB)`,0);
+
+
+# 处理日间（广电、移动）流量数据
+
+ALTER TABLE `5G_结果表`
+ADD COLUMN `_gNBId` varchar(50),
+ADD COLUMN `_cellId` varchar(50),
+ADD COLUMN `移动流量_GB` double NOT NULL DEFAULT 0 AFTER `CU小区配置名称`,
+ADD COLUMN `广电流量_GB` double NOT NULL DEFAULT 0 AFTER `移动流量_GB`;
+
+UPDATE `5G_结果表` SET
+  `_gNBId` = SUBSTRING_INDEX(SUBSTRING_INDEX(`NCGI`, '-', 3), '-', -1),
+  `_cellId` = SUBSTRING_INDEX(`NCGI`, '-', -1);
+
+ALTER TABLE `5G_结果表` ADD INDEX `_rj`(`_gNBId`, `_cellId`);
+
+
+CREATE TABLE `_rj_yd` ( `gNBId` varchar(50), `cellId` varchar(50), `上下行总流量_GB` double, INDEX (`gNBId`, `cellId`)) AS
+	SELECT `gNBId`, `cellId`, AVG(`上下行总流量_GB`) AS `上下行总流量_GB` FROM (
+		SELECT `gNBId`, `cellId`, `上下行总流量_GB` FROM `2_6grjyd`
+		UNION ALL
+		SELECT `gNBId`, `cellId`, `上下行总流量_GB` FROM `700mrjyd`
+	) AS t
+		GROUP BY `gNBId`, `cellId`;
+
+CREATE TABLE `_rj_gd` (
+    `gNBId` varchar(50), `cellId` varchar(50), `上下行总流量_GB` double,
+    INDEX (`gNBId`, `cellId`)
+) AS
+SELECT `gNBId`, `cellId`, AVG(`上下行总流量_GB`) AS `上下行总流量_GB`
+FROM (
+    SELECT `gNBId`, `cellId`, `上下行总流量_GB` FROM `2_6grjgd`
+    UNION ALL
+    SELECT `gNBId`, `cellId`, `上下行总流量_GB` FROM `700mrjgd`
+) AS t
+GROUP BY `gNBId`, `cellId`;
+
+CREATE TABLE `rj` (
+    `gNBId` varchar(50), `cellId` varchar(50),
+    `移动流量_GB` double NOT NULL DEFAULT 0,
+    `广电流量_GB` double NOT NULL DEFAULT 0,
+    INDEX (`gNBId`, `cellId`)
+) AS
+SELECT
+    `_rj_yd`.`gNBId`, `_rj_yd`.`cellId`,
+    IFNULL(`_rj_yd`.`上下行总流量_GB`, 0) AS `移动流量_GB`,
+    IFNULL(`_rj_gd`.`上下行总流量_GB`, 0) AS `广电流量_GB`
+FROM `_rj_yd`
+LEFT JOIN `_rj_gd` ON `_rj_yd`.`gNBId` = `_rj_gd`.`gNBId` AND `_rj_yd`.`cellId` = `_rj_gd`.`cellId`
+UNION ALL
+SELECT
+    `_rj_gd`.`gNBId`, `_rj_gd`.`cellId`,
+    0, `_rj_gd`.`上下行总流量_GB`
+FROM `_rj_gd`
+LEFT JOIN `_rj_yd` ON `_rj_gd`.`gNBId` = `_rj_yd`.`gNBId` AND `_rj_gd`.`cellId` = `_rj_yd`.`cellId`
+WHERE `_rj_yd`.`gNBId` IS NULL;
+
+UPDATE `5G_结果表`
+LEFT JOIN `rj`
+  ON `5G_结果表`.`_gNBId` = `rj`.`gNBId`
+ AND `5G_结果表`.`_cellId` = `rj`.`cellId`
+SET
+  `5G_结果表`.`移动流量_GB` = IFNULL(`rj`.`移动流量_GB`, 0),
+  `5G_结果表`.`广电流量_GB` = IFNULL(`rj`.`广电流量_GB`, 0);
+
+ALTER TABLE `5G_结果表` DROP INDEX `_rj`, DROP COLUMN `_gNBId`, DROP COLUMN `_cellId`;
+
+DROP TABLE `_rj_yd`;
+DROP TABLE `_rj_gd`;
+DROP TABLE `rj`;
+
