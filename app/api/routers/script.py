@@ -19,7 +19,7 @@ SCRIPT_PATHS = {
     "celldata": CELLDATA_SCRIPT,
 }
 SCRIPT_LABELS = {
-    "report": "报表脚本",
+    "report": "容量报表脚本",
     "celldata": "CellData 脚本",
 }
 

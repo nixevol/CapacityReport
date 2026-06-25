@@ -1,17 +1,6 @@
 <template>
   <div class="script-page-body">
     <div class="script-editor-container">
-      <div class="script-type-bar">
-        <n-tabs
-          :value="scriptType"
-          type="segment"
-          size="small"
-          @update:value="switchScript"
-        >
-          <n-tab-pane name="report" tab="报表脚本" :disabled="switching" />
-          <n-tab-pane name="celldata" tab="CellData 脚本" :disabled="switching" />
-        </n-tabs>
-      </div>
       <div ref="editorHost" class="script-editor" />
     </div>
 
@@ -50,7 +39,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import { useMessage } from 'naive-ui';
-import { BrushOutline, PlayOutline, SaveOutline } from '@vicons/ionicons5';
+import {
+  BrushOutline,
+  PlayOutline,
+  SaveOutline,
+  SwapHorizontalOutline,
+} from '@vicons/ionicons5';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
@@ -74,10 +68,10 @@ type MonacoGlobal = typeof globalThis & {
   getWorker: () => new editorWorker()
 };
 
-const SCRIPT_LABELS: Record<string, string> = {
-  report: '报表脚本',
-  celldata: 'CellData 脚本',
-};
+const SCRIPT_OPTIONS = [
+  { key: 'report', label: '容量报表脚本' },
+  { key: 'celldata', label: 'CellData 脚本' },
+];
 
 const message = useMessage();
 const editorHost = ref<HTMLDivElement | null>(null);
@@ -85,7 +79,6 @@ const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 const disposables: monaco.IDisposable[] = [];
 const content = ref('');
 const originalContent = ref('');
-const scriptPath = ref('');
 const modified = ref<string | null>(null);
 const cursorText = ref('行 1，列 1');
 const lineCount = ref(1);
@@ -94,7 +87,6 @@ const loading = ref(false);
 const saving = ref(false);
 const executing = ref(false);
 const scriptType = ref('report');
-const switching = ref(false);
 let timer: number | undefined;
 let themeObserver: MutationObserver | undefined;
 let applyingRemoteContent = false;
@@ -126,17 +118,23 @@ const statusText = computed(() => {
 const editorStatus = computed(() => {
   if (loading.value) return '加载中';
   if (saving.value) return '保存中';
-  if (switching.value) return '切换中';
   return isModified.value ? '未保存' : '就绪';
 });
 const modifiedText = computed(() => (modified.value ? `最后修改: ${modified.value}` : '最后修改: -'));
-const currentLabel = computed(() => SCRIPT_LABELS[scriptType.value] || scriptType.value);
+const currentLabel = computed(() => SCRIPT_OPTIONS.find(o => o.key === scriptType.value)?.label || scriptType.value);
 
 onMounted(async () => {
   setPageHeader({
-    subtitle: computed(() => currentLabel.value + (scriptPath.value ? ` (${scriptPath.value})` : '')),
+    subtitle: computed(() => currentLabel.value),
     actions: [
       { key: 'script-modified', kind: 'text', label: modifiedText },
+      {
+        key: 'switch-script',
+        label: computed(() => currentLabel.value),
+        icon: SwapHorizontalOutline,
+        dropdownOptions: SCRIPT_OPTIONS,
+        onSelect: (key) => void switchScript(String(key)),
+      },
       {
         key: 'save-script',
         label: computed(() => (isModified.value ? '保存 *' : '保存')),
@@ -149,7 +147,7 @@ onMounted(async () => {
       { key: 'format-script', label: '格式化', icon: BrushOutline, onClick: formatScript },
       {
         key: 'run-script',
-        label: computed(() => `运行${currentLabel.value}`),
+        label: '运行',
         icon: PlayOutline,
         type: 'success',
         variant: 'solid',
@@ -225,15 +223,13 @@ function createEditor() {
 }
 
 async function switchScript(type: string) {
-  if (type === scriptType.value || switching.value) return;
+  if (type === scriptType.value) return;
   if (isModified.value) {
-    const confirm = window.confirm(`当前${currentLabel.value}有未保存的修改，是否放弃？`);
+    const confirm = window.confirm(`当前脚本有未保存的修改，是否放弃？`);
     if (!confirm) return;
   }
-  switching.value = true;
   scriptType.value = type;
   await loadScript();
-  switching.value = false;
 }
 
 async function loadScript() {
@@ -244,7 +240,6 @@ async function loadScript() {
       throw new Error(result.error || '加载脚本失败');
     }
     applyScriptContent(result.content);
-    scriptPath.value = result.path;
     modified.value = result.modified;
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载脚本失败');
@@ -315,9 +310,7 @@ function applyScriptContent(value: string) {
   applyingRemoteContent = true;
   content.value = value;
   originalContent.value = value;
-  if (editor.value && editor.value.getValue() !== value) {
-    editor.value.setValue(value);
-  }
+  editor.value?.setValue(value);
   lineCount.value = editor.value?.getModel()?.getLineCount() || value.split(/\r\n|\r|\n/).length || 1;
   isModified.value = false;
   applyingRemoteContent = false;
@@ -370,13 +363,3 @@ async function refreshStatus() {
   }
 }
 </script>
-
-<style scoped>
-.script-type-bar {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--n-border-color, #e0e0e6);
-}
-.script-type-bar :deep(.n-tabs .n-tabs-tab) {
-  padding: 4px 16px;
-}
-</style>
