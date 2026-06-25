@@ -72,8 +72,8 @@ class MySQLConfig:
         ).normalized()
 
 
-# Source backends: direct FTP/SFTP, or Metrix storage platform.
-SOURCE_TYPES = ("ftp", "sftp", "metrix")
+# Source backends: external (FTP/SFTP), or Metrix storage platform.
+SOURCE_TYPES = ("external", "metrix")
 # Warehouse backends: direct MySQL, or Metrix database platform.
 WAREHOUSE_TYPES = ("mysql", "metrix")
 
@@ -537,8 +537,9 @@ def _normalize_source_type(value: Any, protocol: str = "sftp") -> str:
     text = str(value or "").strip().lower()
     if text in SOURCE_TYPES:
         return text
-    # Back-compat: no explicit source type means direct remote, pick its protocol.
-    return "ftp" if str(protocol).strip().lower() == "ftp" else "sftp"
+    if text in ("ftp", "sftp"):
+        return "external"
+    return "external"
 
 
 def _normalize_warehouse_type(value: Any) -> str:
@@ -549,7 +550,8 @@ def _normalize_warehouse_type(value: Any) -> str:
 @dataclass
 class AppConfig:
     update: str = ""
-    source_type: str = "sftp"
+    metrix_enabled: bool = False
+    source_type: str = "external"
     warehouse_type: str = "mysql"
     mysql: MySQLConfig = field(default_factory=MySQLConfig)
     metrix: MetrixConfig = field(default_factory=MetrixConfig)
@@ -578,6 +580,7 @@ class AppConfig:
 
         return cls(
             update=data.get("Update", ""),
+            metrix_enabled=bool(data.get("MetrixEnabled", False)),
             source_type=_normalize_source_type(data.get("SourceType"), remote_config.protocol),
             warehouse_type=_normalize_warehouse_type(data.get("WarehouseType")),
             mysql=mysql_config,
@@ -602,6 +605,7 @@ class AppConfig:
         """转换为配置文件结构（包含敏感字段，用于保存和下载）"""
         return {
             "Update": self.update,
+            "MetrixEnabled": self.metrix_enabled,
             "SourceType": self.source_type,
             "WarehouseType": self.warehouse_type,
             "MySQL_DBInfo": self.mysql.normalized().to_dict(include_password=True),
@@ -618,6 +622,7 @@ class AppConfig:
         """转换为字典（用于返回给前端，隐藏密码）"""
         return {
             "update": self.update,
+            "metrix_enabled": self.metrix_enabled,
             "source_type": self.source_type,
             "warehouse_type": self.warehouse_type,
             "mysql": self.mysql.normalized().to_dict(),
@@ -634,6 +639,7 @@ class AppConfig:
         """转换为完整字典（包含密码，用于编辑时回显）"""
         return {
             "update": self.update,
+            "metrix_enabled": self.metrix_enabled,
             "source_type": self.source_type,
             "warehouse_type": self.warehouse_type,
             "mysql": self.mysql.normalized().to_dict(include_password=True),

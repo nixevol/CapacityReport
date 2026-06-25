@@ -877,5 +877,14 @@
 - 新增 `cell_data.py::copy_celldata_tables_to_capacity()`：列出 CellData 库所有表，逐表 `SHOW CREATE TABLE` → 目标库建表 → 分批 `SELECT * / INSERT INTO` 复制数据；两库相同时跳过。
 - CellData 独立处理（远程 / 本地上传）完成后自动执行 CellData 脚本（不复制表）。
 - 容量处理集成（`tasks.py` / `remote.py` 的 `_try_refresh_cell_data`）：CellData 数据更新 → 执行 CellData 脚本 → 复制表到容量库 → 后续 ReportScript.sql 可直接引用 CellData 表。
-- 前端脚本编辑页（`ScriptPanel.vue`）编辑器上方新增 Naive UI segment tabs 切换「报表脚本」和「CellData 脚本」；切换时检查未保存状态、加载对应脚本内容；保存和运行按钮跟随当前脚本类型。
+- 前端脚本编辑页（`ScriptPanel.vue`）页头下拉按钮切换「容量报表脚本」和「CellData 脚本」；运行按钮文案统一为「运行」，跟随当前脚本类型执行对应库的 SQL。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过；构建产物已清理。
+
+## 2026-06-25：Metrix 平台模式按需启用 + 数据源合并为外部储存
+
+- Metrix 平台开关：新增 `AppConfig.metrix_enabled`（默认 `false`），存储为 `Configure.json` 的 `MetrixEnabled`；关闭时 `source_type` 和 `warehouse_type` 自动回落为 `external` / `mysql`。
+- 开关入口：连点品牌图标 8 次打开的「授权延期」弹窗底部新增「启用 Metrix 平台」开关（`LicenseActivationModal.vue`），通过 `POST /api/config/metrix-enabled` 保存。
+- 条件显示：设置页「数据源 / 仓库」标签页仅在 `metrix_enabled=true` 时显示；未启用时该页不可见，系统默认走外部储存 + MySQL 直连。
+- 数据源合并：`source_type` 从 `ftp | sftp | metrix` 改为 `external | metrix`；FTP/SFTP 协议选择保留在远程数据源配置的 `RemoteData.protocol` 中，`external` 统一代表外部储存。旧值 `ftp`/`sftp` 自动规范化为 `external`。
+- 全局状态：`metrixEnabled` 通过 `composables/metrixEnabled.ts` 共享响应式状态，`AppShell` 登录后和激活弹窗切换时同步更新。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过；构建产物已清理。

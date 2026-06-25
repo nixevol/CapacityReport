@@ -62,6 +62,17 @@ async def update_remote_config(config: dict[str, Any] = Body(...)):
     return {"success": True, "message": "远程数据配置已更新", "update": state.config.update}
 
 
+@router.post("/api/config/metrix-enabled")
+async def update_metrix_enabled(enabled: bool = Body(..., embed=True)):
+    state.reload_config()
+    state.config.metrix_enabled = enabled
+    if not enabled:
+        state.config.source_type = "external"
+        state.config.warehouse_type = "mysql"
+    state.config.save()
+    return {"success": True, "message": "已更新", "update": state.config.update}
+
+
 @router.post("/api/config/backend")
 async def update_backend(
     source_type: str = Body(...),

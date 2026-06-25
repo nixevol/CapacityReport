@@ -112,7 +112,7 @@
     </n-layout>
   </n-layout>
 
-  <LicenseActivationModal v-if="licenseModalVisible" v-model:show="licenseModalVisible" />
+  <LicenseActivationModal v-if="licenseModalVisible" v-model:show="licenseModalVisible" @metrix-changed="onMetrixChanged" />
 </template>
 
 <script setup lang="ts">
@@ -131,9 +131,10 @@ import {
   SunnyOutline
 } from '@vicons/ionicons5';
 
-import { apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
-import type { LoginResponse } from './types';
+import { apiGet, apiPost, clearToken, getToken, setToken, setUnauthorizedHandler } from './api/client';
+import type { AppConfig, LoginResponse } from './types';
 import { pageHeader, resetPageHeader, resolveHeaderValue, type PageHeaderAction } from './composables/pageHeader';
+import { metrixEnabled } from './composables/metrixEnabled';
 import { themeName, toggleAppTheme } from './composables/theme';
 
 const LoginView = defineAsyncComponent(() => import('./components/LoginView.vue'));
@@ -172,6 +173,9 @@ const themeToggleTitle = computed(() => (themeName.value === 'dark' ? '切换到
 onMounted(() => {
   window.addEventListener('dragover', preventWindowFileDrop, { capture: true });
   window.addEventListener('drop', preventWindowFileDrop, { capture: true });
+  if (token.value) {
+    void loadMetrixEnabled();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -198,6 +202,7 @@ async function handleLogin(payload: { username: string; password: string }) {
     setToken(result.token);
     token.value = result.token;
     message.success('登录成功');
+    void loadMetrixEnabled();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '登录失败');
   } finally {
@@ -224,6 +229,19 @@ function handleMenuChange(key: string | number) {
     return;
   }
   void router.push({ name: key });
+}
+
+function onMetrixChanged(enabled: boolean) {
+  metrixEnabled.value = enabled;
+}
+
+async function loadMetrixEnabled() {
+  try {
+    const config = await apiGet<AppConfig>('/api/config/full');
+    metrixEnabled.value = config.metrix_enabled ?? false;
+  } catch {
+    metrixEnabled.value = false;
+  }
 }
 
 function handleBrandMarkClick() {

@@ -96,7 +96,8 @@ export interface CacheSize {
 
 export interface AppConfig {
   update: string;
-  source_type: 'ftp' | 'sftp' | 'metrix';
+  metrix_enabled: boolean;
+  source_type: 'external' | 'metrix';
   warehouse_type: 'mysql' | 'metrix';
   mysql: {
     host: string;

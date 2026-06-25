@@ -4,16 +4,15 @@
 
     <n-card size="small" class="work-card settings-tabs-card">
       <n-tabs type="line" animated class="settings-tabs">
-        <n-tab-pane name="backend" tab="数据源 / 仓库">
+        <n-tab-pane v-if="metrixEnabledRef" name="backend" tab="数据源 / 仓库">
           <div class="settings-database-panel">
             <div class="settings-database-stack">
               <n-card title="后端类型" size="small" class="work-card">
                 <n-form label-placement="top">
                   <n-form-item label="数据源">
                     <n-radio-group v-model:value="sourceType">
-                      <n-radio-button value="sftp">SFTP</n-radio-button>
-                      <n-radio-button value="ftp">FTP</n-radio-button>
-                      <n-radio-button value="metrix">Metrix 存储平台</n-radio-button>
+                      <n-radio-button value="external">外部储存</n-radio-button>
+                      <n-radio-button value="metrix">Metrix 储存平台</n-radio-button>
                     </n-radio-group>
                   </n-form-item>
                   <n-form-item label="数据仓库">
@@ -22,7 +21,7 @@
                       <n-radio-button value="metrix">Metrix 数据库平台</n-radio-button>
                     </n-radio-group>
                   </n-form-item>
-                  <p class="form-hint">主数据源和数据仓库可独立选择；CellData 单独配置。</p>
+                  <p class="form-hint">数据源和数据仓库可独立选择；CellData 单独配置。</p>
                 </n-form>
                 <template #footer>
                   <n-space justify="end">
@@ -819,6 +818,7 @@ import type {
   RemoteSchedulerStatus
 } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
+import { metrixEnabled as metrixEnabledRef } from '../composables/metrixEnabled';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
 
 interface ExtractFieldConfig {
@@ -882,7 +882,7 @@ const savingCellDataSettings = ref(false);
 const validatingCellDataSettings = ref(false);
 const savingBackend = ref(false);
 const savingMetrix = ref(false);
-const sourceType = ref<'ftp' | 'sftp' | 'metrix'>('sftp');
+const sourceType = ref<'external' | 'metrix'>('external');
 const warehouseType = ref<'mysql' | 'metrix'>('mysql');
 const savingDirectoryMappings = ref(false);
 const savingHistoryRetention = ref(false);
@@ -1120,7 +1120,7 @@ async function loadConfig() {
   try {
     const config = await apiGet<AppConfig>('/api/config/full');
     configUpdate.value = config.update;
-    sourceType.value = config.source_type || 'sftp';
+    sourceType.value = (config.source_type === 'metrix' ? 'metrix' : 'external') as 'external' | 'metrix';
     warehouseType.value = config.warehouse_type || 'mysql';
     if (config.metrix) {
       metrixForm.base_url = config.metrix.base_url || '';
