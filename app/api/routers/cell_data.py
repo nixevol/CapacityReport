@@ -12,6 +12,7 @@ from app.api.routers.task_runtime import set_task_stage
 from app.config import AppConfig, CACHE_DIR
 from app.processor import ProcessLogger
 from app.services.cell_data import CellDataProcessor, refresh_cell_data
+from app.utils.files import safe_relative_path
 
 router = APIRouter(tags=["cell-data"])
 
@@ -72,7 +73,7 @@ async def upload_and_start_cell_data_processing(files: list[UploadFile] = File(.
     for file in files:
         if not file.filename:
             continue
-        target = upload_dir / file.filename.replace("\\", "/")
+        target = upload_dir / safe_relative_path(file.filename)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(await file.read())
         saved_count += 1

@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app import state
 from app.config import CACHE_DIR
+from app.utils.files import safe_relative_path
 
 
 router = APIRouter(tags=["upload"])
@@ -70,12 +71,14 @@ async def upload_files(
             if not file.filename:
                 continue
 
-            file_path = work_dir / file.filename
+            relative_path = safe_relative_path(file.filename)
+            file_path = work_dir / relative_path
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_bytes(await file.read())
 
-            saved_files.append(file.filename)
-            session["files"].append(file.filename)
+            saved_name = str(relative_path).replace("\\", "/")
+            saved_files.append(saved_name)
+            session["files"].append(saved_name)
 
         record = state.history_manager.get(session_id)
         if record:
@@ -107,4 +110,3 @@ async def complete_upload_session(session_id: str):
     state.history_manager.update(session_id, file_count=len(session["files"]))
 
     return {"success": True, "session_id": session_id, "total_files": len(session["files"])}
-

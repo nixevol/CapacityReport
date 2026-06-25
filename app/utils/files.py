@@ -1,6 +1,17 @@
 from pathlib import Path
 
 
+def safe_relative_path(value: str, fallback: str = "upload.bin") -> Path:
+    parts = [
+        part
+        for part in str(value or "").replace("\\", "/").split("/")
+        if part and part not in {".", ".."}
+    ]
+    if not parts:
+        parts = [fallback]
+    return Path(*parts)
+
+
 def remove_file_safely(path: Path) -> None:
     try:
         path.unlink()
