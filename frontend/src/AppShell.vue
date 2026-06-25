@@ -128,6 +128,7 @@ import {
   MoonOutline,
   ServerOutline,
   SettingsOutline,
+  StatsChartOutline,
   SunnyOutline
 } from '@vicons/ionicons5';
 
@@ -147,12 +148,13 @@ const loginLoading = ref(false);
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
 const licenseModalVisible = ref(false);
 const brandClickCount = ref(0);
-const menuKeys = ['workflow', 'history', 'database', 'script', 'settings'] as const;
+const menuKeys = ['workflow', 'dashboard', 'history', 'database', 'script', 'settings'] as const;
 type MenuKey = (typeof menuKeys)[number];
 let brandClickResetTimer: number | undefined;
 
 const menuOptions: MenuOption[] = [
   { label: '数据处理', key: 'workflow', icon: renderIcon(CloudUploadOutline) },
+  { label: '容量看板', key: 'dashboard', icon: renderIcon(StatsChartOutline) },
   { label: '处理历史', key: 'history', icon: renderIcon(FileTrayFullOutline) },
   { label: '数据管理', key: 'database', icon: renderIcon(ServerOutline) },
   { label: '脚本编辑', key: 'script', icon: renderIcon(ConstructOutline) },

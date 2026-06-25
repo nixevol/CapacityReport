@@ -905,3 +905,15 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 附带修复：`frontend/src/vite-env.d.ts` 增加 `declare module 'monaco-editor/esm/vs/basic-languages/mysql/mysql.js'`，修复 ScriptPanel SQL 补全的深层导入缺类型声明导致 `vue-tsc`（`npm run build`）失败（TS7016）。
 
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过（DatabasePanel chunk≈124KB）。
+
+## 2026-06-26：容量看板（4G/5G 高负荷分析大屏）
+
+- 后端 `app/api/routers/dashboard.py`（`main.py` 注册）：基于「主仓库」(`make_warehouse`，直连 MySQL 或 Metrix) 的 4G/5G 结果表聚合分析，4 个接口：
+  - `GET /api/dashboard/status` → `{has_4g,has_5g,ready}`（两表都在才 ready）；
+  - `GET /api/dashboard/overview?rat=4g|5g` → 汇总(总数/高负荷/利用率预警/高流量预警/正常/平均下行利用率/总流量) + 问题分布饼 + 制式/带宽/站型/频段 分组统计 + 下行利用率 10 档直方 + Top10 高负荷小区；
+  - `GET /api/dashboard/cells?rat&problem&keyword&page&page_size` → 问题小区清单（按 高负荷>高流量预警>利用率预警 + 下行利用率 排序，可筛选）；
+  - `GET /api/dashboard/cell?rat&id` → 单小区全字段 + 优化建议 + 同扇区同 PLMN 兄弟小区。
+  - 4G 指标用 PUSCH/PDSCH 利用率与 YY-RRC，5G 用 PRB 利用率与 RRC 平均；execute_sql 原始 SQL，用户输入(id/keyword) 转义。
+- 前端：新增依赖 `echarts`；`components/EChart.vue`（echarts 封装，ResizeObserver 自适应 + dispose）；`components/CapacityDashboard.vue`（科技感大屏：4G/5G 分段切换、6 张汇总卡片含数字滚动、6 个图表(环形/直方/分组柱/饼/横向柱)、问题小区清单(筛选+分页+点击行打开)、右侧详情抽屉(关键指标 + 优化建议 + 同扇区兄弟小区)）。无结果表时横纵居中「请先进行数据处理」。
+- 路由 `/dashboard`(name=`dashboard`，懒加载)；侧边菜单「容量看板」置于「数据处理」下方（`AppShell` menuKeys/menuOptions + `StatsChartOutline`）。看板自带深色科技风(径向辉光/玻璃拟态/霓虹色)，不随应用明暗主题；图表 echarts 自定义深色配色。
+- 验证：`npm run build`（vue-tsc）通过（CapacityDashboard 懒加载 chunk≈1.16MB 含 echarts）；后端 `compileall` 通过；各接口 SQL 经 MCP 对真实数据验证（4G 高负荷 792 / 5G 46，同扇区邻区 6–8 个）。

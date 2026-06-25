@@ -14,6 +14,7 @@ from app.api.routers import (
     cache,
     cell_data,
     config,
+    dashboard,
     database,
     health,
     history,
@@ -112,6 +113,7 @@ def register_routes(app: FastAPI) -> None:
         config.router,
         cache.router,
         cell_data.router,
+        dashboard.router,
         script.router,
     ]
     for router in routers:
