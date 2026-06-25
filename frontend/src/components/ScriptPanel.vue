@@ -5,17 +5,15 @@
     </div>
 
     <div v-if="taskStatus || taskId" class="script-process-section">
-      <div class="upload-process-card script-process-card">
-        <div class="card-header">
-          <div class="card-header-left">
+      <n-collapse>
+        <n-collapse-item name="log">
+          <template #header>
             <span class="card-title">脚本执行进度</span>
-            <span class="process-status" :class="statusClass">{{ statusText }}</span>
-          </div>
-          <div class="card-header-right">
-            <n-button size="small" tertiary :disabled="!taskId" @click="refreshStatus">刷新</n-button>
-          </div>
-        </div>
-        <div class="card-body">
+            <span class="process-status" :class="statusClass" style="margin-left:8px">{{ statusText }}</span>
+          </template>
+          <template #header-extra>
+            <n-button size="tiny" quaternary :disabled="!taskId" @click.stop="refreshStatus">刷新</n-button>
+          </template>
           <div class="colored-log-panel script-log" role="log" aria-label="脚本执行日志">
             <pre class="colored-log-content"><span
               v-for="(line, index) in logLines"
@@ -24,8 +22,8 @@
               :class="`log-level-${line.level}`"
             >{{ line.text }}</span></pre>
           </div>
-        </div>
-      </div>
+        </n-collapse-item>
+      </n-collapse>
     </div>
 
     <div class="script-status-bar">
@@ -48,6 +46,7 @@ import {
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
+import { language as mysqlLanguage } from 'monaco-editor/esm/vs/basic-languages/mysql/mysql.js';
 
 import { apiPost } from '../api/client';
 import type { ApiMessage, ScriptContent, TaskStatus } from '../types';
@@ -219,6 +218,42 @@ function createEditor() {
   editor.value.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
     void saveScript();
   });
+
+  const completionItems: Array<{ label: string; kind: monaco.languages.CompletionItemKind }> = [];
+  const seen = new Set<string>();
+  const add = (list: string[] | undefined, kind: monaco.languages.CompletionItemKind) => {
+    for (const item of list || []) {
+      const upper = item.toUpperCase();
+      if (!seen.has(upper)) {
+        seen.add(upper);
+        completionItems.push({ label: upper, kind });
+      }
+    }
+  };
+  add(mysqlLanguage.keywords as string[], monaco.languages.CompletionItemKind.Keyword);
+  add(mysqlLanguage.operators as string[], monaco.languages.CompletionItemKind.Operator);
+  add(mysqlLanguage.builtinFunctions as string[], monaco.languages.CompletionItemKind.Function);
+  disposables.push(
+    monaco.languages.registerCompletionItemProvider('sql', {
+      provideCompletionItems(model, position) {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+        return {
+          suggestions: completionItems.map(item => ({
+            label: item.label,
+            kind: item.kind,
+            insertText: item.label,
+            range,
+          })),
+        };
+      },
+    })
+  );
 
   updateCursor();
 }

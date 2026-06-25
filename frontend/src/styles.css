@@ -2248,28 +2248,13 @@ select {
 }
 
 .script-process-section {
-  flex: 0 1 clamp(168px, 26vh, 280px);
-  min-height: 148px;
+  flex: 0 0 auto;
   margin: 8px 16px 0;
-  overflow: hidden;
 }
 
-.script-process-card {
-  display: flex;
-  height: 100%;
-  min-height: 0;
-  flex-direction: column;
-}
-
-.script-process-section .card-body {
-  flex: 1;
-  min-height: 0;
-  padding: 12px 16px 16px;
-}
-
-.script-log {
-  height: 100%;
-  min-height: 0;
+.script-process-section .script-log {
+  max-height: clamp(140px, 22vh, 240px);
+  overflow: auto;
 }
 
 /* ==================== Responsive ==================== */
