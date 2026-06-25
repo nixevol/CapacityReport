@@ -428,3 +428,153 @@ class CellDataProcessor:
 
 def refresh_cell_data(app_config: AppConfig, work_dir: Path, logger=None) -> CellDataResult:
     return CellDataProcessor(app_config, work_dir, logger).run()
+
+
+def execute_celldata_script(script_path: Path, app_config: AppConfig, logger=None) -> None:
+    if not script_path.exists():
+        if logger:
+            logger.info("CellData 脚本文件不存在，跳过")
+        return
+    sql_text = script_path.read_text(encoding="utf-8").strip()
+    if not sql_text:
+        if logger:
+            logger.info("CellData 脚本为空，跳过")
+        return
+
+    from app.processor import DataProcessor
+
+    statements = DataProcessor.parse_sql_script(sql_text)
+    if not statements:
+        if logger:
+            logger.info("CellData 脚本中没有有效语句，跳过")
+        return
+
+    mysql = app_config.cell_data.mysql.normalized()
+    conn = pymysql.connect(
+        host=mysql.host,
+        port=mysql.port,
+        user=mysql.user,
+        password=mysql.passwd,
+        database=mysql.dbname,
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=False,
+    )
+    try:
+        with conn.cursor() as cursor:
+            for i, sql in enumerate(statements, 1):
+                preview = sql[:80].replace("\n", " ")
+                if logger:
+                    logger.info(f"CellData SQL ({i}/{len(statements)}): {preview}...")
+                cursor.execute(sql)
+                affected = cursor.rowcount if cursor.rowcount >= 0 else 0
+                if affected > 0 and logger:
+                    logger.info(f"完成，影响 {affected} 行")
+        conn.commit()
+        if logger:
+            logger.success(f"CellData 脚本执行完成，共 {len(statements)} 条语句")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def copy_celldata_tables_to_capacity(app_config: AppConfig, logger=None) -> int:
+    cd_mysql = app_config.cell_data.mysql.normalized()
+    cap_mysql = app_config.mysql.normalized()
+
+    if (
+        cd_mysql.host == cap_mysql.host
+        and cd_mysql.port == cap_mysql.port
+        and cd_mysql.dbname == cap_mysql.dbname
+    ):
+        if logger:
+            logger.info("CellData 与容量数据库相同，跳过表复制")
+        return 0
+
+    cd_conn = pymysql.connect(
+        host=cd_mysql.host, port=cd_mysql.port,
+        user=cd_mysql.user, password=cd_mysql.passwd,
+        database=cd_mysql.dbname, charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+    )
+    cap_conn = pymysql.connect(
+        host=cap_mysql.host, port=cap_mysql.port,
+        user=cap_mysql.user, password=cap_mysql.passwd,
+        database=cap_mysql.dbname, charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        local_infile=True, autocommit=False,
+    )
+    try:
+        tables = _list_tables(cd_conn)
+        if not tables:
+            if logger:
+                logger.info("CellData 数据库中没有表，跳过复制")
+            return 0
+
+        copied = 0
+        for table in tables:
+            rows = _copy_one_table(cd_conn, cap_conn, table, logger)
+            if rows >= 0:
+                copied += 1
+        cap_conn.commit()
+        if logger:
+            logger.success(f"已将 {copied} 张表从 CellData 复制到容量数据库")
+        return copied
+    except Exception:
+        cap_conn.rollback()
+        raise
+    finally:
+        cd_conn.close()
+        cap_conn.close()
+
+
+def _list_tables(conn) -> list[str]:
+    with conn.cursor() as cur:
+        cur.execute("SHOW TABLES")
+        return [list(row.values())[0] for row in cur.fetchall()]
+
+
+def _copy_one_table(src_conn, dst_conn, table: str, logger=None) -> int:
+    with src_conn.cursor() as cur:
+        cur.execute(f"SHOW CREATE TABLE `{table}`")
+        row = cur.fetchone()
+        create_sql = row.get("Create Table") or list(row.values())[1]
+
+    with src_conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) AS `cnt` FROM `{table}`")
+        count = cur.fetchone()["cnt"]
+
+    with dst_conn.cursor() as cur:
+        cur.execute(f"DROP TABLE IF EXISTS `{table}`")
+        cur.execute(create_sql)
+
+    if count == 0:
+        if logger:
+            logger.info(f"复制表 {table}: 0 行（空表）")
+        return 0
+
+    with src_conn.cursor() as src_cur:
+        src_cur.execute(f"SELECT * FROM `{table}`")
+        columns = [desc[0] for desc in src_cur.description]
+        col_list = ", ".join(f"`{c}`" for c in columns)
+        placeholders = ", ".join(["%s"] * len(columns))
+        insert_sql = f"INSERT INTO `{table}` ({col_list}) VALUES ({placeholders})"
+
+        batch: list[tuple] = []
+        inserted = 0
+        with dst_conn.cursor() as dst_cur:
+            for row in src_cur:
+                batch.append(tuple(row.values()))
+                if len(batch) >= 5000:
+                    dst_cur.executemany(insert_sql, batch)
+                    inserted += len(batch)
+                    batch.clear()
+            if batch:
+                dst_cur.executemany(insert_sql, batch)
+                inserted += len(batch)
+
+    if logger:
+        logger.info(f"复制表 {table}: {inserted} 行")
+    return inserted

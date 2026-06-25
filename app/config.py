@@ -24,6 +24,7 @@ BASE_DIR = _resolve_base_dir()
 CACHE_DIR = BASE_DIR / "cache"
 CONFIG_FILE = BASE_DIR / "Configure.json"
 SQL_SCRIPT = BASE_DIR / "ReportScript.sql"
+CELLDATA_SCRIPT = BASE_DIR / "CellDataScript.sql"
 
 
 @dataclass

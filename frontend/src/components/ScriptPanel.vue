@@ -1,6 +1,17 @@
 <template>
   <div class="script-page-body">
     <div class="script-editor-container">
+      <div class="script-type-bar">
+        <n-tabs
+          :value="scriptType"
+          type="segment"
+          size="small"
+          @update:value="switchScript"
+        >
+          <n-tab-pane name="report" tab="报表脚本" :disabled="switching" />
+          <n-tab-pane name="celldata" tab="CellData 脚本" :disabled="switching" />
+        </n-tabs>
+      </div>
       <div ref="editorHost" class="script-editor" />
     </div>
 
@@ -63,6 +74,11 @@ type MonacoGlobal = typeof globalThis & {
   getWorker: () => new editorWorker()
 };
 
+const SCRIPT_LABELS: Record<string, string> = {
+  report: '报表脚本',
+  celldata: 'CellData 脚本',
+};
+
 const message = useMessage();
 const editorHost = ref<HTMLDivElement | null>(null);
 const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -77,6 +93,8 @@ const isModified = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const executing = ref(false);
+const scriptType = ref('report');
+const switching = ref(false);
 let timer: number | undefined;
 let themeObserver: MutationObserver | undefined;
 let applyingRemoteContent = false;
@@ -108,13 +126,15 @@ const statusText = computed(() => {
 const editorStatus = computed(() => {
   if (loading.value) return '加载中';
   if (saving.value) return '保存中';
+  if (switching.value) return '切换中';
   return isModified.value ? '未保存' : '就绪';
 });
 const modifiedText = computed(() => (modified.value ? `最后修改: ${modified.value}` : '最后修改: -'));
+const currentLabel = computed(() => SCRIPT_LABELS[scriptType.value] || scriptType.value);
 
 onMounted(async () => {
   setPageHeader({
-    subtitle: computed(() => scriptPath.value || 'ReportScript.sql'),
+    subtitle: computed(() => currentLabel.value + (scriptPath.value ? ` (${scriptPath.value})` : '')),
     actions: [
       { key: 'script-modified', kind: 'text', label: modifiedText },
       {
@@ -129,7 +149,7 @@ onMounted(async () => {
       { key: 'format-script', label: '格式化', icon: BrushOutline, onClick: formatScript },
       {
         key: 'run-script',
-        label: '运行脚本',
+        label: computed(() => `运行${currentLabel.value}`),
         icon: PlayOutline,
         type: 'success',
         variant: 'solid',
@@ -162,7 +182,7 @@ function createEditor() {
   if (!editorHost.value || editor.value) return;
 
   editor.value = monaco.editor.create(editorHost.value, {
-    value: '-- 正在加载 ReportScript.sql',
+    value: '-- 正在加载脚本...',
     language: 'sql',
     theme: currentEditorTheme(),
     fontSize: 14,
@@ -204,10 +224,22 @@ function createEditor() {
   updateCursor();
 }
 
+async function switchScript(type: string) {
+  if (type === scriptType.value || switching.value) return;
+  if (isModified.value) {
+    const confirm = window.confirm(`当前${currentLabel.value}有未保存的修改，是否放弃？`);
+    if (!confirm) return;
+  }
+  switching.value = true;
+  scriptType.value = type;
+  await loadScript();
+  switching.value = false;
+}
+
 async function loadScript() {
   loading.value = true;
   try {
-    const result = await apiGet<ScriptContent>('/api/script/content');
+    const result = await apiGet<ScriptContent>(`/api/script/content?type=${scriptType.value}`);
     if (!result.success) {
       throw new Error(result.error || '加载脚本失败');
     }
@@ -226,7 +258,8 @@ async function saveScript() {
   try {
     const value = getEditorContent();
     const result = await apiPost<ApiMessage & { modified?: string }>('/api/script/save', {
-      content: value
+      content: value,
+      script_type: scriptType.value
     });
     if (!result.success) {
       throw new Error(result.error || '保存失败');
@@ -261,7 +294,9 @@ async function executeScript() {
       if (isModified.value) return;
     }
 
-    const result = await apiPost<ApiMessage>('/api/script/execute');
+    const result = await apiPost<ApiMessage>('/api/script/execute', {
+      script_type: scriptType.value
+    });
     if (!result.task_id) {
       throw new Error(result.message || '脚本任务启动失败');
     }
@@ -335,3 +370,13 @@ async function refreshStatus() {
   }
 }
 </script>
+
+<style scoped>
+.script-type-bar {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--n-border-color, #e0e0e6);
+}
+.script-type-bar :deep(.n-tabs .n-tabs-tab) {
+  padding: 4px 16px;
+}
+</style>

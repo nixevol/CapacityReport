@@ -9,9 +9,9 @@ from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 
 from app import state
 from app.api.routers.task_runtime import set_task_stage
-from app.config import AppConfig, CACHE_DIR
+from app.config import AppConfig, CACHE_DIR, CELLDATA_SCRIPT
 from app.processor import ProcessLogger
-from app.services.cell_data import CellDataProcessor, refresh_cell_data
+from app.services.cell_data import CellDataProcessor, execute_celldata_script, refresh_cell_data
 from app.utils.files import safe_relative_path
 
 router = APIRouter(tags=["cell-data"])
@@ -139,6 +139,7 @@ def _run_cell_data_processing(task_id: str, work_dir: Path, logger: ProcessLogge
     started = time.time()
     try:
         result = refresh_cell_data(app_config, work_dir, logger)
+        execute_celldata_script(CELLDATA_SCRIPT, app_config, logger)
         elapsed = round(time.time() - started, 2)
         state.processing_tasks[task_id] = {
             "logs": logger.get_logs(),
@@ -169,6 +170,7 @@ def _run_uploaded_cell_data_processing(task_id: str, upload_dir: Path, work_dir:
     started = time.time()
     try:
         result = CellDataProcessor(app_config, work_dir, logger).run_local(upload_dir)
+        execute_celldata_script(CELLDATA_SCRIPT, app_config, logger)
         elapsed = round(time.time() - started, 2)
         state.processing_tasks[task_id] = {
             "logs": logger.get_logs(),

@@ -4,41 +4,62 @@ from datetime import datetime
 from pathlib import Path
 from threading import Thread
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Query
 
 from app import state
 from app.api.routers.task_runtime import set_task_stage
-from app.config import AppConfig, CACHE_DIR, SQL_SCRIPT
+from app.config import AppConfig, CACHE_DIR, CELLDATA_SCRIPT, SQL_SCRIPT
 from app.processor import DataProcessor, ProcessLogger
 
 
 router = APIRouter(tags=["script"])
 
+SCRIPT_PATHS = {
+    "report": SQL_SCRIPT,
+    "celldata": CELLDATA_SCRIPT,
+}
+SCRIPT_LABELS = {
+    "report": "报表脚本",
+    "celldata": "CellData 脚本",
+}
+
+
+def _resolve_script_path(script_type: str) -> Path:
+    path = SCRIPT_PATHS.get(script_type)
+    if path is None:
+        raise HTTPException(status_code=400, detail=f"不支持的脚本类型: {script_type}")
+    return path
+
 
 @router.get("/api/script/content")
-async def get_script_content():
+async def get_script_content(type: str = Query("report")):
+    script_path = _resolve_script_path(type)
+    label = SCRIPT_LABELS.get(type, type)
     try:
-        if not SQL_SCRIPT.exists():
+        if not script_path.exists():
             return {
                 "success": True,
-                "content": "# SQL 脚本文件不存在，请在此编写脚本\n",
+                "content": f"# {label}文件不存在，请在此编写脚本\n",
                 "modified": None,
-                "path": str(SQL_SCRIPT),
+                "path": str(script_path),
+                "script_type": type,
             }
 
-        modified = datetime.fromtimestamp(SQL_SCRIPT.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        modified = datetime.fromtimestamp(script_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         return {
             "success": True,
-            "content": SQL_SCRIPT.read_text(encoding="utf-8"),
+            "content": script_path.read_text(encoding="utf-8"),
             "modified": modified,
-            "path": str(SQL_SCRIPT),
+            "path": str(script_path),
+            "script_type": type,
         }
     except Exception as exc:
         return {"success": False, "error": str(exc)}
 
 
 @router.post("/api/script/execute")
-async def execute_script():
+async def execute_script(script_type: str = Body("report", embed=True)):
+    script_path = _resolve_script_path(script_type)
     if state.global_task_lock["locked"]:
         raise HTTPException(status_code=409, detail="已有任务在运行，请等待完成")
 
@@ -62,29 +83,48 @@ async def execute_script():
     set_task_stage(task_id, "processing", logs)
     app_config = state.current_config()
 
-    thread = Thread(target=_run_script, args=(task_id, logger, logs, app_config), daemon=True)
+    thread = Thread(
+        target=_run_script,
+        args=(task_id, logger, logs, app_config, script_path, script_type),
+        daemon=True,
+    )
     thread.start()
-    return {"success": True, "message": "脚本执行任务已启动", "task_id": task_id}
+    label = SCRIPT_LABELS.get(script_type, script_type)
+    return {"success": True, "message": f"{label}执行任务已启动", "task_id": task_id}
 
 
 @router.post("/api/script/save")
-async def save_script_content(content: str = Body(..., embed=True)):
+async def save_script_content(
+    content: str = Body(...),
+    script_type: str = Body("report"),
+):
+    script_path = _resolve_script_path(script_type)
     try:
-        if SQL_SCRIPT.exists():
-            shutil.copy(SQL_SCRIPT, SQL_SCRIPT.with_suffix(".sql.bak"))
+        if script_path.exists():
+            shutil.copy(script_path, script_path.with_suffix(".sql.bak"))
 
-        SQL_SCRIPT.write_text(content, encoding="utf-8")
-        modified = datetime.fromtimestamp(SQL_SCRIPT.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        script_path.write_text(content, encoding="utf-8")
+        modified = datetime.fromtimestamp(script_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         return {"success": True, "message": "脚本保存成功", "modified": modified}
     except Exception as exc:
         return {"success": False, "error": str(exc)}
 
 
-def _run_script(task_id: str, logger: ProcessLogger, logs: list[str], app_config: AppConfig) -> None:
+def _run_script(
+    task_id: str,
+    logger: ProcessLogger,
+    logs: list[str],
+    app_config: AppConfig,
+    script_path: Path,
+    script_type: str,
+) -> None:
     temp_work_dir: Path | None = None
+    label = SCRIPT_LABELS.get(script_type, script_type)
     try:
-        logger.info("开始执行 SQL 脚本...")
-        if app_config.warehouse_type == "metrix":
+        logger.info(f"开始执行{label}...")
+        if script_type == "celldata":
+            _run_celldata_script(script_path, app_config, logger)
+        elif app_config.warehouse_type == "metrix":
             from app.services.pipeline import run_report_sql
 
             run_report_sql(app_config, logger)
@@ -93,12 +133,18 @@ def _run_script(task_id: str, logger: ProcessLogger, logs: list[str], app_config
             temp_work_dir.mkdir(parents=True, exist_ok=True)
             processor = DataProcessor(app_config, temp_work_dir, logger)
             processor._execute_sql_script()
-        logger.success("SQL 脚本执行完成")
+        logger.success(f"{label}执行完成")
         set_task_stage(task_id, "completed", logs, status="completed")
     except Exception as exc:
-        logger.error(f"SQL 脚本执行失败: {exc}")
+        logger.error(f"{label}执行失败: {exc}")
         set_task_stage(task_id, "failed", logs, status="failed")
     finally:
         if temp_work_dir and temp_work_dir.exists():
             shutil.rmtree(temp_work_dir, ignore_errors=True)
         state.reset_task_lock()
+
+
+def _run_celldata_script(script_path: Path, app_config: AppConfig, logger: ProcessLogger) -> None:
+    from app.services.cell_data import execute_celldata_script
+
+    execute_celldata_script(script_path, app_config, logger)

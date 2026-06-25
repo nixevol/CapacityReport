@@ -868,3 +868,14 @@
 - 修复：`processor.py::_convert_datetime_column` 在 ISO8601 解析前先用正则剥离时区后缀（`+08:00`、`-05:30`、`Z`）和 `T` 分隔符，再按朴素日期时间解析，保留原始壁钟时间。
 - SQL 清理：`ReportScript.sql` 删除 4G/5G 的 `DATE_ADD(INTERVAL 8 HOUR)` 补偿语句，因为数据导入阶段已正确保留本地时间，不再需要 SQL 层面修正。
 - 验证：`python -m compileall -q app` 通过。
+
+## 2026-06-25：CellData 脚本编辑与跨库表复制
+
+- 新增 `CellDataScript.sql` 脚本路径（`config.py::CELLDATA_SCRIPT = BASE_DIR / "CellDataScript.sql"`），与 `ReportScript.sql` 并列，用于 CellData 数据导入后执行的 SQL。
+- 脚本 API（`script.py`）三个接口（读取/保存/执行）新增 `script_type` 参数（`report` / `celldata`），默认 `report` 保持向后兼容；CellData 脚本执行在 CellData 数据库上下文中运行。
+- 新增 `cell_data.py::execute_celldata_script()`：在 CellData MySQL 库上执行 CellDataScript.sql，复用 `DataProcessor.parse_sql_script` 解析。
+- 新增 `cell_data.py::copy_celldata_tables_to_capacity()`：列出 CellData 库所有表，逐表 `SHOW CREATE TABLE` → 目标库建表 → 分批 `SELECT * / INSERT INTO` 复制数据；两库相同时跳过。
+- CellData 独立处理（远程 / 本地上传）完成后自动执行 CellData 脚本（不复制表）。
+- 容量处理集成（`tasks.py` / `remote.py` 的 `_try_refresh_cell_data`）：CellData 数据更新 → 执行 CellData 脚本 → 复制表到容量库 → 后续 ReportScript.sql 可直接引用 CellData 表。
+- 前端脚本编辑页（`ScriptPanel.vue`）编辑器上方新增 Naive UI segment tabs 切换「报表脚本」和「CellData 脚本」；切换时检查未保存状态、加载对应脚本内容；保存和运行按钮跟随当前脚本类型。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过；构建产物已清理。

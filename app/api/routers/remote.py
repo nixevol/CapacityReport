@@ -14,7 +14,8 @@ from app.api.routers.task_runtime import (
 )
 from app.config import AppConfig, CACHE_DIR, RemoteDataConfig
 from app.processor import DataProcessor, ProcessLogger
-from app.services.cell_data import refresh_cell_data
+from app.config import CELLDATA_SCRIPT
+from app.services.cell_data import copy_celldata_tables_to_capacity, execute_celldata_script, refresh_cell_data
 from app.services.license import LicenseError, check_processing_allowed
 from app.services.platform import PlatformStorageDownloader, make_source_downloader
 from app.services.pipeline import RESULT_TABLES, run_import_and_report
@@ -221,6 +222,8 @@ def _try_refresh_cell_data(app_config: AppConfig, work_dir: Path, logger: Proces
             f"CellData 更新完成：{result.imported_rows} 行"
             f"（解析 {result.parsed_rows}，跳过 {result.skipped_rows}）"
         )
+        execute_celldata_script(CELLDATA_SCRIPT, app_config, logger)
+        copy_celldata_tables_to_capacity(app_config, logger)
     except Exception as exc:
         logger.warning(f"CellData 更新失败，继续容量处理: {exc}")
 
