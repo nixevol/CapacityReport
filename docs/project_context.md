@@ -861,3 +861,10 @@
 - 消除标记-删除模式：4G 部分的 DLPRB_MAX 和 CCE_MAX、5G 部分的 DLPRB_MAX 原先各用 `ADD COLUMN insert → UPDATE...JOIN → ADD INDEX → DELETE → DROP COLUMN` 五步标记并删除重复行，现改为 `INSERT...WHERE NOT EXISTS` 一步完成，共减少约 15 条冗余 DDL/DML。这正是导致 CCE_MAX JOIN 4G_MAX UPDATE 跑 >1 小时的直接原因。
 - 标识符规范化：全文所有表名和列名统一加反引号，避免以数字开头的表名（如 `4G`、`5G`）和中文列名在不同 MySQL 版本或 SQL 模式下引起解析歧义。
 - 业务逻辑未变：忙时取法（ULPRB > DLPRB > CCE 优先级）、结果表聚合和 IFNULL 归零逻辑均保持原样。
+
+## 2026-06-25：修复 ISO8601 日期时间导入时区偏移
+
+- 根因：源 CSV 中日期时间格式为 `2026-06-15T00:00:00+08:00`（ISO 8601 带时区），`pd.to_datetime(format='ISO8601')` 会自动转为 UTC（`2026-06-14 16:00:00`），导致入库后比实际壁钟时间偏移 -8 小时。
+- 修复：`processor.py::_convert_datetime_column` 在 ISO8601 解析前先用正则剥离时区后缀（`+08:00`、`-05:30`、`Z`）和 `T` 分隔符，再按朴素日期时间解析，保留原始壁钟时间。
+- SQL 清理：`ReportScript.sql` 删除 4G/5G 的 `DATE_ADD(INTERVAL 8 HOUR)` 补偿语句，因为数据导入阶段已正确保留本地时间，不再需要 SQL 层面修正。
+- 验证：`python -m compileall -q app` 通过。

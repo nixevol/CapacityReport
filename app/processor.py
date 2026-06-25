@@ -754,7 +754,10 @@ class DataProcessor:
                 
                 try:
                     if fmt == 'ISO8601':
-                        temp_parsed = pd.to_datetime(series[remaining], errors='coerce', format='ISO8601')
+                        raw = series[remaining].astype(str)
+                        raw = raw.str.replace(r'(?:Z|[+-]\d{2}:\d{2})\s*$', '', regex=True)
+                        raw = raw.str.replace('T', ' ', regex=False)
+                        temp_parsed = pd.to_datetime(raw, errors='coerce')
                     else:
                         temp_parsed = pd.to_datetime(series[remaining], errors='coerce', format=fmt)
                     
