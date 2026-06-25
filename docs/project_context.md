@@ -854,3 +854,10 @@
 - 前端阶段标签：`stageLabels` 新增 `cell_data: '更新 CellData...'`；`importing` 标签从"上传数据中..."改为"导入数据中..."以避免与文件上传混淆。
 - 前端结果摘要：CellData 独立处理或容量处理完成后，处理进度区域显示成功摘要（文件数、导入行数、跳过行数、耗时）；`TaskStatus` 类型新增 `result?: CellDataResult` 字段。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过；构建产物已清理。
+
+## 2026-06-25：ReportScript.sql 性能优化与标识符规范化
+
+- Buffer Pool：脚本头部新增 `SET GLOBAL innodb_buffer_pool_size = 1073741824`（1 GB），原值 128 MB 不足以容纳 4G/5G 各 500 万行的工作集，导致 UPDATE...JOIN 等操作变成磁盘随机 I/O。
+- 消除标记-删除模式：4G 部分的 DLPRB_MAX 和 CCE_MAX、5G 部分的 DLPRB_MAX 原先各用 `ADD COLUMN insert → UPDATE...JOIN → ADD INDEX → DELETE → DROP COLUMN` 五步标记并删除重复行，现改为 `INSERT...WHERE NOT EXISTS` 一步完成，共减少约 15 条冗余 DDL/DML。这正是导致 CCE_MAX JOIN 4G_MAX UPDATE 跑 >1 小时的直接原因。
+- 标识符规范化：全文所有表名和列名统一加反引号，避免以数字开头的表名（如 `4G`、`5G`）和中文列名在不同 MySQL 版本或 SQL 模式下引起解析歧义。
+- 业务逻辑未变：忙时取法（ULPRB > DLPRB > CCE 优先级）、结果表聚合和 IFNULL 归零逻辑均保持原样。
