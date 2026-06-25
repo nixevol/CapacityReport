@@ -32,9 +32,9 @@ def _resolve_script_path(script_type: str) -> Path:
 
 
 @router.get("/api/script/content")
-async def get_script_content(type: str = Query("report")):
-    script_path = _resolve_script_path(type)
-    label = SCRIPT_LABELS.get(type, type)
+async def get_script_content(script_type: str = Query("report")):
+    script_path = _resolve_script_path(script_type)
+    label = SCRIPT_LABELS.get(script_type, script_type)
     try:
         if not script_path.exists():
             return {
@@ -42,7 +42,7 @@ async def get_script_content(type: str = Query("report")):
                 "content": f"# {label}文件不存在，请在此编写脚本\n",
                 "modified": None,
                 "path": str(script_path),
-                "script_type": type,
+                "script_type": script_type,
             }
 
         modified = datetime.fromtimestamp(script_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
@@ -51,7 +51,7 @@ async def get_script_content(type: str = Query("report")):
             "content": script_path.read_text(encoding="utf-8"),
             "modified": modified,
             "path": str(script_path),
-            "script_type": type,
+            "script_type": script_type,
         }
     except Exception as exc:
         return {"success": False, "error": str(exc)}

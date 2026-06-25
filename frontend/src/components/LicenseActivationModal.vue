@@ -17,7 +17,7 @@
         :disabled="activationLoading"
       />
       <div class="license-metrix-toggle">
-        <n-switch v-model:value="metrixEnabled" :loading="savingMetrix" size="small" @update:value="toggleMetrix" />
+        <n-switch :value="metrixEnabled" :loading="savingMetrix" size="small" @update:value="toggleMetrix" />
         <span class="license-metrix-label">启用 Metrix 平台</span>
       </div>
     </div>
@@ -72,14 +72,14 @@ async function loadMetrixEnabled() {
   }
 }
 
-async function toggleMetrix(enabled: boolean) {
+async function toggleMetrix(target: boolean) {
+  if (target === metrixEnabled.value) return;
   savingMetrix.value = true;
   try {
-    await apiPost('/api/config/metrix-enabled', { enabled });
-    metrixEnabled.value = enabled;
-    emit('metrixChanged', enabled);
+    await apiPost('/api/config/metrix-enabled', { enabled: target });
+    metrixEnabled.value = target;
+    emit('metrixChanged', target);
   } catch (error) {
-    metrixEnabled.value = !enabled;
     message.error(error instanceof Error ? error.message : '保存失败');
   } finally {
     savingMetrix.value = false;

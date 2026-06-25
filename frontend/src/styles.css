@@ -1547,7 +1547,7 @@ select {
 }
 
 .settings-remote-panel {
-  grid-template-columns: repeat(2, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
 }
 
 .settings-scheduler-panel {
@@ -1556,7 +1556,7 @@ select {
 
 .remote-connection-row {
   display: grid;
-  grid-template-columns: minmax(112px, 0.8fr) minmax(220px, 1.8fr) minmax(110px, 0.8fr) minmax(120px, 0.8fr) minmax(116px, 0.7fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr));
   gap: 12px;
   align-items: start;
 }
@@ -2281,19 +2281,11 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .remote-connection-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .settings-rules-grid {
     grid-template-rows: auto minmax(520px, 1fr);
     align-items: start;
     overflow-x: hidden;
     overflow-y: auto;
-  }
-
-  .settings-remote-panel {
-    grid-template-columns: 1fr;
   }
 
   .settings-tabs .n-tab-pane {

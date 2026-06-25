@@ -682,36 +682,37 @@
     >
       <div class="cell-data-settings-body">
         <section class="cell-data-settings-section">
-          <div class="cell-data-section-title">
-            <strong>高级匹配</strong>
-          </div>
-          <n-grid :cols="12" :x-gap="12">
-            <n-gi :span="4">
-              <n-form-item label="年份目录正则">
-                <n-input v-model:value="cellDataRegexForm.year_dir_regex" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="4">
-              <n-form-item label="月份目录正则">
-                <n-input v-model:value="cellDataRegexForm.month_dir_regex" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="4">
-              <n-form-item label="日期目录正则">
-                <n-input v-model:value="cellDataRegexForm.day_dir_regex" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="6">
-              <n-form-item label="文件名正则">
-                <n-input v-model:value="cellDataRegexForm.file_name_regex" />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="6">
-              <n-form-item label="时间戳正则">
-                <n-input v-model:value="cellDataRegexForm.file_time_regex" />
-              </n-form-item>
-            </n-gi>
-          </n-grid>
+          <n-collapse>
+            <n-collapse-item title="高级匹配" name="advanced">
+              <n-grid :cols="12" :x-gap="12">
+                <n-gi :span="4">
+                  <n-form-item label="年份目录正则">
+                    <n-input v-model:value="cellDataRegexForm.year_dir_regex" />
+                  </n-form-item>
+                </n-gi>
+                <n-gi :span="4">
+                  <n-form-item label="月份目录正则">
+                    <n-input v-model:value="cellDataRegexForm.month_dir_regex" />
+                  </n-form-item>
+                </n-gi>
+                <n-gi :span="4">
+                  <n-form-item label="日期目录正则">
+                    <n-input v-model:value="cellDataRegexForm.day_dir_regex" />
+                  </n-form-item>
+                </n-gi>
+                <n-gi :span="6">
+                  <n-form-item label="文件名正则">
+                    <n-input v-model:value="cellDataRegexForm.file_name_regex" />
+                  </n-form-item>
+                </n-gi>
+                <n-gi :span="6">
+                  <n-form-item label="时间戳正则">
+                    <n-input v-model:value="cellDataRegexForm.file_time_regex" />
+                  </n-form-item>
+                </n-gi>
+              </n-grid>
+            </n-collapse-item>
+          </n-collapse>
         </section>
 
         <section class="cell-data-settings-section">

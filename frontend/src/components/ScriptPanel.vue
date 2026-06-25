@@ -79,6 +79,7 @@ const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 const disposables: monaco.IDisposable[] = [];
 const content = ref('');
 const originalContent = ref('');
+const scriptPath = ref('');
 const modified = ref<string | null>(null);
 const cursorText = ref('行 1，列 1');
 const lineCount = ref(1);
@@ -125,7 +126,7 @@ const currentLabel = computed(() => SCRIPT_OPTIONS.find(o => o.key === scriptTyp
 
 onMounted(async () => {
   setPageHeader({
-    subtitle: computed(() => currentLabel.value),
+    subtitle: computed(() => scriptPath.value || currentLabel.value),
     actions: [
       { key: 'script-modified', kind: 'text', label: modifiedText },
       {
@@ -228,19 +229,21 @@ async function switchScript(type: string) {
     const confirm = window.confirm(`当前脚本有未保存的修改，是否放弃？`);
     if (!confirm) return;
   }
-  scriptType.value = type;
-  await loadScript();
+  await loadScript(type);
 }
 
-async function loadScript() {
+async function loadScript(type?: string) {
+  const target = type || scriptType.value;
   loading.value = true;
   try {
-    const result = await apiGet<ScriptContent>(`/api/script/content?type=${scriptType.value}`);
+    const result = await apiGet<ScriptContent & { script_type?: string }>(`/api/script/content?script_type=${target}`);
     if (!result.success) {
       throw new Error(result.error || '加载脚本失败');
     }
-    applyScriptContent(result.content);
+    scriptType.value = target;
+    scriptPath.value = result.path || '';
     modified.value = result.modified;
+    applyScriptContent(result.content);
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载脚本失败');
   } finally {
