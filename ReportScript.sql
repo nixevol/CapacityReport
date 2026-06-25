@@ -580,3 +580,218 @@ DROP TABLE `_rj_yd`;
 DROP TABLE `_rj_gd`;
 DROP TABLE `rj`;
 
+
+# ============================================================
+# 从 sector / cellinfo 富集小区信息
+# ============================================================
+
+
+ALTER TABLE `4G_结果表`
+  ADD COLUMN `扇区` varchar(200) AFTER `小区名称`,
+  ADD COLUMN `物理站` varchar(200) AFTER `扇区`,
+  ADD COLUMN `站型` varchar(50) AFTER `物理站`,
+  ADD COLUMN `频段` varchar(50) AFTER `站型`,
+  ADD COLUMN `频点` varchar(50) AFTER `频段`,
+  ADD COLUMN `带宽` varchar(20) AFTER `频点`,
+  ADD COLUMN `制式` varchar(50) AFTER `带宽`,
+  ADD COLUMN `功率` varchar(100) AFTER `制式`;
+
+ALTER TABLE `5G_结果表`
+  ADD COLUMN `基站名称` varchar(200) AFTER `NCGI`,
+  ADD COLUMN `扇区` varchar(200) AFTER `基站名称`,
+  ADD COLUMN `物理站` varchar(200) AFTER `扇区`,
+  ADD COLUMN `站型` varchar(50) AFTER `物理站`,
+  ADD COLUMN `频段` varchar(50) AFTER `站型`,
+  ADD COLUMN `频点` varchar(50) AFTER `频段`,
+  ADD COLUMN `带宽` varchar(20) AFTER `频点`,
+  ADD COLUMN `制式` varchar(50) AFTER `带宽`,
+  ADD COLUMN `功率` varchar(100) AFTER `制式`;
+
+
+
+UPDATE `4G_结果表` `t`
+LEFT JOIN `sector` `s` ON `t`.`CGI` = `s`.`CGI`
+SET
+  `t`.`扇区` = `s`.`扇区`,
+  `t`.`物理站` = `s`.`物理站`,
+  `t`.`站型` = `s`.`站型`,
+  `t`.`频段` = `s`.`频段`;
+
+
+UPDATE `4G_结果表` `t`
+LEFT JOIN `cellinfo` `c` ON `t`.`CGI` = `c`.`CGI`
+SET
+  `t`.`频点` = `c`.`频点`,
+  `t`.`带宽` = `c`.`带宽`,
+  `t`.`制式` = `c`.`制式`,
+  `t`.`功率` = `c`.`功率`;
+	
+
+UPDATE `5G_结果表` `t`
+LEFT JOIN `sector` `s` ON `t`.`NCGI` = `s`.`CGI`
+SET
+  `t`.`扇区` = `s`.`扇区`,
+  `t`.`物理站` = `s`.`物理站`,
+  `t`.`站型` = `s`.`站型`,
+  `t`.`频段` = `s`.`频段`;
+
+
+UPDATE `5G_结果表` `t`
+LEFT JOIN `cellinfo` `c` ON `t`.`NCGI` = `c`.`CGI`
+SET
+  `t`.`基站名称` = `c`.`基站名称`,
+  `t`.`频点` = `c`.`频点`,
+  `t`.`带宽` = `c`.`带宽`,
+  `t`.`制式` = `c`.`制式`,
+  `t`.`功率` = `c`.`功率`;
+
+
+
+
+
+
+
+# ============================================================
+# 高负荷小区判定（互斥，利用率优先）
+#   利用率达标 → 用户数达标 = 高负荷；否则 = 利用率预警
+#   利用率不达标 → 流量达标 = 高流量预警；否则 = 正常
+# 是否高负荷小区：仅「高负荷」= 是；两类预警与正常 = 否（预警 ≠ 高负荷）。
+# 门限区分 制式 / 带宽（直接用富集写入结果表的 `制式` `带宽` 列，无需再 JOIN）；不分站型；3DMM 归 TDD(0.5)。
+# 阈值与命中量见 docs/高负荷小区判定_调研记录.md（§8）。
+# ============================================================
+
+ALTER TABLE `4G_结果表` ADD COLUMN `是否高负荷小区` VARCHAR(100);
+ALTER TABLE `4G_结果表` ADD COLUMN `高负荷问题` VARCHAR(50);
+
+ALTER TABLE `4G_结果表` ADD COLUMN `优化建议` TEXT;
+
+ALTER TABLE `5G_结果表` ADD COLUMN `是否高负荷小区` VARCHAR(100);
+ALTER TABLE `5G_结果表` ADD COLUMN `高负荷问题` VARCHAR(50);
+ALTER TABLE `5G_结果表` ADD COLUMN `优化建议` TEXT;
+
+# 4G：利用率 FDD≥0.7 / 其余(TDD、3DMM)≥0.5；用户数(YY-RRC)按带宽 20M=30/15M=25/10M=20/5M=12；
+#     高流量(下行流量GB)按带宽 20M=10/15M=7.5/10M=5/5M=2.5。
+UPDATE `4G_结果表` SET `高负荷问题` = CASE
+  WHEN (`下行PDSCH利用率` >= CASE WHEN `制式` = 'FDD' THEN 0.7 ELSE 0.5 END
+        OR `上行PUSCH利用率` >= CASE WHEN `制式` = 'FDD' THEN 0.7 ELSE 0.5 END)
+    THEN CASE
+      WHEN `YY-RRC连接建立最大用户数` >= CASE `带宽` WHEN '15M' THEN 25 WHEN '10M' THEN 20 WHEN '5M' THEN 12 ELSE 30 END
+        THEN '高负荷'
+      ELSE '利用率预警'
+    END
+  WHEN `下行流量（GB）` >= CASE `带宽` WHEN '15M' THEN 7.5 WHEN '10M' THEN 5 WHEN '5M' THEN 2.5 ELSE 10 END
+    THEN '高流量预警'
+  ELSE NULL
+END;
+
+UPDATE `4G_结果表` SET `是否高负荷小区` = IF(`高负荷问题` = '高负荷', '是', '否');
+
+# 5G：利用率 上行PRB≥0.5 或 下行PRB≥0.7；用户数(RRC平均)按带宽 100M/80M=200/60M=120/30M=90；
+#     高流量(上行GB 或 下行GB)按带宽 100M=5/70、60M=3/43、30M=8/30。
+UPDATE `5G_结果表` SET `高负荷问题` = CASE
+  WHEN (`上行PRB平均利用率` >= 0.5 OR `下行PRB平均利用率` >= 0.7)
+    THEN CASE
+      WHEN `RRC连接平均连接用户数` >= CASE `带宽` WHEN '60M' THEN 120 WHEN '30M' THEN 90 ELSE 200 END
+        THEN '高负荷'
+      ELSE '利用率预警'
+    END
+  WHEN (`5G上行流量（上行PDCP PDU数据量）(GB)` >= CASE `带宽` WHEN '60M' THEN 3 WHEN '30M' THEN 8 ELSE 5 END
+        OR `5G下行流量（下行PDCP成功发送数据量）(GB)` >= CASE `带宽` WHEN '60M' THEN 43 WHEN '30M' THEN 30 ELSE 70 END)
+    THEN '高流量预警'
+  ELSE NULL
+END;
+
+UPDATE `5G_结果表` SET `是否高负荷小区` = IF(`高负荷问题` = '高负荷', '是', '否');
+
+
+# ============================================================
+# 优化建议（仅对 是否高负荷小区='是' 的高负荷小区生成）
+#   分析范围：同扇区(`扇区`) + 同 PLMN（CGI/NCGI 前两段，如 460-00 移动 / 460-15 广电；
+#   不同运营商不可均衡、不视为同扇区）。
+#   在该范围内取“最空闲”小区（`高负荷问题` IS NULL，按 下行利用率→日均流量 升序取一）：
+#     有空闲小区 → 模板1：给出本小区与空闲小区的指标，建议负载均衡；
+#     无空闲小区（同扇区皆 高负荷/利用率预警/高流量预警）→ 模板2：建议人工分析周边小区。
+#   `_idle_4g`/`_idle_5g` 为每个(扇区,PLMN)的最空闲小区缓存表，用后即删。
+# ============================================================
+
+DROP TABLE IF EXISTS `_idle_4g`;
+CREATE TABLE `_idle_4g` (
+  `扇区` varchar(200), `plmn` varchar(20),
+  `cgi` varchar(120), `name` varchar(200), `ul` double, `dl` double, `flow` double, `pwr` varchar(120),
+  INDEX (`扇区`, `plmn`)
+) AS
+SELECT `扇区`, `plmn`, `CGI` AS `cgi`, `小区名称` AS `name`, `上行PUSCH利用率` AS `ul`, `下行PDSCH利用率` AS `dl`, `日均流量（GB）` AS `flow`, `功率` AS `pwr`
+FROM (
+  SELECT `扇区`, SUBSTRING_INDEX(`CGI`, '-', 2) AS `plmn`, `CGI`, `小区名称`,
+         `上行PUSCH利用率`, `下行PDSCH利用率`, `日均流量（GB）`, `功率`,
+         ROW_NUMBER() OVER (PARTITION BY `扇区`, SUBSTRING_INDEX(`CGI`, '-', 2)
+                            ORDER BY `下行PDSCH利用率` ASC, `日均流量（GB）` ASC) AS `rn`
+  FROM `4G_结果表`
+  WHERE `高负荷问题` IS NULL AND `扇区` IS NOT NULL AND `扇区` <> ''
+) `t`
+WHERE `rn` = 1;
+
+UPDATE `4G_结果表` `t`
+LEFT JOIN `_idle_4g` `i` ON `i`.`扇区` = `t`.`扇区` AND `i`.`plmn` = SUBSTRING_INDEX(`t`.`CGI`, '-', 2)
+SET `t`.`优化建议` = CONCAT(
+  '高负荷小区', `t`.`CGI`, '（', IFNULL(`t`.`小区名称`, '-'), '）',
+  '：上行利用率:', ROUND(`t`.`上行PUSCH利用率` * 100, 1), '%',
+  ' 下行利用率:', ROUND(`t`.`下行PDSCH利用率` * 100, 1), '%',
+  ' 日均流量:', ROUND(`t`.`日均流量（GB）`, 2), 'GB',
+  ' 用户数:', ROUND(`t`.`YY-RRC连接建立最大用户数`, 0),
+  ' 当前小区功率:', IFNULL(`t`.`功率`, '-'), '。',
+  IF(`i`.`cgi` IS NOT NULL,
+    CONCAT('存在同覆盖空闲小区:', `i`.`cgi`, '（', IFNULL(`i`.`name`, '-'), '）',
+           '：下行利用率:', ROUND(`i`.`dl` * 100, 1), '%',
+           ' 上行利用率:', ROUND(`i`.`ul` * 100, 1), '%',
+           ' 日均流量:', ROUND(`i`.`flow`, 2), 'GB',
+           ' 小区功率:', IFNULL(`i`.`pwr`, '-'),
+           '，建议将本小区部分负荷均衡至该空闲小区（负载均衡/邻区参数优化）。'),
+    '经分析，本站同扇区（同PLMN）小区均为高负荷或预警状态、无空闲可均衡小区，建议人工分析周边小区是否可均衡。'
+  )
+)
+WHERE `t`.`是否高负荷小区` = '是';
+
+DROP TABLE IF EXISTS `_idle_4g`;
+
+
+DROP TABLE IF EXISTS `_idle_5g`;
+CREATE TABLE `_idle_5g` (
+  `扇区` varchar(200), `plmn` varchar(20),
+  `cgi` varchar(120), `name` varchar(200), `ul` double, `dl` double, `flow` double, `pwr` varchar(120),
+  INDEX (`扇区`, `plmn`)
+) AS
+SELECT `扇区`, `plmn`, `NCGI` AS `cgi`, `CU小区配置名称` AS `name`, `上行PRB平均利用率` AS `ul`, `下行PRB平均利用率` AS `dl`, `日均流量（GB）` AS `flow`, `功率` AS `pwr`
+FROM (
+  SELECT `扇区`, SUBSTRING_INDEX(`NCGI`, '-', 2) AS `plmn`, `NCGI`, `CU小区配置名称`,
+         `上行PRB平均利用率`, `下行PRB平均利用率`, `日均流量（GB）`, `功率`,
+         ROW_NUMBER() OVER (PARTITION BY `扇区`, SUBSTRING_INDEX(`NCGI`, '-', 2)
+                            ORDER BY `下行PRB平均利用率` ASC, `日均流量（GB）` ASC) AS `rn`
+  FROM `5G_结果表`
+  WHERE `高负荷问题` IS NULL AND `扇区` IS NOT NULL AND `扇区` <> ''
+) `t`
+WHERE `rn` = 1;
+
+UPDATE `5G_结果表` `t`
+LEFT JOIN `_idle_5g` `i` ON `i`.`扇区` = `t`.`扇区` AND `i`.`plmn` = SUBSTRING_INDEX(`t`.`NCGI`, '-', 2)
+SET `t`.`优化建议` = CONCAT(
+  '高负荷小区', `t`.`NCGI`, '（', IFNULL(`t`.`CU小区配置名称`, '-'), '）',
+  '：上行PRB利用率:', ROUND(`t`.`上行PRB平均利用率` * 100, 1), '%',
+  ' 下行PRB利用率:', ROUND(`t`.`下行PRB平均利用率` * 100, 1), '%',
+  ' 日均流量:', ROUND(`t`.`日均流量（GB）`, 2), 'GB',
+  ' 用户数:', ROUND(`t`.`RRC连接平均连接用户数`, 0),
+  ' 当前小区功率:', IFNULL(`t`.`功率`, '-'), '。',
+  IF(`i`.`cgi` IS NOT NULL,
+    CONCAT('存在同覆盖空闲小区:', `i`.`cgi`, '（', IFNULL(`i`.`name`, '-'), '）',
+           '：下行PRB利用率:', ROUND(`i`.`dl` * 100, 1), '%',
+           ' 上行PRB利用率:', ROUND(`i`.`ul` * 100, 1), '%',
+           ' 日均流量:', ROUND(`i`.`flow`, 2), 'GB',
+           ' 小区功率:', IFNULL(`i`.`pwr`, '-'),
+           '，建议将本小区部分负荷均衡至该空闲小区（负载均衡/邻区参数优化）。'),
+    '经分析，本站同扇区（同PLMN）小区均为高负荷或预警状态、无空闲可均衡小区，建议人工分析周边小区是否可均衡。'
+  )
+)
+WHERE `t`.`是否高负荷小区` = '是';
+
+DROP TABLE IF EXISTS `_idle_5g`;
+
