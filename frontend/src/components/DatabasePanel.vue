@@ -808,8 +808,11 @@ async function saveEditRow() {
   if (!selectedTable.value || !editRowOriginal.value || savingRow.value) return;
   savingRow.value = true;
   try {
-    const values: Record<string, string> = {};
-    editRowKeys.value.forEach(key => { values[key] = editRowForm[key] ?? ''; });
+    const values: Record<string, string | null> = {};
+    editRowKeys.value.forEach(key => {
+      const cell = editRowForm[key] ?? '';
+      values[key] = cell === '' ? null : cell;
+    });
     await apiPost('/api/database/table/row/update', {
       table_name: selectedTable.value,
       database_source: selectedDatabaseSource.value,

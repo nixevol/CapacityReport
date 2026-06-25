@@ -893,7 +893,7 @@
 
 数据管理（`frontend/src/components/DatabasePanel.vue` + `app/api/routers/database.py` + `app/database.py` + `app/warehouse.py`）：
 - 数据表列宽可拖拽：`n-data-table` 每列加 `resizable + width`，`scroll-x` 计入新增操作列宽度。
-- 新增固定右侧「操作」列：每行「编辑 / 删除」。编辑弹窗按列字段逐项填写后保存；删除二次确认；操作后自动刷新当前页。
+- 新增固定右侧「操作」列：每行「编辑 / 删除」。编辑弹窗按列字段逐项填写后保存（清空某字段=写入 NULL，前端空串→`null`，后端 `None`→SQL `NULL`）；删除二次确认；操作后自动刷新当前页。
 - 行定位策略：以「整行原值」作为 WHERE 条件 + `LIMIT 1`（NULL 用 `IS NULL`），无主键表也能精确改/删单行、避免误伤重复行。后端 `DatabaseManager.update_row/delete_row`（参数化）与 `MetrixWarehouse.update_row/delete_row`（经 `execute_sql` 字面量 SQL）。
 - 工具栏新增「模板」「导入」（在 刷新/清空/删除 同组）：模板下载当前表字段的 CSV 表头（`POST /api/database/table/template`，FileResponse）；导入上传 CSV（`POST /api/database/table/import`，multipart，sync def 走线程池）。**导入按模板校验**：CSV 表头必须与表字段完全一致，缺字段/多字段一律 400 失败；通过后追加导入（`DatabaseManager.import_csv` 走 `bulk_insert`；Metrix 走平台 `/import` mode=append、create_table=false）。
 - 新接口均支持 `database_source`(main/cell_data) 双库；前端用 `client.upload`(multipart) 导入、`download`(POST) 下模板。
