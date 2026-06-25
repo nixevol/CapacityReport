@@ -836,3 +836,8 @@
 - `app/history.py`、`app/processor.py`、`app/api/routers/task_runtime.py` 中的异常诊断从直接 `print()` 改为模块级 `logging`，避免后台任务和历史清理在 stdout 中产生零散噪音，同时保留必要警告信息。
 - `app/main.py` 中的启动横幅 `print()` 保留，仍用于命令行直接启动时提示版本、配置更新时间和访问地址。
 - 验证：`CapacityReport\.venv\Scripts\python.exe -m compileall -q app` 通过；`frontend` `npx vue-tsc --noEmit --noUnusedLocals --noUnusedParameters` 通过。
+ 
+## 2026-06-25：收敛上传文件相对路径
+
+- 新增 `app.utils.files.safe_relative_path()`，容量数据上传和 CellData 本地上传保存文件前统一过滤空片段、`.` 与 `..`，避免客户端文件名或 `webkitRelativePath` 中的路径穿越片段写出任务工作目录，同时保留合法的文件夹层级。
+- 验证：`safe_relative_path` 典型路径断言通过；`python -m compileall -q app` 通过；`frontend` `npm run build` 通过；构建产物已清理。
