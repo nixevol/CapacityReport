@@ -1,9 +1,11 @@
+import csv
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
@@ -179,6 +181,129 @@ def drop_all_tables(database_source: DatabaseSource = Body("main", embed=True)):
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/api/database/table/row/update")
+def update_table_row(
+    table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+    identifier: dict = Body(...),
+    values: dict = Body(...),
+):
+    if not identifier:
+        raise HTTPException(status_code=400, detail="缺少行定位信息")
+    db = _db(database_source)
+    try:
+        affected = db.update_row(table_name, identifier, values)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if affected == 0:
+        raise HTTPException(status_code=404, detail="未找到匹配的数据行，可能已被修改或删除")
+    return {"success": True, "message": "已更新该行", "affected_rows": affected}
+
+
+@router.post("/api/database/table/row/delete")
+def delete_table_row(
+    table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+    identifier: dict = Body(...),
+):
+    if not identifier:
+        raise HTTPException(status_code=400, detail="缺少行定位信息")
+    db = _db(database_source)
+    try:
+        affected = db.delete_row(table_name, identifier)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if affected == 0:
+        raise HTTPException(status_code=404, detail="未找到匹配的数据行，可能已被删除")
+    return {"success": True, "message": "已删除该行", "affected_rows": affected}
+
+
+def _table_columns(db, table_name: str) -> list[str]:
+    info = db.get_table_info(table_name)
+    return [str(column["Field"]) for column in info.get("columns", [])]
+
+
+@router.post("/api/database/table/template")
+def download_table_template(
+    table_name: str = Body(..., embed=True),
+    database_source: DatabaseSource = Body("main"),
+):
+    db = _db(database_source)
+    try:
+        columns = _table_columns(db, table_name)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not columns:
+        raise HTTPException(status_code=400, detail="无法获取表字段，无法生成模板")
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filepath = CACHE_DIR / f"{table_name}_template_{timestamp}.csv"
+    try:
+        with filepath.open("w", encoding="utf-8-sig", newline="") as handle:
+            csv.writer(handle).writerow(columns)
+    except Exception:
+        remove_file_safely(filepath)
+        raise
+    return FileResponse(
+        path=str(filepath),
+        filename=f"{table_name}_模板.csv",
+        media_type="text/csv",
+        background=BackgroundTask(remove_file_safely, filepath),
+    )
+
+
+def _read_csv_header(path: Path) -> list[str]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.reader(handle):
+            return [str(cell).strip() for cell in row]
+    return []
+
+
+# Sync def so FastAPI runs it in a threadpool: file read + DB insert are blocking.
+@router.post("/api/database/table/import")
+def import_table_csv(
+    file: UploadFile = File(...),
+    table_name: str = Form(...),
+    database_source: str = Form("main"),
+):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="仅支持 CSV 格式文件")
+    db = _db(database_source)
+    try:
+        columns = _table_columns(db, table_name)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not columns:
+        raise HTTPException(status_code=400, detail="无法获取表字段")
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    tmp_path = CACHE_DIR / f"import_{timestamp}.csv"
+    tmp_path.write_bytes(file.file.read())
+    try:
+        header = _read_csv_header(tmp_path)
+        if not header:
+            raise HTTPException(status_code=400, detail="CSV 文件为空或缺少表头")
+        missing = [name for name in columns if name not in header]
+        extra = [name for name in header if name not in columns]
+        if missing or extra:
+            parts = []
+            if missing:
+                parts.append("缺少字段: " + ", ".join(missing))
+            if extra:
+                parts.append("多余字段: " + ", ".join(extra))
+            raise HTTPException(status_code=400, detail="CSV 字段与模板不一致，导入失败。" + "；".join(parts))
+        imported = db.import_csv(str(tmp_path), table_name)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        remove_file_safely(tmp_path)
+    return {"success": True, "message": f"导入成功，共 {imported} 行", "imported_rows": imported}
 
 
 @router.post("/api/database/execute")

@@ -9,6 +9,7 @@ query_table / truncate_table / drop_table / drop_all_tables / execute_sql。
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import AppConfig
@@ -32,6 +33,10 @@ def _quote_ident(name: str) -> str:
 
 def _quote_value(value: str) -> str:
     return "'" + str(value).replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def _sql_literal(value: Any) -> str:
+    return "NULL" if value is None else _quote_value(str(value))
 
 
 class MetrixWarehouse:
@@ -152,6 +157,41 @@ class MetrixWarehouse:
         drop_sql = "".join(f"DROP TABLE IF EXISTS {_quote_ident(t)};\n" for t in tables)
         self._run(drop_sql)
         return {"success": True, "dropped_count": len(tables), "tables": tables}
+
+    def _row_where(self, identifier: Dict[str, Any]) -> str:
+        parts = [
+            f"{_quote_ident(col)} IS NULL" if val is None else f"{_quote_ident(col)} = {_sql_literal(val)}"
+            for col, val in identifier.items()
+        ]
+        return " AND ".join(parts) if parts else "1 = 0"
+
+    def update_row(self, table_name: str, identifier: Dict[str, Any], values: Dict[str, Any]) -> int:
+        if not values:
+            return 0
+        set_clause = ", ".join(f"{_quote_ident(col)} = {_sql_literal(val)}" for col, val in values.items())
+        sql = f"UPDATE {_quote_ident(table_name)} SET {set_clause} WHERE {self._row_where(identifier)} LIMIT 1"
+        ok, result = self.execute_sql(sql)
+        if not ok:
+            raise RuntimeError(str(result))
+        return int(result.get("affected_rows", 0)) if isinstance(result, dict) else 0
+
+    def delete_row(self, table_name: str, identifier: Dict[str, Any]) -> int:
+        sql = f"DELETE FROM {_quote_ident(table_name)} WHERE {self._row_where(identifier)} LIMIT 1"
+        ok, result = self.execute_sql(sql)
+        if not ok:
+            raise RuntimeError(str(result))
+        return int(result.get("affected_rows", 0)) if isinstance(result, dict) else 0
+
+    def import_csv(self, file_path: str, table_name: str) -> int:
+        """走 Metrix 平台导入 API 追加导入到已存在的表（字段映射由平台按列名处理）。"""
+        job_id = self.client.import_csv(
+            self.conn_id, table_name, Path(file_path), mode="append",
+            database=self.database, create_table=False,
+        )
+        job = self.client.wait_job(job_id)
+        if job.get("status") != "success":
+            raise RuntimeError(job.get("error_code") or job.get("status") or "导入失败")
+        return int(job.get("row_count") or 0)
 
     def execute_sql(self, sql: str) -> Tuple[bool, Any]:
         try:

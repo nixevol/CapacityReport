@@ -1,6 +1,7 @@
 """
 数据库连接与操作模块
 """
+import csv
 import pymysql
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
@@ -199,6 +200,62 @@ class DatabaseManager:
                     "total_pages": (total + page_size - 1) // page_size
                 }
     
+    def _row_conditions(self, identifier: Dict[str, Any]) -> Tuple[str, List[Any]]:
+        """按整行原值构造 WHERE：NULL 用 IS NULL；调用方再加 LIMIT 1 只影响单行。"""
+        parts: List[str] = []
+        params: List[Any] = []
+        for col, val in identifier.items():
+            if val is None:
+                parts.append(f"`{col}` IS NULL")
+            else:
+                parts.append(f"`{col}` = %s")
+                params.append(val)
+        return (" AND ".join(parts) if parts else "1 = 0"), params
+
+    def update_row(self, table_name: str, identifier: Dict[str, Any], values: Dict[str, Any]) -> int:
+        """更新单行：按 identifier(原始整行) 定位、LIMIT 1，避免影响重复行。返回影响行数。"""
+        if not values:
+            return 0
+        set_clause = ", ".join(f"`{col}` = %s" for col in values)
+        set_params = list(values.values())
+        where_clause, where_params = self._row_conditions(identifier)
+        sql = f"UPDATE `{table_name}` SET {set_clause} WHERE {where_clause} LIMIT 1"
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, set_params + where_params)
+                conn.commit()
+                return cursor.rowcount
+
+    def delete_row(self, table_name: str, identifier: Dict[str, Any]) -> int:
+        """删除单行：按 identifier(原始整行) 定位、LIMIT 1。返回影响行数。"""
+        where_clause, where_params = self._row_conditions(identifier)
+        sql = f"DELETE FROM `{table_name}` WHERE {where_clause} LIMIT 1"
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, where_params)
+                conn.commit()
+                return cursor.rowcount
+
+    def import_csv(self, file_path: str, table_name: str) -> int:
+        """按 CSV 表头列追加导入（列须与表字段一致，由调用方校验）。返回导入行数。"""
+        with open(file_path, "r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.reader(handle)
+            try:
+                header = next(reader)
+            except StopIteration:
+                return 0
+            columns = [str(name).strip() for name in header]
+            width = len(columns)
+            data: List[Tuple] = []
+            for row in reader:
+                if not any(str(cell).strip() for cell in row):
+                    continue
+                cells = list(row[:width]) + [""] * (width - len(row))
+                data.append(tuple(cells))
+        if not data:
+            return 0
+        return self.bulk_insert(table_name, columns, data)
+
     def truncate_table(self, table_name: str) -> bool:
         """清空表"""
         with self.get_connection() as conn:

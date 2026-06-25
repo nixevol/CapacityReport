@@ -253,37 +253,58 @@ class CellDataProcessor:
     def _parse_zip_files(self, local_files: list[tuple[SelectedZip, Path]], result: CellDataResult) -> list[dict[str, str]]:
         mapping = self.config.mapping
         key_config = mapping["key"]
+        key_field = str(key_config["field"])
         rows_by_key: dict[str, dict[str, str]] = {}
+        self._log(f"开始解压并解析 {len(local_files)} 个 ZIP 文件...")
         for selected, local_path in local_files:
+            band_label = selected.band or "未识别频段"
+            size_kb = local_path.stat().st_size / 1024 if local_path.exists() else 0
+            self._log(f"[{band_label}] 解压 {local_path.name}（{size_kb:.0f} KB）...")
+            zip_parsed_before = result.parsed_rows
+            zip_skipped_before = result.skipped_rows
             with zipfile.ZipFile(local_path) as zf:
                 sources = list(mapping["sources"])
-                for info in zf.infolist():
+                csv_entries = [info for info in zf.infolist() if Path(info.filename).name.lower().endswith(".csv")]
+                self._log(f"  压缩包内含 {len(csv_entries)} 个 CSV 文件")
+                for info in csv_entries:
                     name = Path(info.filename).name
-                    if not name.lower().endswith(".csv"):
-                        continue
                     matching_sources = [
                         source
                         for source in sources
                         if name.startswith(source["file_prefix"]) and (not selected.band or source["band"] == selected.band)
                     ]
                     if not matching_sources:
+                        self._log(f"  跳过未匹配规则的文件: {name}")
                         continue
                     if not selected.band and len(matching_sources) > 1:
-                        self._log(f"跳过无法识别频段的文件: {name}")
+                        self._log(f"  跳过无法识别频段的文件: {name}")
                         continue
                     for source in matching_sources:
                         raw = zf.read(info.filename)
                         text = self._decode_csv(raw)
                         reader = csv.DictReader(text.splitlines())
+                        added = 0
+                        skipped = 0
                         for csv_row in reader:
                             row = self._map_row(source["fields"], csv_row)
                             key = self._render_expr(str(key_config["expr"]), row)
                             if not key or "--" in key:
                                 result.skipped_rows += 1
+                                skipped += 1
                                 continue
-                            row[str(key_config["field"])] = key
+                            row[key_field] = key
                             rows_by_key[key] = {column: row.get(column, "") for column in CELLINFO_COLUMNS}
                             result.parsed_rows += 1
+                            added += 1
+                        self._log(f"  解析 {name}（频段 {source.get('band', '') or '通用'}）：有效 {added} 行，跳过 {skipped} 行")
+            self._log(
+                f"[{band_label}] {local_path.name} 解析完成："
+                f"本包有效 {result.parsed_rows - zip_parsed_before} 行，跳过 {result.skipped_rows - zip_skipped_before} 行"
+            )
+        self._log(
+            f"全部解析完成：累计有效 {result.parsed_rows} 行，按 {key_field} 去重后 {len(rows_by_key)} 行，"
+            f"累计跳过 {result.skipped_rows} 行"
+        )
         return list(rows_by_key.values())
 
     def _map_row(self, fields: dict[str, Any], csv_row: dict[str, str]) -> dict[str, str]:
@@ -320,6 +341,7 @@ class CellDataProcessor:
     def _replace_cellinfo(self, rows: list[dict[str, str]]) -> int:
         mysql = self.config.mysql.normalized()
         table = str(self.config.mapping.get("target_table") or "cellinfo")
+        self._log(f"准备写入表 `{table}`（库 {mysql.dbname}@{mysql.host}:{mysql.port}），共 {len(rows)} 行")
         conn = pymysql.connect(
             host=mysql.host,
             port=mysql.port,
@@ -330,22 +352,29 @@ class CellDataProcessor:
             cursorclass=pymysql.cursors.DictCursor,
             autocommit=False,
         )
+        self._log("已连接 CellData 数据库")
         try:
             with conn.cursor() as cursor:
                 self._ensure_cellinfo_table(cursor, table)
+                self._log(f"已确认表结构 `{table}`")
                 cursor.execute(f"TRUNCATE TABLE `{table}`")
+                self._log(f"已清空表 `{table}`（TRUNCATE）")
                 placeholders = ", ".join(["%s"] * len(CELLINFO_COLUMNS))
                 columns = ", ".join(f"`{column}`" for column in CELLINFO_COLUMNS)
                 values = [tuple(row.get(column, "") for column in CELLINFO_COLUMNS) for row in rows]
-                for start in range(0, len(values), 1000):
+                total = len(values)
+                for start in range(0, total, 1000):
                     cursor.executemany(
                         f"INSERT INTO `{table}` ({columns}) VALUES ({placeholders})",
                         values[start:start + 1000],
                     )
+                    self._log(f"写入中 {min(start + 1000, total)}/{total} 行...")
             conn.commit()
+            self._log(f"已提交，成功写入 {len(rows)} 行到 `{table}`")
             return len(rows)
-        except Exception:
+        except Exception as exc:
             conn.rollback()
+            self._log(f"写入失败，已回滚: {exc}")
             raise
         finally:
             conn.close()

@@ -88,6 +88,8 @@
         </div>
         <n-space size="small" class="toolbar-actions">
           <n-button size="small" tertiary :loading="loadingData" @click="reloadTable">刷新</n-button>
+          <n-button size="small" tertiary :loading="downloadingTemplate" @click="downloadTemplate">模板</n-button>
+          <n-button size="small" tertiary type="primary" @click="openImportDialog">导入</n-button>
           <n-button size="small" tertiary type="warning" @click="confirmTruncate">清空</n-button>
           <n-button size="small" tertiary type="error" @click="confirmDrop">删除</n-button>
         </n-space>
@@ -251,12 +253,60 @@
       </button>
     </n-scrollbar>
   </n-modal>
+
+  <n-modal
+    v-model:show="editRowVisible"
+    preset="card"
+    class="row-edit-modal"
+    title="编辑数据行"
+    style="width: min(560px, calc(100vw - 32px))"
+  >
+    <div class="row-edit-body">
+      <div v-for="key in editRowKeys" :key="key" class="row-edit-field">
+        <label class="row-edit-label" :title="key">{{ key }}</label>
+        <n-input v-model:value="editRowForm[key]" type="text" :placeholder="key" />
+      </div>
+    </div>
+    <template #footer>
+      <div class="row-edit-footer">
+        <n-button size="small" @click="editRowVisible = false">取消</n-button>
+        <n-button size="small" type="primary" :loading="savingRow" @click="saveEditRow">保存</n-button>
+      </div>
+    </template>
+  </n-modal>
+
+  <n-modal
+    v-model:show="importDialogVisible"
+    preset="card"
+    class="table-import-modal"
+    title="导入 CSV"
+    style="width: min(460px, calc(100vw - 32px))"
+  >
+    <div class="import-dialog-body">
+      <p class="import-dialog-hint">
+        请先下载「模板」，按模板填写数据后导入到表 <strong>{{ selectedTable }}</strong>。
+        CSV 字段必须与表字段完全一致，否则导入失败。
+      </p>
+      <div class="import-file-row">
+        <input ref="importInputRef" type="file" accept=".csv" class="import-file-input" @change="onImportFileChange" />
+        <n-button size="small" @click="importInputRef?.click()">选择 CSV 文件</n-button>
+        <span class="import-file-name" :title="importFile?.name">{{ importFile?.name || '未选择文件' }}</span>
+      </div>
+      <n-button size="tiny" text type="primary" :loading="downloadingTemplate" @click="downloadTemplate">下载模板</n-button>
+    </div>
+    <template #footer>
+      <div class="import-dialog-footer">
+        <n-button size="small" @click="importDialogVisible = false">取消</n-button>
+        <n-button size="small" type="primary" :loading="importing" :disabled="!importFile" @click="doImport">导入</n-button>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, h, onActivated, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
-import { useDialog, useMessage } from 'naive-ui';
+import { NButton, useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns, DropdownOption } from 'naive-ui';
 import {
   ChevronForwardOutline,
@@ -266,7 +316,7 @@ import {
   TrashOutline
 } from '@vicons/ionicons5';
 
-import { apiGet, apiPost, download } from '../api/client';
+import { apiGet, apiPost, download, upload } from '../api/client';
 import type { ApiMessage, AppConfig, DatabaseInfo, TableData, TableInfo } from '../types';
 import { showDownloadCompleteDialog } from '../composables/downloadFeedback';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
@@ -282,6 +332,7 @@ interface DatabaseSourceOption {
 }
 
 const COLUMN_MIN_WIDTH = 140;
+const ROW_ACTIONS_WIDTH = 120;
 const message = useMessage();
 const dialog = useDialog();
 const databaseInfo = ref<DatabaseInfo | null>(null);
@@ -307,6 +358,16 @@ const xlsxDialogVisible = ref(false);
 const selectedCsvTable = ref('');
 const selectedXlsxTables = ref<string[]>([]);
 const columnSchemaExpanded = ref(false);
+const editRowVisible = ref(false);
+const editRowOriginal = ref<RowData | null>(null);
+const editRowForm = reactive<Record<string, string>>({});
+const editRowKeys = ref<string[]>([]);
+const savingRow = ref(false);
+const downloadingTemplate = ref(false);
+const importDialogVisible = ref(false);
+const importFile = ref<File | null>(null);
+const importing = ref(false);
+const importInputRef = ref<HTMLInputElement | null>(null);
 let tableLoadToken = 0;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
@@ -335,17 +396,31 @@ const columnKeys = computed(() => (
     ? Object.keys(rows.value[0])
     : tableInfo.value?.columns.map(column => String(column.Field || '')).filter(Boolean) || []
 ));
-const dataTableScrollX = computed(() => Math.max(columnKeys.value.length * COLUMN_MIN_WIDTH, COLUMN_MIN_WIDTH));
+const dataTableScrollX = computed(() => (
+  Math.max(columnKeys.value.length * COLUMN_MIN_WIDTH, COLUMN_MIN_WIDTH) + ROW_ACTIONS_WIDTH
+));
 const columns = computed<DataTableColumns<RowData>>(() => {
-  const keys = columnKeys.value;
-
-  return keys.map(key => ({
+  const dataColumns: DataTableColumns<RowData> = columnKeys.value.map(key => ({
     title: key,
     key,
+    width: COLUMN_MIN_WIDTH,
     minWidth: COLUMN_MIN_WIDTH,
+    resizable: true,
     ellipsis: { tooltip: true },
     render: row => formatCell(row[key])
   }));
+  dataColumns.push({
+    title: '操作',
+    key: '__row_actions__',
+    width: ROW_ACTIONS_WIDTH,
+    fixed: 'right',
+    align: 'center',
+    render: row => h('div', { class: 'row-action-cell' }, [
+      h(NButton, { size: 'tiny', quaternary: true, type: 'primary', onClick: () => openEditRow(row) }, { default: () => '编辑' }),
+      h(NButton, { size: 'tiny', quaternary: true, type: 'error', onClick: () => confirmDeleteRow(row) }, { default: () => '删除' })
+    ])
+  });
+  return dataColumns;
 });
 
 onMounted(() => {
@@ -712,6 +787,119 @@ function formatCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+function cellToInput(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function openEditRow(row: RowData) {
+  editRowOriginal.value = { ...row };
+  const keys = columnKeys.value;
+  editRowKeys.value = keys;
+  Object.keys(editRowForm).forEach(key => delete editRowForm[key]);
+  keys.forEach(key => { editRowForm[key] = cellToInput(row[key]); });
+  editRowVisible.value = true;
+}
+
+async function saveEditRow() {
+  if (!selectedTable.value || !editRowOriginal.value || savingRow.value) return;
+  savingRow.value = true;
+  try {
+    const values: Record<string, string> = {};
+    editRowKeys.value.forEach(key => { values[key] = editRowForm[key] ?? ''; });
+    await apiPost('/api/database/table/row/update', {
+      table_name: selectedTable.value,
+      database_source: selectedDatabaseSource.value,
+      identifier: editRowOriginal.value,
+      values
+    });
+    message.success('已更新该行');
+    editRowVisible.value = false;
+    await loadTableData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '更新失败');
+  } finally {
+    savingRow.value = false;
+  }
+}
+
+function confirmDeleteRow(row: RowData) {
+  dialog.warning({
+    title: '删除数据行',
+    content: '确认删除选中的这一行数据？',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: () => deleteRow(row)
+  });
+}
+
+async function deleteRow(row: RowData) {
+  if (!selectedTable.value) return;
+  try {
+    await apiPost('/api/database/table/row/delete', {
+      table_name: selectedTable.value,
+      database_source: selectedDatabaseSource.value,
+      identifier: { ...row }
+    });
+    message.success('已删除该行');
+    await loadTableData();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败');
+  }
+}
+
+async function downloadTemplate() {
+  if (!selectedTable.value || downloadingTemplate.value) return;
+  downloadingTemplate.value = true;
+  try {
+    const filename = `${selectedTable.value}_模板.csv`;
+    const result = await download('/api/database/table/template', {
+      table_name: selectedTable.value,
+      database_source: selectedDatabaseSource.value
+    }, filename);
+    if (result.saved) {
+      showDownloadCompleteDialog(dialog, filename, result.path);
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '模板下载失败');
+  } finally {
+    downloadingTemplate.value = false;
+  }
+}
+
+function openImportDialog() {
+  if (!selectedTable.value) return;
+  importFile.value = null;
+  importDialogVisible.value = true;
+}
+
+function onImportFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  importFile.value = input.files?.[0] ?? null;
+  input.value = '';
+}
+
+async function doImport() {
+  if (!selectedTable.value || !importFile.value || importing.value) return;
+  importing.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', importFile.value);
+    formData.append('table_name', selectedTable.value);
+    formData.append('database_source', selectedDatabaseSource.value);
+    const result = await upload<ApiMessage & { imported_rows?: number }>('/api/database/table/import', formData);
+    message.success(result.message || `导入成功，共 ${result.imported_rows ?? 0} 行`);
+    importDialogVisible.value = false;
+    importFile.value = null;
+    await reloadTable();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '导入失败');
+  } finally {
+    importing.value = false;
+  }
 }
 </script>
 
@@ -1143,6 +1331,76 @@ function formatCell(value: unknown): string {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.row-action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.row-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.row-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row-edit-label {
+  overflow: hidden;
+  color: var(--td-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row-edit-footer,
+.import-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.import-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.import-dialog-hint {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.import-file-input {
+  display: none;
+}
+
+.import-file-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--td-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 1180px) {

@@ -888,3 +888,20 @@
 - 数据源合并：`source_type` 从 `ftp | sftp | metrix` 改为 `external | metrix`；FTP/SFTP 协议选择保留在远程数据源配置的 `RemoteData.protocol` 中，`external` 统一代表外部储存。旧值 `ftp`/`sftp` 自动规范化为 `external`。
 - 全局状态：`metrixEnabled` 通过 `composables/metrixEnabled.ts` 共享响应式状态，`AppShell` 登录后和激活弹窗切换时同步更新。
 - 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过；构建产物已清理。
+
+## 2026-06-26：数据管理增强（列宽可调 + 行编辑/删除 + 模板/导入）与 CellData 处理日志细化
+
+数据管理（`frontend/src/components/DatabasePanel.vue` + `app/api/routers/database.py` + `app/database.py` + `app/warehouse.py`）：
+- 数据表列宽可拖拽：`n-data-table` 每列加 `resizable + width`，`scroll-x` 计入新增操作列宽度。
+- 新增固定右侧「操作」列：每行「编辑 / 删除」。编辑弹窗按列字段逐项填写后保存；删除二次确认；操作后自动刷新当前页。
+- 行定位策略：以「整行原值」作为 WHERE 条件 + `LIMIT 1`（NULL 用 `IS NULL`），无主键表也能精确改/删单行、避免误伤重复行。后端 `DatabaseManager.update_row/delete_row`（参数化）与 `MetrixWarehouse.update_row/delete_row`（经 `execute_sql` 字面量 SQL）。
+- 工具栏新增「模板」「导入」（在 刷新/清空/删除 同组）：模板下载当前表字段的 CSV 表头（`POST /api/database/table/template`，FileResponse）；导入上传 CSV（`POST /api/database/table/import`，multipart，sync def 走线程池）。**导入按模板校验**：CSV 表头必须与表字段完全一致，缺字段/多字段一律 400 失败；通过后追加导入（`DatabaseManager.import_csv` 走 `bulk_insert`；Metrix 走平台 `/import` mode=append、create_table=false）。
+- 新接口均支持 `database_source`(main/cell_data) 双库；前端用 `client.upload`(multipart) 导入、`download`(POST) 下模板。
+
+CellData 处理日志细化（`app/services/cell_data.py`）：
+- `_parse_zip_files`（解压/解析）：逐 ZIP 打「解压 {频段}/{文件名}（KB）」+「含 N 个 CSV」，逐 CSV 打「解析 {文件名}（频段）：有效 X / 跳过 Y 行」，每包小计，末尾打「累计有效 / 去重后 / 累计跳过」。
+- `_replace_cellinfo`（上传/导入）：打「准备写入表/库」「已连接」「确认表结构」「清空表(TRUNCATE)」「写入中 written/total 行」分批进度「已提交，成功写入 N 行」，失败回滚也记录。
+
+附带修复：`frontend/src/vite-env.d.ts` 增加 `declare module 'monaco-editor/esm/vs/basic-languages/mysql/mysql.js'`，修复 ScriptPanel SQL 补全的深层导入缺类型声明导致 `vue-tsc`（`npm run build`）失败（TS7016）。
+
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过（DatabasePanel chunk≈124KB）。
