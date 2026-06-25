@@ -846,3 +846,11 @@
 
 - `/api/remote/test`、`/api/config/cell-data/remote/test`、`/api/config/cell-data/mysql/test` 改为同步路由函数，保持响应结构不变，但让 FastAPI 在线程池中执行 FTP/SFTP、Metrix 平台 HTTP 与 MySQL 连接测试，避免慢连接或超时阻塞事件循环。
 - 验证：`.venv\Scripts\python.exe -m compileall -q app` 通过；`frontend` `npm run build` 通过；构建产物已清理。
+
+## 2026-06-25：CellData 容量处理集成改进与前端处理进度优化
+
+- 容量处理集成：`tasks.py` 和 `remote.py` 中的 `refresh_cell_data()` 调用改为 `_try_refresh_cell_data()` 包装函数，CellData 数据源未启用时直接跳过，CellData 处理失败时记录警告但继续执行容量处理，不再因 CellData SFTP 连接失败或无数据等原因导致整个容量处理任务失败。
+- CellData 阶段标识：容量处理流程中 CellData 更新阶段会设置独立的 `cell_data` stage，前端可显示"更新 CellData..."状态文案；CellData 完成后日志输出导入行数、解析行数和跳过行数摘要。
+- 前端阶段标签：`stageLabels` 新增 `cell_data: '更新 CellData...'`；`importing` 标签从"上传数据中..."改为"导入数据中..."以避免与文件上传混淆。
+- 前端结果摘要：CellData 独立处理或容量处理完成后，处理进度区域显示成功摘要（文件数、导入行数、跳过行数、耗时）；`TaskStatus` 类型新增 `result?: CellDataResult` 字段。
+- 验证：`python -m compileall -q app` 通过；`frontend` `npm run build`（vue-tsc）通过；构建产物已清理。

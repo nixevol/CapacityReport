@@ -27,6 +27,13 @@ export interface LicenseStatus {
   zip_count?: number;
 }
 
+export interface CellDataResult {
+  selected_files: number;
+  parsed_rows: number;
+  imported_rows: number;
+  skipped_rows: number;
+}
+
 export interface TaskStatus {
   task_id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed' | string;
@@ -35,6 +42,7 @@ export interface TaskStatus {
   elapsed_time?: number;
   error?: string;
   error_detail?: ApiErrorDetail;
+  result?: CellDataResult;
 }
 
 export interface ActiveTask {

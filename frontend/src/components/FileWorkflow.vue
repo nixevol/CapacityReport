@@ -213,6 +213,9 @@
           <n-alert v-if="activeTask?.has_active" type="info" :bordered="false" class="task-alert">
             当前任务：{{ activeTask.task_id }} / {{ currentStageText }}
           </n-alert>
+          <n-alert v-if="taskStatus?.status === 'completed' && taskResultSummary" type="success" :bordered="false" class="task-alert">
+            {{ taskResultSummary }}
+          </n-alert>
           <n-alert v-if="taskStatus?.error" type="error" :bordered="false" class="task-alert">
             {{ taskStatus.error }}
           </n-alert>
@@ -326,7 +329,7 @@ import {
 } from '@vicons/ionicons5';
 
 import { ApiRequestError, apiGet, apiPost, upload } from '../api/client';
-import type { ActiveTask, ApiErrorDetail, LicenseStatus, TaskStatus } from '../types';
+import type { ActiveTask, ApiErrorDetail, CellDataResult, LicenseStatus, TaskStatus } from '../types';
 import { toColoredLogLines } from '../composables/logLines';
 
 type FileStatus = 'pending' | 'uploading' | 'uploaded' | 'error';
@@ -380,6 +383,7 @@ let timer: number | undefined;
 
 const stageLabels: Record<string, string> = {
   license: '授权校验中...',
+  cell_data: '更新 CellData...',
   locating: '定位数据中...',
   downloading: '远程下载中...',
   uploading: '上传文件中...',
@@ -387,7 +391,7 @@ const stageLabels: Record<string, string> = {
   extracting: '解压数据中...',
   converting: '转换 Excel 中...',
   parsing: '解析数据中...',
-  importing: '上传数据中...',
+  importing: '导入数据中...',
   scripting: '运行脚本中...',
   completed: '处理完成',
   failed: '处理失败'
@@ -419,6 +423,18 @@ const processStatusText = computed(() => {
   if (taskStatus.value?.status === 'completed') return '处理完成';
   if (taskStatus.value?.status === 'failed') return '处理失败';
   return currentStageText.value;
+});
+const taskResultSummary = computed(() => {
+  const status = taskStatus.value;
+  if (!status || status.status !== 'completed') return '';
+  const parts: string[] = [];
+  if (status.result) {
+    parts.push(formatCellDataResult(status.result));
+  }
+  if (status.elapsed_time != null) {
+    parts.push(`耗时 ${status.elapsed_time.toFixed(1)}s`);
+  }
+  return parts.join('，');
 });
 
 watch(
@@ -967,6 +983,14 @@ function fileStatusText(item: PickedFile): string {
   if (item.status === 'uploaded') return '已完成';
   if (item.status === 'error') return '失败';
   return '等待上传';
+}
+
+function formatCellDataResult(result: CellDataResult): string {
+  const parts: string[] = [];
+  if (result.selected_files > 0) parts.push(`${result.selected_files} 个文件`);
+  parts.push(`导入 ${result.imported_rows} 行`);
+  if (result.skipped_rows > 0) parts.push(`跳过 ${result.skipped_rows} 行`);
+  return parts.join('，');
 }
 
 function formatBytes(size: number): string {

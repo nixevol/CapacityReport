@@ -151,7 +151,7 @@ def _run_remote_processing(
 
         state.history_manager.update(task_id, file_count=download_result.file_count)
 
-        refresh_cell_data(app_config, work_dir, logger)
+        _try_refresh_cell_data(app_config, work_dir, logger)
 
         if app_config.warehouse_type == "metrix":
             started = time.time()
@@ -208,6 +208,21 @@ def _run_remote_processing(
         state.reset_task_lock()
         if on_finish:
             on_finish(task_id, final_status)
+
+
+def _try_refresh_cell_data(app_config: AppConfig, work_dir: Path, logger: ProcessLogger) -> None:
+    if not app_config.cell_data.remote_data.enabled:
+        return
+    logger.set_stage("cell_data")
+    logger.info("── CellData 更新 ──")
+    try:
+        result = refresh_cell_data(app_config, work_dir, logger)
+        logger.success(
+            f"CellData 更新完成：{result.imported_rows} 行"
+            f"（解析 {result.parsed_rows}，跳过 {result.skipped_rows}）"
+        )
+    except Exception as exc:
+        logger.warning(f"CellData 更新失败，继续容量处理: {exc}")
 
 
 def _format_bytes(size: int) -> str:

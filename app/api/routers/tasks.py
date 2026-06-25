@@ -169,7 +169,7 @@ def _task_finished(task_id: str) -> bool:
 
 def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_config: AppConfig) -> None:
     try:
-        refresh_cell_data(app_config, work_dir, logger)
+        _try_refresh_cell_data(app_config, work_dir, logger)
         if app_config.warehouse_type == "metrix":
             import time
 
@@ -214,3 +214,18 @@ def _run_processing(task_id: str, work_dir: Path, logger: ProcessLogger, app_con
     finally:
         apply_history_retention_safely()
         state.reset_task_lock()
+
+
+def _try_refresh_cell_data(app_config: AppConfig, work_dir: Path, logger: ProcessLogger) -> None:
+    if not app_config.cell_data.remote_data.enabled:
+        return
+    logger.set_stage("cell_data")
+    logger.info("── CellData 更新 ──")
+    try:
+        result = refresh_cell_data(app_config, work_dir, logger)
+        logger.success(
+            f"CellData 更新完成：{result.imported_rows} 行"
+            f"（解析 {result.parsed_rows}，跳过 {result.skipped_rows}）"
+        )
+    except Exception as exc:
+        logger.warning(f"CellData 更新失败，继续容量处理: {exc}")
