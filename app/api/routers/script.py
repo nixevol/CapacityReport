@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Thread
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException
 
 from app import state
 from app.api.routers.task_runtime import set_task_stage
@@ -14,27 +14,19 @@ from app.processor import DataProcessor, ProcessLogger
 
 router = APIRouter(tags=["script"])
 
-SCRIPT_PATHS = {
-    "report": SQL_SCRIPT,
-    "celldata": CELLDATA_SCRIPT,
-}
-SCRIPT_LABELS = {
-    "report": "容量报表脚本",
-    "celldata": "CellData 脚本",
-}
 
-
-def _resolve_script_path(script_type: str) -> Path:
-    path = SCRIPT_PATHS.get(script_type)
+def _resolve_script_path(script_type: str) -> tuple[Path, str]:
+    paths = {"report": SQL_SCRIPT, "celldata": CELLDATA_SCRIPT}
+    labels = {"report": "容量报表脚本", "celldata": "CellData 脚本"}
+    path = paths.get(script_type)
     if path is None:
         raise HTTPException(status_code=400, detail=f"不支持的脚本类型: {script_type}")
-    return path
+    return path, labels.get(script_type, script_type)
 
 
-@router.get("/api/script/content")
-async def get_script_content(script_type: str = Query("report")):
-    script_path = _resolve_script_path(script_type)
-    label = SCRIPT_LABELS.get(script_type, script_type)
+@router.post("/api/script/content")
+def get_script_content(script_type: str = Body("report", embed=True)):
+    script_path, label = _resolve_script_path(script_type)
     try:
         if not script_path.exists():
             return {
@@ -42,7 +34,6 @@ async def get_script_content(script_type: str = Query("report")):
                 "content": f"# {label}文件不存在，请在此编写脚本\n",
                 "modified": None,
                 "path": str(script_path),
-                "script_type": script_type,
             }
 
         modified = datetime.fromtimestamp(script_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
@@ -51,7 +42,6 @@ async def get_script_content(script_type: str = Query("report")):
             "content": script_path.read_text(encoding="utf-8"),
             "modified": modified,
             "path": str(script_path),
-            "script_type": script_type,
         }
     except Exception as exc:
         return {"success": False, "error": str(exc)}
@@ -59,7 +49,7 @@ async def get_script_content(script_type: str = Query("report")):
 
 @router.post("/api/script/execute")
 async def execute_script(script_type: str = Body("report", embed=True)):
-    script_path = _resolve_script_path(script_type)
+    script_path, _ = _resolve_script_path(script_type)
     if state.global_task_lock["locked"]:
         raise HTTPException(status_code=409, detail="已有任务在运行，请等待完成")
 
@@ -89,7 +79,7 @@ async def execute_script(script_type: str = Body("report", embed=True)):
         daemon=True,
     )
     thread.start()
-    label = SCRIPT_LABELS.get(script_type, script_type)
+    _, label = _resolve_script_path(script_type)
     return {"success": True, "message": f"{label}执行任务已启动", "task_id": task_id}
 
 
@@ -98,7 +88,7 @@ async def save_script_content(
     content: str = Body(...),
     script_type: str = Body("report"),
 ):
-    script_path = _resolve_script_path(script_type)
+    script_path, _ = _resolve_script_path(script_type)
     try:
         if script_path.exists():
             shutil.copy(script_path, script_path.with_suffix(".sql.bak"))
@@ -119,7 +109,8 @@ def _run_script(
     script_type: str,
 ) -> None:
     temp_work_dir: Path | None = None
-    label = SCRIPT_LABELS.get(script_type, script_type)
+    labels = {"report": "容量报表脚本", "celldata": "CellData 脚本"}
+    label = labels.get(script_type, script_type)
     try:
         logger.info(f"开始执行{label}...")
         if script_type == "celldata":

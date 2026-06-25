@@ -49,7 +49,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 
-import { apiGet, apiPost } from '../api/client';
+import { apiPost } from '../api/client';
 import type { ApiMessage, ScriptContent, TaskStatus } from '../types';
 import { toColoredLogLines } from '../composables/logLines';
 import { resetPageHeader, setPageHeader } from '../composables/pageHeader';
@@ -236,7 +236,7 @@ async function loadScript(type?: string) {
   const target = type || scriptType.value;
   loading.value = true;
   try {
-    const result = await apiGet<ScriptContent & { script_type?: string }>(`/api/script/content?script_type=${target}`);
+    const result = await apiPost<ScriptContent>('/api/script/content', { script_type: target });
     if (!result.success) {
       throw new Error(result.error || '加载脚本失败');
     }
