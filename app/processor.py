@@ -2,6 +2,7 @@
 数据处理核心模块
 """
 import chardet
+import logging
 import os
 import re
 import shutil
@@ -19,6 +20,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.config import AppConfig, SQL_SCRIPT
 from app.database import DatabaseManager
 from app.utils.file_dates import DirectoryDateSelection, select_recent_items_by_directory
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProcessLogger:
@@ -53,7 +57,7 @@ class ProcessLogger:
                     f.write(entry + "\n")
             except Exception as e:
                 # 如果写入失败，至少记录到内存
-                print(f"写入日志文件失败: {e}")
+                logger.warning("Failed to write process log file: %s", e)
         
         if self.callback:
             self.callback(entry)

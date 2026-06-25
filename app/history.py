@@ -2,6 +2,7 @@
 处理历史记录管理模块
 """
 import json
+import logging
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -12,6 +13,7 @@ from app.config import CACHE_DIR
 
 
 HISTORY_FILE = CACHE_DIR / "history.json"
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -69,9 +71,9 @@ class HistoryManager:
                     work_path.relative_to(cache_path)
                     shutil.rmtree(work_path)
                 except ValueError:
-                    print(f"警告: 尝试删除cache目录外的文件: {work_dir}")
+                    logger.warning("Skip deleting path outside cache directory: %s", work_dir)
         except Exception as e:
-            print(f"删除文件目录失败: {work_dir}, 错误: {e}")
+            logger.warning("Failed to delete work directory %s: %s", work_dir, e)
     
     def create(self, work_dir: Path, file_count: int, record_id: Optional[str] = None) -> HistoryRecord:
         """创建新的历史记录"""
@@ -159,7 +161,7 @@ class HistoryManager:
             logs = [line.strip() for line in content.split('\n') if line.strip()]
             return logs
         except Exception as e:
-            print(f"读取日志文件失败: {log_file}, 错误: {e}")
+            logger.warning("Failed to read history log file %s: %s", log_file, e)
             return []
     
     def delete(self, record_id: str) -> bool:
@@ -238,12 +240,12 @@ class HistoryManager:
                         item_path.unlink()
                 except ValueError:
                     # 路径不在cache目录内，跳过（安全保护）
-                    print(f"警告: 跳过cache目录外的文件: {item}")
+                    logger.warning("Skip path outside cache directory: %s", item)
                 except Exception as e:
                     # 单个文件/目录删除失败，继续处理其他文件
-                    print(f"删除失败: {item}, 错误: {e}")
+                    logger.warning("Failed to delete cache item %s: %s", item, e)
         except Exception as e:
             # 记录错误但不影响清空历史记录的操作
-            print(f"清空cache目录失败: {e}")
+            logger.warning("Failed to clear cache directory: %s", e)
         
         return count

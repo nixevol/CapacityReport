@@ -830,3 +830,9 @@
 
 - “添加来源”按钮移动到主键表达式输入区下方右侧；点击后来源列表自动滚动到新增来源。
 - 验证：`frontend` `npm run build` 通过；构建产物已清理。
+
+## 2026-06-25：清理后端直接 print 诊断输出
+
+- `app/history.py`、`app/processor.py`、`app/api/routers/task_runtime.py` 中的异常诊断从直接 `print()` 改为模块级 `logging`，避免后台任务和历史清理在 stdout 中产生零散噪音，同时保留必要警告信息。
+- `app/main.py` 中的启动横幅 `print()` 保留，仍用于命令行直接启动时提示版本、配置更新时间和访问地址。
+- 验证：`CapacityReport\.venv\Scripts\python.exe -m compileall -q app` 通过；`frontend` `npx vue-tsc --noEmit --noUnusedLocals --noUnusedParameters` 通过。

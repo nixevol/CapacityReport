@@ -1,6 +1,10 @@
+import logging
 from typing import Any
 
 from app import state
+
+
+logger = logging.getLogger(__name__)
 
 
 def set_task_stage(task_id: str, stage: str, logs: list[str], status: str = "processing") -> None:
@@ -29,4 +33,4 @@ def apply_history_retention_safely() -> None:
     try:
         state.apply_history_retention()
     except Exception as exc:
-        print(f"自动清理处理历史失败: {exc}")
+        logger.warning("Failed to apply history retention: %s", exc)
