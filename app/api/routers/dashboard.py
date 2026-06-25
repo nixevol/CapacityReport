@@ -155,7 +155,7 @@ def dashboard_overview(rat: str = Query("4g")):
     ]
 
     top_rows = _rows(db, (
-        f"SELECT `{cfg['id']}` id, IFNULL(`{cfg['name']}`,'') name, IFNULL(`制式`,'') system,"
+        f"SELECT `{cfg['id']}` id, IFNULL(`{cfg['name']}`,'') name, IFNULL(`制式`,'') `system`,"
         f" IFNULL(`带宽`,'') band, IFNULL(`站型`,'') station,"
         f" ROUND({ul}*100,1) ul, ROUND({dl}*100,1) dl, ROUND({flow},2) flow, ROUND({users},0) users,"
         f" IFNULL(`高负荷问题`,'') problem"
@@ -210,7 +210,7 @@ def dashboard_cells(
     total = _num(_rows(db, f"SELECT COUNT(*) c FROM {t}{where_sql}")[0].get("c"))
     offset = (page - 1) * page_size
     rows = _rows(db, (
-        f"SELECT `{cfg['id']}` id, IFNULL(`{cfg['name']}`,'') name, IFNULL(`制式`,'') system,"
+        f"SELECT `{cfg['id']}` id, IFNULL(`{cfg['name']}`,'') name, IFNULL(`制式`,'') `system`,"
         f" IFNULL(`带宽`,'') band, IFNULL(`站型`,'') station, IFNULL(`频段`,'') freq,"
         f" ROUND({ul}*100,1) ul, ROUND({dl}*100,1) dl, ROUND({flow},2) flow, ROUND({users},0) users,"
         f" IFNULL(`高负荷问题`,'') problem, IFNULL(`是否高负荷小区`,'否') is_high"
