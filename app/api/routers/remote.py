@@ -25,7 +25,7 @@ router = APIRouter(tags=["remote"])
 
 
 @router.post("/api/remote/test")
-async def test_remote_connection(config: dict[str, Any] | None = Body(None)):
+def test_remote_connection(config: dict[str, Any] | None = Body(None)):
     app_config = state.current_config()
     try:
         if app_config.source_type == "metrix":

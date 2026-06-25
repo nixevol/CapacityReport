@@ -841,3 +841,8 @@
 
 - 新增 `app.utils.files.safe_relative_path()`，容量数据上传和 CellData 本地上传保存文件前统一过滤空片段、`.` 与 `..`，避免客户端文件名或 `webkitRelativePath` 中的路径穿越片段写出任务工作目录，同时保留合法的文件夹层级。
 - 验证：`safe_relative_path` 典型路径断言通过；`python -m compileall -q app` 通过；`frontend` `npm run build` 通过；构建产物已清理。
+
+## 2026-06-25：连接测试接口改为线程池执行
+
+- `/api/remote/test`、`/api/config/cell-data/remote/test`、`/api/config/cell-data/mysql/test` 改为同步路由函数，保持响应结构不变，但让 FastAPI 在线程池中执行 FTP/SFTP、Metrix 平台 HTTP 与 MySQL 连接测试，避免慢连接或超时阻塞事件循环。
+- 验证：`.venv\Scripts\python.exe -m compileall -q app` 通过；`frontend` `npm run build` 通过；构建产物已清理。

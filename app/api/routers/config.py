@@ -137,7 +137,7 @@ async def update_cell_data_mysql_config(config: dict[str, Any] = Body(...)):
 
 
 @router.post("/api/config/cell-data/remote/test")
-async def test_cell_data_remote_connection(config: dict[str, Any] | None = Body(None)):
+def test_cell_data_remote_connection(config: dict[str, Any] | None = Body(None)):
     try:
         remote_config = RemoteDataConfig.from_dict(config) if config else state.current_config().cell_data.remote_data
         RemoteDataDownloader(remote_config).test_connection()
@@ -147,7 +147,7 @@ async def test_cell_data_remote_connection(config: dict[str, Any] | None = Body(
 
 
 @router.post("/api/config/cell-data/mysql/test")
-async def test_cell_data_mysql_connection(config: dict[str, Any] | None = Body(None)):
+def test_cell_data_mysql_connection(config: dict[str, Any] | None = Body(None)):
     mysql_config = MySQLConfig.from_dict(config, default_dbname="celldata") if config else state.current_config().cell_data.mysql
     return _test_mysql_config(mysql_config)
 
