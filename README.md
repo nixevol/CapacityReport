@@ -86,9 +86,12 @@ docker load -i dist/docker/capacity-report-app-latest.tar
 docker compose -f dist/docker/docker-compose.yml up -d
 ```
 
-## 开发文档
+## 文档
 
-更详细的技术栈、目录结构和「功能 ↔ 代码」对照见 [开发文档 DEVELOPMENT.md](DEVELOPMENT.md)：
+- [使用说明 USAGE.md](USAGE.md)：Web 端各功能的操作方法与注意事项。
+- [开发文档 DEVELOPMENT.md](DEVELOPMENT.md)：技术栈、目录结构与「功能 ↔ 代码」对照。
+
+开发文档锚点：
 
 - [技术栈与主要库](DEVELOPMENT.md#技术栈与主要库)
 - [目录结构](DEVELOPMENT.md#目录结构)
