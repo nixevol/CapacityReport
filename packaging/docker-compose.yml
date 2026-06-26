@@ -6,14 +6,10 @@ services:
     ports:
       - "9081:9081"
     volumes:
-      - ./cache:/app/cache
-      - ./Configure.json:/app/Configure.json
-      - ./ReportScript.sql:/app/ReportScript.sql
-      - ./logs:/var/log/supervisor
+      - capacity-data:/data
     environment:
       - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1
-      - SUPERVISOR_ENABLED=1
     depends_on:
       capacity-mysql:
         condition: service_healthy
@@ -59,4 +55,6 @@ networks:
 
 volumes:
   capacity-mysql-data:
+    driver: local
+  capacity-data:
     driver: local

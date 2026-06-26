@@ -48,93 +48,62 @@ CapaReport/
 │  └─ config.py                 # 配置读写
 ├─ frontend/                    # Vue 前端
 ├─ src-tauri/                   # Tauri 桌面壳
-├─ scripts/                     # 一键构建脚本
-├─ packaging/                   # Docker、Compose、PyInstaller 配置
-├─ dist/                        # 一键构建后的最终产物
+├─ scripts/                     # 运行 / 编译 Python 脚本（dev、run、tauri、docker、clean...）
+├─ packaging/                   # Dockerfile、Compose、PyInstaller 配置
+├─ dist/                        # 编译后的最终产物
 ├─ docs/project_context.md      # 项目维护记录
 ├─ Configure.json               # 应用配置
 ├─ ReportScript.sql             # SQL 处理脚本
 ├─ requirements.txt             # Python 依赖
-└─ run.bat                      # Windows 本地启动脚本
+└─ Dockerfile                   # 服务端容器镜像
 ```
 
-## 本地运行
+## 运行与编译脚本
+
+所有运行 / 编译都统一为 `scripts/` 下的 Python 脚本，直接用系统 Python 运行即可（`python scripts/xxx.py`）。脚本会**自动创建 `.venv` 并安装依赖**（使用标准库 `venv`，不依赖 uv），自动安装前端依赖；缺少 Node.js / Rust / Docker 时会给出安装引导。
 
 前置要求：
 
-- Windows 10/11
-- Python 与 `uv`
-- Node.js
-- MySQL 8.0+
+- Python 3.10+（加入 PATH，作为创建 `.venv` 的基础解释器）
+- Node.js 18+（前端构建）
+- MySQL 8.0+（直连仓库模式）
+- Rust 工具链（仅编译 Tauri 桌面版需要）
+- Docker（仅编译 Docker 镜像需要）
 
-安装后端依赖：
+| 脚本 | 用途 |
+| --- | --- |
+| `python scripts/dev.py` | 开发测试：后端自动重载 + 前端 Vite 热更新 |
+| `python scripts/run.py` | 本地运行：构建前端（如缺失）并启动服务 |
+| `python scripts/tauri_dev.py` | Tauri 桌面端测试运行 |
+| `python scripts/build_server.py` | 编译 Server 便携版 |
+| `python scripts/build_tauri.py` | 编译 Tauri 桌面版 |
+| `python scripts/build_docker.py` | 编译 / 更新 Docker 镜像 |
+| `python scripts/clean.py` | 清理缓存、`__pycache__`、编译产物、运行时临时数据 |
+| `python scripts/gen_license_code.py` | 根据授权 key 生成激活码 |
 
-```powershell
-uv venv
-uv pip install -r requirements.txt
-```
-
-安装前端依赖：
-
-```powershell
-cd frontend
-npm install
-cd ..
-```
-
-启动服务：
+### 开发测试
 
 ```powershell
-.\run.bat
+python scripts/dev.py
 ```
 
-访问地址：
+启动后端（`http://127.0.0.1:9081`，自动重载）和前端（`http://127.0.0.1:5174`，Vite 热更新，`/api` 与 `/health` 代理到后端）。按 `Ctrl+C` 停止。
 
-```text
-http://localhost:9081
-```
-
-前端开发模式：
+### 本地运行
 
 ```powershell
-cd frontend
-npm run dev
+python scripts/run.py            # 默认 0.0.0.0:9081
+python scripts/run.py --port 8080
+python scripts/run.py --rebuild  # 强制重新构建前端
 ```
 
-Vite 会把 `/api` 和 `/health` 代理到 `http://localhost:9081`。如果 `frontend/dist` 不存在，`run.bat` 会自动安装前端依赖并执行构建。
+访问 `http://localhost:9081`。
 
-## 一键构建
+### Server 便携版
 
-Windows 在项目根目录执行：
-
-```bat
-scripts\build.bat -?
-```
-
-可用目标：
-
-```bat
-scripts\build.bat server
-scripts\build.bat desktop
-scripts\build.bat docker
-scripts\build.bat all
-```
-
-常用参数：
-
-```bat
-scripts\build.bat server -NoArchive
-scripts\build.bat all -Clean
-scripts\build.bat docker -SkipDockerBuild
-scripts\build.bat all -SkipDesktopBuild
-```
-
-构建完成后只保留 `dist/` 下的最终产物；`dist/.tmp`、`frontend/dist`、`src-tauri/target`、`src-tauri/binaries` 等中间产物会自动清理。
-
-### Server Portable
-
-```bat
-scripts\build.bat server
+```powershell
+python scripts/build_server.py
+python scripts/build_server.py --no-archive
 ```
 
 输出：
@@ -144,80 +113,60 @@ dist\server\CapacityReport-Server-windows-x64\
 dist\server\CapacityReport-Server-windows-x64.zip
 ```
 
-便携版内包含后端可执行文件、前端构建产物、`Configure.json`、`ReportScript.sql`、`cache/`、`logs/` 和启动脚本。默认监听端口为 `9081`。
+便携版内包含后端可执行文件、前端构建产物、`Configure.json`、`ReportScript.sql`、`CellData.sql`、`cache/`、`logs/` 和启动脚本（Windows 为 `run.bat`，Linux/macOS 为 `start.sh`）。默认监听端口 `9081`。便携版需在目标系统原生构建。
 
-### 桌面版
+### Tauri 桌面版
 
-```bat
-scripts\build.bat desktop
+```powershell
+python scripts/build_tauri.py                   # 编译当前系统的桌面版
+python scripts/build_tauri.py --platform windows
 ```
 
-输出：
+输出：`dist\desktop\` 下的安装包（Windows: `.msi` / `.exe`；Linux: `.deb` / `.AppImage`；macOS: `.dmg`）。
 
-```text
-dist\desktop\*-setup.exe
+- 桌面版使用 Tauri 启动 Python sidecar，sidecar 监听 `127.0.0.1:9081`，运行数据写入系统 app data 目录。
+- Windows 安装包内置 WebView2 离线安装器，适合无外网、未预装 WebView2 Runtime 的机器。
+- Windows 默认安装到 `D:\Program Files\CapacityReport`，无 D 盘时回落系统盘。
+- 首次安装运行 Rust/Tauri 时，脚本会在缺少 Tauri CLI 时自动 `cargo install tauri-cli --locked`。
+- Tauri 无法可靠跨系统交叉编译：`--platform` 必须与当前系统一致，否则脚本会提示需在目标系统本机构建。
+
+### Docker 镜像
+
+```powershell
+python scripts/build_docker.py            # 编译镜像并生成 dist/docker/ 离线部署包
+python scripts/build_docker.py update     # 重新编译镜像并就地更新本机容器
+python scripts/build_docker.py --no-save  # 编译但不导出 tar
 ```
 
-桌面版使用 Tauri 启动 Python sidecar。sidecar 默认监听 `127.0.0.1:9081`，运行数据写入系统 app data 目录，不写入安装目录。
+离线部署包输出到 `dist\docker\`（`capacity-report-app-latest.tar`、`docker-compose.yml`、`Configure.json`、`ReportScript.sql`、`CellData.sql`、`mysql/`）。运行态数据落在 `/data` 数据卷，首次启动由 `docker/entrypoint.sh` 播种默认配置。
 
-Windows 桌面安装包会内置 WebView2 离线安装器，适合没有外网且未预装 WebView2 Runtime 的机器。该模式会让安装包体积增加约 127 MB；构建机需要能在构建阶段下载 WebView2 离线安装器。
-首次启动会把安装包内置的 `Configure.json` 和 `ReportScript.sql` 复制到运行数据目录；Windows 下通常是 `%APPDATA%\com.nixevol.capacityreport\`。安装目录中的 `_up_` 只是 Tauri 打包资源目录，程序运行时不会直接编辑它。
-Windows 桌面版使用 NSIS 安装器，卸载时会询问是否同时删除 `%APPDATA%\com.nixevol.capacityreport\` 中的配置、脚本、授权、缓存和日志。
-Windows 桌面版默认安装到 `D:\Program Files\CapacityReport`；如果没有 D 盘，则默认安装到系统 `Program Files\CapacityReport`。桌面版已关闭 release DevTools 和右键浏览器菜单。
-
-构建桌面版需要 Rust 和 Tauri CLI。脚本会在缺少 Tauri CLI 时自动执行：
-
-```bat
-cargo install tauri-cli --locked
-```
-
-### Docker 版
-
-```bat
-scripts\build.bat docker
-```
-
-输出：
-
-```text
-capacity-report-app:latest
-dist\docker\capacity-report-app-latest.tar
-dist\docker\docker-compose.yml
-dist\docker\Configure.json
-dist\docker\ReportScript.sql
-```
-
-启动：
-
-```bat
-docker load -i dist\docker\capacity-report-app-latest.tar
-docker compose -f dist\docker\docker-compose.yml up -d
-```
-
-访问：
-
-```text
-http://localhost:9081
-```
-
-停止：
-
-```bat
-docker compose -f dist\docker\docker-compose.yml down
-```
-
-## Linux / macOS 构建
-
-在对应系统原生环境执行：
+部署：
 
 ```bash
-sh scripts/build.sh server
-sh scripts/build.sh desktop
-sh scripts/build.sh docker
-sh scripts/build.sh all
+docker load -i dist/docker/capacity-report-app-latest.tar
+docker compose -f dist/docker/docker-compose.yml up -d
 ```
 
-Server Portable 和桌面版需要在目标系统原生构建：Windows 包在 Windows 构建，Linux 包在 Linux 构建，macOS 包在 macOS 构建。Docker 镜像可以在 Windows 开发机上构建。
+访问 `http://localhost:9081`；停止：`docker compose -f dist/docker/docker-compose.yml down`。
+
+### 清理
+
+```powershell
+python scripts/clean.py          # 清理缓存 / 编译产物 / 运行时临时数据
+python scripts/clean.py --deep   # 额外清理 .venv 与 frontend/node_modules
+```
+
+## Linux / macOS
+
+脚本跨平台通用，在对应系统原生环境执行相同命令即可：
+
+```bash
+python3 scripts/build_server.py
+python3 scripts/build_tauri.py
+python3 scripts/build_docker.py
+```
+
+Server 便携版与桌面版需在目标系统原生构建（Windows 包在 Windows、Linux 包在 Linux、macOS 包在 macOS）；Docker 镜像可在任意装有 Docker 的开发机构建。
 
 ## 配置说明
 

@@ -1,5 +1,27 @@
 # 项目上下文记录
 
+## 2026-06-26：统一运行/编译脚本为 scripts/ 下纯 Python（傻瓜式，自动 venv）
+
+把分散的运行/编译入口（根 `run.bat`/`debug.bat`/`start.sh`/`dev.py`、`scripts/build.{sh,ps1,bat}`、`supervisord.conf`、`packaging/Dockerfile`）清理掉，统一改为 `scripts/` 下只依赖标准库的 Python 脚本，可直接 `python scripts/xxx.py` 运行：
+
+- `scripts/_env.py`：共享工具。自动创建 `.venv`（标准库 `venv`，**不使用 uv**），按 `requirements.txt` 的 sha256（存 `.venv/.requirements.hash`）变化自动重装依赖；自动装前端依赖；检测 Node.js / Rust(cargo,rustc) / Docker，缺失时打印安装引导并退出；提供 `build_frontend`(可传 `VITE_API_BASE`)、PyInstaller 打包(`build_server_binary` onedir/onefile)、`build_tauri_sidecar`(按 rust host triple 命名复制到 `src-tauri/binaries`)、`remove_path`(限工作区内)等助手。额外包用 `pip show` 探测是否已装。
+- `scripts/dev.py`：开发测试（移植旧 `dev.py`）——后端 uvicorn `--reload`(9081) + 前端 Vite HMR(5174)，多进程流式日志、Ctrl+C 统一退出。
+- `scripts/run.py`：本地运行（替代 `run.bat`）——构建前端(缺失时) + `python -m app.main`，支持 `--host/--port/--rebuild`。
+- `scripts/tauri_dev.py`：桌面端测试运行——构建前端(desktop api base) + 构建 sidecar(缺失时) + `cargo tauri dev`，`--rebuild` 强制重建。
+- `scripts/build_tauri.py`：桌面版编译——`--platform current|windows|linux|macos`，与宿主不一致时报错提示需本机构建（Tauri 不可靠交叉编译）；Windows 复用旧 ps1 的 NSIS 模板定制（默认装 `D:\Program Files\CapacityReport`、内置 WebView2 离线安装器走 tauri.conf.json），临时改 `tauri.conf.json` 的 `nsis.template` 后构建并还原；产物收集到 `dist/desktop/`。
+- `scripts/build_server.py`：Server 便携版——PyInstaller onedir + 前端 dist + `Configure.json`/`ReportScript.sql`/`CellData.sql` + `cache/`/`logs/` + 启动脚本(win `run.bat`/unix `start.sh`)，zip 打包，`--no-archive` 跳过。
+- `scripts/build_docker.py`：Docker 编译/更新——以**根 `Dockerfile` + `docker/entrypoint.sh`**（前端预构建、`/data` 卷、uvicorn）为准；`build`(默认)生成 `dist/docker/` 离线包(tar+compose+配置+mysql)，`update` 重新构建并 `docker compose ... up -d --force-recreate`，`--no-save` 跳过 tar。
+- `scripts/clean.py`：清理 `__pycache__`/`*.pyc`、编译产物(`dist`、`frontend/dist`、`.vite`、`src-tauri/target`、`src-tauri/binaries`、各 `.cache`)、运行时临时数据(`cache`/`logs`/`uploads`)；`--deep` 再清 `.venv`/`node_modules`。遍历跳过 `.git/.venv/node_modules`，仅删工作区内路径。
+- `scripts/gen_license_code.py` 保留。
+
+清理与统一：
+- 删除 `scripts/build.sh`、`scripts/build.ps1`、`scripts/build.bat`、根 `run.bat`/`debug.bat`/`start.sh`/`dev.py`、`supervisord.conf`、`packaging/Dockerfile`（supervisord 多阶段那套已废弃，确认 `app/` 无 supervisor 引用、根 Dockerfile 用 `docker/entrypoint.sh`）。
+- 重写 `packaging/docker-compose.yml` 匹配根 Dockerfile：app 服务挂 `capacity-data:/data` 命名卷（不再 `/app` 挂载 + supervisord 环境变量），保留 MySQL 服务与 `mysql/` 初始化/配置。
+- 运行时 SQL 文件确认为 `ReportScript.sql` 与 `CellData.sql`（`app/config.py`：`CELLDATA_SCRIPT = BASE_DIR / "CellData.sql"`，非 `CellDataScript.sql`）。便携版/Docker 离线包按此打包。
+- 环境检测：Tauri 桌面端用 Rust（非 Go），脚本检测 Node.js + Rust(+Docker 镜像)；用户最初提到的「go」实为 Rust。
+- `README.md` 改写「运行与编译脚本」表格与各分项说明，目录结构条目改为 `scripts/`(py 脚本) 与根 `Dockerfile`。
+- 验证：9 个脚本 `python -m py_compile` 全通过；`clean.py`/`build_docker.py`/`build_tauri.py` `--help` 正常。
+
 ## 2026-06-01：修复前端 npm audit moderate 漏洞
 
 - `frontend/package.json` 增加 `overrides.dompurify=3.4.7`，将 `monaco-editor@0.55.1` 间接依赖的 vulnerable `dompurify@3.2.7` 覆盖到安全版本。
