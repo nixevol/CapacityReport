@@ -16,13 +16,14 @@ UPDATE cellinfo SET `带宽` = IF(`带宽` IS NULL OR `带宽` = '', '0M', CONCA
 DROP TABLE IF EXISTS sector_band_ref;
 CREATE TABLE sector_band_ref (
   `网络` varchar(8),
-  f_lo decimal(10,2),
-  f_hi decimal(10,2),
-  plmn varchar(16) NULL,
+  `频点下限` decimal(10,2),
+  `频点上限` decimal(10,2),
+  `PLMN` varchar(16) NULL,
   `制式` varchar(20),
   `频段` varchar(20)
 );
-INSERT INTO sector_band_ref (`网络`,f_lo,f_hi,plmn,`制式`,`频段`) VALUES
+-- 频点区间为左闭右开 [频点下限, 频点上限)
+INSERT INTO sector_band_ref (`网络`,`频点下限`,`频点上限`,`PLMN`,`制式`,`频段`) VALUES
 ('5G',4000,99999,NULL,'4.9G','4.9G'),
 ('5G',700,800,'460-00','700M','700M'),
 ('5G',700,800,'460-15','广电','广电'),
@@ -66,9 +67,9 @@ UPDATE _sector_infer SET
 UPDATE _sector_infer t
 JOIN sector_band_ref r
   ON r.`网络` = t.`网络`
- AND CAST(NULLIF(t.`频点`,'') AS DECIMAL(10,2)) >= r.f_lo
- AND CAST(NULLIF(t.`频点`,'') AS DECIMAL(10,2)) <  r.f_hi
- AND (r.plmn IS NULL OR r.plmn = t.PLMN)
+ AND CAST(NULLIF(t.`频点`,'') AS DECIMAL(10,2)) >= r.`频点下限`
+ AND CAST(NULLIF(t.`频点`,'') AS DECIMAL(10,2)) <  r.`频点上限`
+ AND (r.`PLMN` IS NULL OR r.`PLMN` = t.PLMN)
 SET t.`制式` = r.`制式`, t.`频段` = r.`频段`;
 UPDATE _sector_infer SET `制式` = ci_zs, `频段` = ci_zs WHERE `制式` IS NULL;
 
