@@ -38,7 +38,7 @@
           </div>
         </header>
 
-        <div class="cap-spin">
+        <div class="cap-overview">
           <n-spin :show="loadingOverview">
             <!-- 汇总卡片 -->
             <section class="cap-cards">
@@ -47,7 +47,7 @@
                 :key="card.key"
                 class="cap-card"
                 :class="card.tone"
-                :style="{ animationDelay: idx * 60 + 'ms' }"
+                :style="{ animationDelay: idx * 50 + 'ms' }"
               >
                 <div class="cap-card-icon"><n-icon><component :is="card.icon" /></n-icon></div>
                 <div class="cap-card-body">
@@ -65,20 +65,20 @@
                 <e-chart :option="problemOption" :height="chartHeight" />
               </div>
               <div class="cap-panel">
-                <div class="cap-panel-head"><span class="bar"></span>下行利用率分布（{{ overview?.labels.dl }}）</div>
-                <e-chart :option="histOption" :height="chartHeight" />
+                <div class="cap-panel-head"><span class="bar"></span>上行利用率分布（{{ overview?.labels.ul }}）</div>
+                <e-chart :option="ulHistOption" :height="chartHeight" />
               </div>
               <div class="cap-panel">
-                <div class="cap-panel-head"><span class="bar"></span>站型分布</div>
-                <e-chart :option="stationOption" :height="chartHeight" />
+                <div class="cap-panel-head"><span class="bar"></span>下行利用率分布（{{ overview?.labels.dl }}）</div>
+                <e-chart :option="dlHistOption" :height="chartHeight" />
               </div>
               <div class="cap-panel">
                 <div class="cap-panel-head"><span class="bar"></span>制式分布（总数 / 高负荷）</div>
                 <e-chart :option="systemOption" :height="chartHeight" />
               </div>
               <div class="cap-panel">
-                <div class="cap-panel-head"><span class="bar"></span>带宽分布（总数 / 高负荷）</div>
-                <e-chart :option="bandOption" :height="chartHeight" />
+                <div class="cap-panel-head"><span class="bar"></span>站型分布</div>
+                <e-chart :option="stationOption" :height="chartHeight" />
               </div>
               <div class="cap-panel">
                 <div class="cap-panel-head"><span class="bar"></span>频段标记小区 Top</div>
@@ -212,10 +212,11 @@ import { NTag, darkTheme, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import type { EChartsOption } from 'echarts';
 import {
-  AlertCircleOutline,
-  AnalyticsOutline,
+  ArrowDownOutline,
+  ArrowUpOutline,
   BulbOutline,
   CellularOutline,
+  CloudUploadOutline,
   DownloadOutline,
   FlashOutline,
   PulseOutline,
@@ -235,13 +236,13 @@ interface TopCell { id: string; name: string; system: string; band: string; stat
 interface Overview {
   rat: string;
   labels: { ul: string; dl: string };
-  summary: { total: number; high_load: number; util_warn: number; flow_warn: number; normal: number; avg_dl: number; max_dl: number; avg_flow: number; total_flow: number };
+  summary: { total: number; high_load: number; util_warn: number; flow_warn: number; normal: number; avg_ul: number; avg_dl: number; max_dl: number; avg_flow: number; total_flow: number };
   problem_pie: NameVal[];
   by_system: CatStat[];
-  by_band: CatStat[];
   by_station: CatStat[];
   by_freq: CatStat[];
-  util_hist: HistBucket[];
+  ul_hist: HistBucket[];
+  dl_hist: HistBucket[];
   top_cells: TopCell[];
 }
 interface CellRow { id: string; name: string; system: string; band: string; station: string; freq: string; ul: number; dl: number; flow: number; users: number; problem: string; is_high: string }
@@ -264,8 +265,8 @@ const naiveDark = {
     borderRadius: '8px'
   },
   DataTable: {
-    thColor: 'rgba(30, 41, 59, 0.55)',
-    thColorHover: 'rgba(30, 41, 59, 0.85)',
+    thColor: 'rgba(30, 41, 59, 0.85)',
+    thColorHover: 'rgba(30, 41, 59, 0.95)',
     thTextColor: '#cbd5e1',
     thFontWeight: '600',
     tdColor: 'transparent',
@@ -299,7 +300,7 @@ const naiveDark = {
   Empty: { textColor: '#64748b', iconColor: '#475569' }
 };
 
-const chartHeight = 'clamp(136px, 16vh, 184px)';
+const chartHeight = 'clamp(108px, 13vh, 160px)';
 
 const loadingStatus = ref(true);
 const ready = ref(false);
@@ -343,23 +344,25 @@ const PROBLEM_COLOR: Record<string, string> = {
 };
 
 // ---------- 汇总卡片（含数字滚动） ----------
-const animated = reactive<Record<string, number>>({ total: 0, high_load: 0, util_warn: 0, flow_warn: 0, avg_dl: 0, total_flow: 0 });
+const animated = reactive<Record<string, number>>({ total: 0, high_load: 0, util_warn: 0, flow_warn: 0, avg_ul: 0, avg_dl: 0, total_flow: 0 });
 
 const cards = computed(() => {
-  const s = overview.value?.summary;
-  const defs: { key: keyof typeof animated; label: string; icon: Component; tone: string; unit?: string; digits?: number }[] = [
+  const defs: { key: keyof typeof animated; label: string; icon: Component; tone: string; unit?: string; digits?: number; flow?: boolean }[] = [
     { key: 'total', label: '小区总数', icon: CellularOutline, tone: 'tone-cyan' },
     { key: 'high_load', label: '高负荷小区', icon: FlashOutline, tone: 'tone-rose' },
     { key: 'util_warn', label: '利用率预警', icon: PulseOutline, tone: 'tone-blue' },
     { key: 'flow_warn', label: '高流量预警', icon: TrendingUpOutline, tone: 'tone-amber' },
-    { key: 'avg_dl', label: '平均下行利用率', icon: AnalyticsOutline, tone: 'tone-violet', unit: '%', digits: 1 },
-    { key: 'total_flow', label: '总日均流量', icon: AlertCircleOutline, tone: 'tone-emerald', unit: 'GB', digits: 0 }
+    { key: 'avg_ul', label: '平均上行利用率', icon: ArrowUpOutline, tone: 'tone-violet', unit: '%', digits: 1 },
+    { key: 'avg_dl', label: '平均下行利用率', icon: ArrowDownOutline, tone: 'tone-cyan', unit: '%', digits: 1 },
+    { key: 'total_flow', label: '总日均流量', icon: CloudUploadOutline, tone: 'tone-emerald', flow: true }
   ];
-  void s;
-  return defs.map(d => ({
-    ...d,
-    display: formatNum(animated[d.key], d.digits ?? 0)
-  }));
+  return defs.map(d => {
+    if (d.flow) {
+      const f = formatFlow(animated[d.key]);
+      return { ...d, display: f.value, unit: f.unit };
+    }
+    return { ...d, display: formatNum(animated[d.key], d.digits ?? 0) };
+  });
 });
 
 function formatNum(value: number, digits: number): string {
@@ -369,10 +372,29 @@ function formatNum(value: number, digits: number): string {
   return dec ? `${withSep}.${dec}` : withSep;
 }
 
+// 入参单位为 GB，自动换算到合适单位（B/KB/MB/GB/TB/PB）
+function formatFlow(gb: number): { value: string; unit: string } {
+  const v = Number(gb) || 0;
+  if (v >= 1) {
+    const units = ['GB', 'TB', 'PB', 'EB'];
+    let i = 0;
+    let n = v;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+    const digits = n >= 100 ? 0 : n >= 10 ? 1 : 2;
+    return { value: formatNum(n, digits), unit: units[i] };
+  }
+  const units = ['GB', 'MB', 'KB', 'B'];
+  let i = 0;
+  let n = v;
+  while (n < 1 && i < units.length - 1) { n *= 1024; i += 1; }
+  const digits = n >= 100 ? 0 : 1;
+  return { value: formatNum(n, digits), unit: units[i] };
+}
+
 function animateCards(s: Overview['summary']) {
   const targets: Record<string, number> = {
     total: s.total, high_load: s.high_load, util_warn: s.util_warn,
-    flow_warn: s.flow_warn, avg_dl: s.avg_dl, total_flow: s.total_flow
+    flow_warn: s.flow_warn, avg_ul: s.avg_ul, avg_dl: s.avg_dl, total_flow: s.total_flow
   };
   const start = performance.now();
   const from = { ...animated };
@@ -390,7 +412,7 @@ function animateCards(s: Overview['summary']) {
 
 // ---------- echarts 通用主题 ----------
 function baseGrid(): EChartsOption['grid'] {
-  return { left: 8, right: 16, top: 28, bottom: 8, containLabel: true };
+  return { left: 8, right: 16, top: 24, bottom: 6, containLabel: true };
 }
 function axisLine() {
   return { lineStyle: { color: 'rgba(148,163,184,0.25)' } };
@@ -414,9 +436,9 @@ const problemOption = computed<EChartsOption>(() => {
   }));
   return {
     tooltip: { ...tooltipBase(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle' },
+    legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle', itemWidth: 9, itemHeight: 9 },
     series: [{
-      type: 'pie', radius: ['46%', '72%'], center: ['50%', '44%'], avoidLabelOverlap: true,
+      type: 'pie', radius: ['46%', '72%'], center: ['50%', '42%'], avoidLabelOverlap: true,
       itemStyle: { borderColor: 'rgba(2,6,23,0.6)', borderWidth: 2 },
       label: { show: false }, labelLine: { show: false },
       data
@@ -424,8 +446,7 @@ const problemOption = computed<EChartsOption>(() => {
   };
 });
 
-const histOption = computed<EChartsOption>(() => {
-  const buckets = overview.value?.util_hist || [];
+function makeHist(buckets: HistBucket[], c0: string, c1: string): EChartsOption {
   return {
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: baseGrid(),
@@ -435,13 +456,16 @@ const histOption = computed<EChartsOption>(() => {
       type: 'bar', barWidth: '58%', data: buckets.map(b => b.value),
       itemStyle: {
         borderRadius: [4, 4, 0, 0],
-        color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#22d3ee' }, { offset: 1, color: 'rgba(56,189,248,0.15)' }] }
+        color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: c0 }, { offset: 1, color: c1 }] }
       }
     }]
   };
-});
+}
+const ulHistOption = computed<EChartsOption>(() => makeHist(overview.value?.ul_hist || [], '#818cf8', 'rgba(129,140,248,0.15)'));
+const dlHistOption = computed<EChartsOption>(() => makeHist(overview.value?.dl_hist || [], '#22d3ee', 'rgba(56,189,248,0.15)'));
 
-function groupedBar(stats: CatStat[]): EChartsOption {
+const systemOption = computed<EChartsOption>(() => {
+  const stats = overview.value?.by_system || [];
   return {
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { top: 0, right: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
@@ -449,21 +473,19 @@ function groupedBar(stats: CatStat[]): EChartsOption {
     xAxis: { type: 'category', data: stats.map(s => s.name), axisLine: axisLine(), axisLabel: { ...axisLabel(), interval: 0, rotate: stats.length > 5 ? 24 : 0 }, axisTick: { show: false } },
     yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }, axisLabel: axisLabel() },
     series: [
-      { name: '总数', type: 'bar', barGap: '-100%', barWidth: '52%', itemStyle: { borderRadius: [3, 3, 0, 0], color: 'rgba(56,189,248,0.18)' }, data: stats.map(s => s.total) },
-      { name: '高负荷', type: 'bar', barWidth: '52%', itemStyle: { borderRadius: [3, 3, 0, 0], color: '#fb7185' }, data: stats.map(s => s.high) }
+      { name: '总数', type: 'bar', barGap: '-100%', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: 'rgba(56,189,248,0.18)' }, data: stats.map(s => s.total) },
+      { name: '高负荷', type: 'bar', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: '#fb7185' }, data: stats.map(s => s.high) }
     ]
   };
-}
-const systemOption = computed<EChartsOption>(() => groupedBar(overview.value?.by_system || []));
-const bandOption = computed<EChartsOption>(() => groupedBar(overview.value?.by_band || []));
+});
 
 const stationOption = computed<EChartsOption>(() => {
   const data = (overview.value?.by_station || []).map((s, i) => ({ name: s.name, value: s.total, itemStyle: { color: PALETTE[i % PALETTE.length] } }));
   return {
     tooltip: { ...tooltipBase(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle' },
+    legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle', itemWidth: 9, itemHeight: 9 },
     series: [{
-      type: 'pie', radius: ['42%', '70%'], center: ['50%', '44%'],
+      type: 'pie', radius: ['42%', '70%'], center: ['50%', '42%'],
       itemStyle: { borderColor: 'rgba(2,6,23,0.6)', borderWidth: 2 },
       label: { show: false }, labelLine: { show: false }, data
     }]
@@ -474,7 +496,7 @@ const freqOption = computed<EChartsOption>(() => {
   const stats = [...(overview.value?.by_freq || [])].sort((a, b) => a.flagged - b.flagged);
   return {
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 8, right: 24, top: 12, bottom: 8, containLabel: true },
+    grid: { left: 8, right: 24, top: 10, bottom: 6, containLabel: true },
     xAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }, axisLabel: axisLabel() },
     yAxis: { type: 'category', data: stats.map(s => s.name), axisLine: axisLine(), axisLabel: axisLabel(), axisTick: { show: false } },
     series: [{
@@ -651,11 +673,11 @@ onMounted(loadStatus);
 <style scoped>
 .cap-dashboard {
   position: relative;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  height: calc(100vh - 64px);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   padding: 14px 18px;
   color: #e2e8f0;
   background:
@@ -759,24 +781,23 @@ onMounted(loadStatus);
 .cap-refresh:hover:not(:disabled) { color: #22d3ee; border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 16px rgba(56, 189, 248, 0.3); }
 .cap-refresh:disabled { opacity: 0.5; cursor: wait; }
 
-/* n-spin 包裹卡片与图表（固定高度区域） */
-.cap-spin { flex: 0 0 auto; }
-.cap-spin :deep(.n-spin-content) { display: flex; flex-direction: column; gap: 12px; }
+/* 概览区（卡片 + 图表），固定高度，由 n-spin 包裹 */
+.cap-overview { flex: 0 0 auto; }
+.cap-overview :deep(.n-spin-content) { display: flex; flex-direction: column; gap: 12px; }
 
 /* 汇总卡片 */
 .cap-cards {
-  flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
 }
 .cap-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 13px;
-  border-radius: 13px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
   background: linear-gradient(160deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.35));
   border: 1px solid rgba(148, 163, 184, 0.14);
   overflow: hidden;
@@ -786,14 +807,14 @@ onMounted(loadStatus);
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 .cap-card-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px; flex: 0 0 auto;
-  border-radius: 10px; font-size: 20px;
+  width: 34px; height: 34px; flex: 0 0 auto;
+  border-radius: 9px; font-size: 18px;
   background: rgba(148, 163, 184, 0.1);
 }
 .cap-card-body { min-width: 0; }
-.cap-card-value { font-size: 22px; font-weight: 800; line-height: 1.15; color: #f8fafc; font-variant-numeric: tabular-nums; }
-.cap-card-unit { font-size: 12px; font-weight: 600; margin-left: 3px; color: #94a3b8; }
-.cap-card-label { margin-top: 2px; font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-card-value { font-size: 19px; font-weight: 800; line-height: 1.15; color: #f8fafc; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cap-card-unit { font-size: 11px; font-weight: 600; margin-left: 2px; color: #94a3b8; }
+.cap-card-label { margin-top: 2px; font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cap-card-glow { position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%; opacity: 0.5; filter: blur(8px); }
 .tone-cyan .cap-card-icon { color: #22d3ee; } .tone-cyan .cap-card-glow { background: rgba(34, 211, 238, 0.35); }
 .tone-rose .cap-card-icon { color: #fb7185; } .tone-rose .cap-card-glow { background: rgba(251, 113, 133, 0.35); }
@@ -807,26 +828,25 @@ onMounted(loadStatus);
 
 /* 图表区：两行三列 */
 .cap-charts {
-  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .cap-panel {
-  padding: 12px 14px;
-  border-radius: 13px;
+  padding: 10px 14px;
+  border-radius: 12px;
   background: linear-gradient(160deg, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.32));
   border: 1px solid rgba(148, 163, 184, 0.14);
   backdrop-filter: blur(8px);
 }
 .cap-panel-head {
   display: flex; align-items: center; gap: 8px;
-  margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #cbd5e1;
+  margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #cbd5e1;
 }
 .cap-panel-head.sm { font-size: 12px; margin: 14px 0 8px; }
 .cap-panel-head .bar { width: 4px; height: 13px; border-radius: 2px; background: linear-gradient(180deg, #22d3ee, #818cf8); }
 
-/* 清单：占据剩余高度，表格内部滚动 */
+/* 清单：占据剩余高度，表体内部滚动（表头固定） */
 .cap-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-bottom: 10px; }
 .cap-list-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
 .cap-list-head .cap-panel-head { margin-bottom: 0; }
@@ -865,13 +885,14 @@ onMounted(loadStatus);
 .cap-sib-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 12px; color: #94a3b8; }
 
 @media (max-width: 1366px) {
-  .cap-card-value { font-size: 20px; }
-  .cap-card-icon { width: 34px; height: 34px; font-size: 18px; }
+  .cap-card-value { font-size: 17px; }
+  .cap-card-icon { width: 30px; height: 30px; font-size: 16px; }
 }
-@media (max-width: 1100px) {
-  .cap-dashboard { overflow: auto; }
-  .cap-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1180px) {
+  .cap-dashboard { height: auto; min-height: calc(100vh - 64px); overflow: auto; }
+  .cap-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .cap-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cap-list { min-height: 360px; }
 }
 @media (max-width: 720px) {
   .cap-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }

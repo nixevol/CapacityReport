@@ -110,6 +110,7 @@ def dashboard_overview(rat: str = Query("4g")):
         f" SUM(`高负荷问题`='利用率预警') util_warn,"
         f" SUM(`高负荷问题`='高流量预警') flow_warn,"
         f" SUM(`高负荷问题` IS NULL) normal,"
+        f" ROUND(AVG({ul})*100,1) avg_ul,"
         f" ROUND(AVG({dl})*100,1) avg_dl,"
         f" ROUND(MAX({dl})*100,1) max_dl,"
         f" ROUND(AVG({flow}),2) avg_flow,"
@@ -123,6 +124,7 @@ def dashboard_overview(rat: str = Query("4g")):
         "util_warn": _num(s.get("util_warn")),
         "flow_warn": _num(s.get("flow_warn")),
         "normal": _num(s.get("normal")),
+        "avg_ul": _num(s.get("avg_ul"), 1),
         "avg_dl": _num(s.get("avg_dl"), 1),
         "max_dl": _num(s.get("max_dl"), 1),
         "avg_flow": _num(s.get("avg_flow"), 2),
@@ -136,13 +138,14 @@ def dashboard_overview(rat: str = Query("4g")):
         {"name": "正常", "value": summary_out["normal"]},
     ]
 
-    def group_by(col: str, limit: int = 0) -> list[dict[str, Any]]:
+    def group_by(col: str, limit: int = 0, skip_unknown: bool = False) -> list[dict[str, Any]]:
         limit_sql = f" LIMIT {int(limit)}" if limit else ""
+        where_sql = f" WHERE `{col}` IS NOT NULL AND `{col}` <> ''" if skip_unknown else ""
         rows = _rows(db, (
             f"SELECT IFNULL(`{col}`,'未知') name, COUNT(*) total,"
             f" SUM(`是否高负荷小区`='是') high,"
             f" SUM(`高负荷问题` IS NOT NULL) flagged"
-            f" FROM {t} GROUP BY `{col}` ORDER BY flagged DESC, total DESC{limit_sql}"
+            f" FROM {t}{where_sql} GROUP BY `{col}` ORDER BY flagged DESC, total DESC{limit_sql}"
         ))
         return [
             {"name": str(r.get("name")), "total": _num(r.get("total")),
@@ -150,15 +153,13 @@ def dashboard_overview(rat: str = Query("4g")):
             for r in rows
         ]
 
-    # 下行利用率分布（0-10%...90-100%）
-    hist_rows = _rows(db, (
-        f"SELECT LEAST(FLOOR({dl}*10),9) b, COUNT(*) c FROM {t}"
-        f" WHERE {dl} IS NOT NULL GROUP BY b ORDER BY b"
-    ))
-    hist_map = {int(_num(r.get("b"))): _num(r.get("c")) for r in hist_rows}
-    util_hist = [
-        {"bucket": f"{i*10}-{i*10+10}%", "value": hist_map.get(i, 0)} for i in range(10)
-    ]
+    def util_hist(col: str) -> list[dict[str, Any]]:
+        rows = _rows(db, (
+            f"SELECT LEAST(FLOOR({col}*10),9) b, COUNT(*) c FROM {t}"
+            f" WHERE {col} IS NOT NULL GROUP BY b ORDER BY b"
+        ))
+        bucket_map = {int(_num(r.get("b"))): _num(r.get("c")) for r in rows}
+        return [{"bucket": f"{i*10}-{i*10+10}%", "value": bucket_map.get(i, 0)} for i in range(10)]
 
     top_rows = _rows(db, (
         f"SELECT `{cfg['id']}` id, IFNULL(`{cfg['name']}`,'') name, IFNULL(`制式`,'') `system`,"
@@ -180,11 +181,11 @@ def dashboard_overview(rat: str = Query("4g")):
         "labels": {"ul": cfg["ul_label"], "dl": cfg["dl_label"]},
         "summary": summary_out,
         "problem_pie": problem_pie,
-        "by_system": group_by("制式"),
-        "by_band": group_by("带宽"),
+        "by_system": group_by("制式", skip_unknown=True),
         "by_station": group_by("站型"),
         "by_freq": group_by("频段", limit=12),
-        "util_hist": util_hist,
+        "ul_hist": util_hist(ul),
+        "dl_hist": util_hist(dl),
         "top_cells": top_cells,
     }
 

@@ -924,3 +924,13 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 整页不滚动：`.cap-dashboard` 由 `overflow:auto` 改为 `height:100%; overflow:hidden; display:flex; flex-direction:column`（父链 `.content` 高 `calc(100vh-64px)` 为确定值）。布局分三段：顶栏(auto) → `.cap-spin`(flex:0 0 auto，包裹卡片+图表) → `.cap-list`(flex:1，占满剩余)。**清单已移出 `n-spin`** 成为 `.cap-body` 直接 flex 子项以获得确定高度；表格 `n-data-table` 加 `flex-height + height:100%`，由 `.cap-table-wrap`(flex:1 min-height:0) 提供高度，表体内部纵向滚动而非整页滚动。图表改为 2 行 3 列等宽网格，高度 `clamp(136px,16vh,184px)` 随视口自适应；卡片/字号整体缩小。窄屏(<1100px) 回退为 `overflow:auto` 多列换行。
 - 清单导出：后端新增 `GET /api/dashboard/export?rat&problem&keyword`（`dashboard.py`，sync def 走线程池），WHERE 与 `cells` 完全一致（同 problem/keyword 筛选、同排序、无分页），导出全部命中行为 CSV(`utf-8-sig`，FileResponse + BackgroundTask 清理 CACHE_DIR 临时文件)；列含 CGI/NCGI、小区名称、制式/带宽/站型/频段、上下行利用率%、日均流量、用户数、高负荷问题、优化建议。前端清单工具栏「查询」旁加「导出」按钮（`downloadGet`，`exporting` 态，清单为空时禁用）。
 - 验证：`frontend` `vue-tsc --noEmit` 通过；后端 `py_compile dashboard.py` 通过。
+
+## 2026-06-26：容量看板布局重构（定高不滚动）+ KPI/图表调整
+
+- **修复整页布局塌陷**：上一版 `.cap-dashboard { height:100% }` 在 Naive `n-layout-content`(`.content`=`height:calc(100vh-64px); overflow:auto`) 结构下未解析为确定高度，导致 `flex:1` 的清单塌成 0、下方露白、加载态只剩顶部一条。改为 `.cap-dashboard { height: calc(100vh - 64px); box-sizing:border-box; overflow:hidden; flex column }`（视口定高，不依赖父级百分比，与 `.content` 等高故无页面滚动条）。窄屏(<1180px) 回退 `height:auto; overflow:auto`。
+- **清单占满剩余 + 表头固定**：`.cap-body` flex 列三段=顶栏(0) / `.cap-overview`(0，n-spin 包裹卡片+图表) / `.cap-list`(flex:1)。清单作为 `.cap-body` 直接 flex 子项；`n-data-table` 用 `flex-height + height:100%`，由 `.cap-table-wrap`(flex:1 min-height:0) 给高，**表体内部纵向滚动、表头与 scroll-x 横向条不跟随滚动**。
+- **KPI 卡片 7 个**（一行，宽度缩小）：新增「平均上行利用率」(`summary.avg_ul`，后端 SQL 加 `AVG(ul)*100`)；「总日均流量」改为 `formatFlow()` 自动换算单位 B/KB/MB/GB/TB/PB(源值 GB，≥1024 逐级进位，<1 逐级降级)，4G≈780.1 TB / 5G≈2.34 PB。
+- **图表两行三列**：行一=负荷问题分布(环形) / 上行利用率分布(直方) / 下行利用率分布(直方)；行二=制式分布(分组柱) / 站型分布(饼) / 频段标记小区(横向柱)。**删除带宽分布**；后端 overview 删 `by_band`、`util_hist` 拆为 `ul_hist`+`dl_hist`(复用 `util_hist(col)` 函数)。
+- **制式分布排除「未知」**：`group_by` 增 `skip_unknown` 参数(`WHERE 制式 IS NOT NULL AND <> ''`)，制式分布只剩 TDD/FDD。
+- 行间距：统一用 flex `gap:12px`，卡片/图表 panel 内边距收紧，避免叠压。图表高度 `clamp(108px,13vh,160px)` 适配矮窗口。
+- 验证：`frontend` `npm run build`(vue-tsc+vite) 通过；后端 `py_compile` 通过；4G/5G 的 avg_ul/total_flow、制式排除空值、上下行直方均经 MCP 对真实数据验证。
