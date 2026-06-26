@@ -15,7 +15,6 @@
 | pymysql | 直连 MySQL 读写 |
 | cryptography | 本地授权文件加密 |
 | paramiko | SFTP 远程下载 |
-| requests | Metrix 平台 API 客户端（可选模式） |
 
 ### 前端（Vue 3）
 
@@ -53,11 +52,11 @@ CapacityReport/
 │  ├─ auth.py               # 登录账号（auth.ini）、JWT、密码修改
 │  ├─ db_init.py            # 启动时确保必要数据表存在
 │  ├─ database.py           # DatabaseManager：直连 MySQL 表操作
-│  ├─ warehouse.py          # make_warehouse：按仓库类型返回直连或 Metrix 仓库
+│  ├─ warehouse.py          # 数据库访问的统一封装
 │  ├─ processor.py          # DataProcessor：解压/转换/入库/执行报表 SQL；ProcessLogger
 │  ├─ history.py            # HistoryManager：处理历史记录与日志
 │  ├─ api/routers/          # 各业务接口（按模块拆分，见下表）
-│  ├─ services/             # 业务服务（远程下载、调度、CellData、授权、Metrix 等）
+│  ├─ services/             # 业务服务（远程下载、调度、CellData、授权等）
 │  └─ utils/                # 通用工具（文件、文件名日期解析）
 ├─ frontend/                # 前端（Vue 3 + Vite）
 │  └─ src/
@@ -111,7 +110,6 @@ CapacityReport/
 | 服务 | `app/services/auto_scheduler.py` | 后台自动调度（按目标周检查远程数据就绪） |
 | 服务 | `app/services/cell_data.py` | CellData 解析入库、执行 `CellData.sql`、跨库复制 |
 | 服务 | `app/services/license.py` | 按数据日期校验授权期限 |
-| 服务 | `app/services/csv_processor.py`、`pipeline.py`、`platform.py` | Metrix 平台模式下的预处理与平台导入（可选） |
 | 工具 | `app/utils/file_dates.py` | 文件名日期解析、按目录筛选最近 7 天文件 |
 
 ### 容量看板
@@ -123,7 +121,7 @@ CapacityReport/
 | 前端 | `frontend/src/components/CapacityDashboard.vue` | 看板大屏：汇总卡片、图表、问题小区清单、详情抽屉 |
 | 前端 | `frontend/src/components/EChart.vue` | ECharts 封装组件 |
 | 接口 | `app/api/routers/dashboard.py` | 状态、汇总概览、问题小区清单、单小区详情、清单导出 |
-| 依赖 | `app/warehouse.py` | 读取主仓库结果表 |
+| 依赖 | `app/warehouse.py` | 读取数据库中的结果表 |
 
 ### 处理历史
 
@@ -144,7 +142,7 @@ CapacityReport/
 | 前端 | `frontend/src/components/DatabasePanel.vue` | 表列表、表数据分页、行编辑/删除、导入导出、执行 SQL |
 | 接口 | `app/api/routers/database.py` | 表列表/结构/分页、清空/删除、行增改删、CSV/XLSX 导出、模板/导入、执行 SQL（`database_source` 选主库或 CellData 库） |
 | 服务 | `app/database.py` | DatabaseManager：直连 MySQL 表操作 |
-| 服务 | `app/warehouse.py` | 直连或 Metrix 仓库的统一访问 |
+| 服务 | `app/warehouse.py` | 数据库访问的统一封装 |
 
 ### 脚本编辑
 
@@ -154,7 +152,7 @@ CapacityReport/
 | --- | --- | --- |
 | 前端 | `frontend/src/components/ScriptPanel.vue` | Monaco SQL 编辑器、保存、运行、切换脚本类型 |
 | 接口 | `app/api/routers/script.py` | 读取/保存/执行（`report` → `ReportScript.sql`，`celldata` → `CellData.sql`） |
-| 服务 | `app/processor.py`、`app/services/cell_data.py`、`app/services/pipeline.py` | 在对应数据库上下文执行脚本 |
+| 服务 | `app/processor.py`、`app/services/cell_data.py` | 在对应数据库上下文执行脚本 |
 
 ### 系统设置
 
@@ -163,7 +161,7 @@ CapacityReport/
 | 类型 | 文件 | 职责 |
 | --- | --- | --- |
 | 前端 | `frontend/src/components/SettingsPanel.vue` | 各类配置表单、连接测试、配置导入导出 |
-| 前端 | `frontend/src/components/LicenseActivationModal.vue` | 授权延期窗口、Metrix 平台开关（连点品牌图标 8 次打开） |
+| 前端 | `frontend/src/components/LicenseActivationModal.vue` | 授权延期窗口（连点品牌图标 8 次打开） |
 | 接口 | `app/api/routers/config.py` | 各配置块读写、配置上传/下载、MySQL/远程/CellData 连接测试、CellData 规则校验 |
 | 接口 | `app/api/routers/auth.py` | 登录、修改密码 |
 | 接口 | `app/api/routers/license.py` | 授权状态查询与激活 |
