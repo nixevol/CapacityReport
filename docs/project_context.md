@@ -962,3 +962,12 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 站型分布、频段标记小区也排除「未知」：`overview` 的 `by_station`、`by_freq` 调用加 `skip_unknown=True`（同制式分布，`WHERE 列 IS NOT NULL AND <> ''`）。
 - 矮屏可滚动：`.cap-dashboard` `overflow:hidden` → `overflow-y:auto`（仍固定 `height:calc(100vh-64px)`）；`.cap-list` `min-height:0` → `min-height:300px`。视口够高时 flex 填满不滚动；过矮时卡片+图表+清单(≥300px) 总高超出 → 整页出纵向滚动条，可滚到问题小区清单。移除原 `@media(<=1180px)` 里多余的 `height:auto/overflow` 覆盖（统一由主规则处理）。
 - 验证：后端 `py_compile` 通过；`frontend` `vue-tsc --noEmit` 通过。
+
+## 2026-06-26：看板小区详情抽屉优化
+
+- 抽屉标题 CGI 与小区名称上下两行：`.cap-detail-head` 改 `flex-direction:column`。
+- 标签区去掉重复的「频段」tag（5G 制式值与频段常同为如 700M 显得重复），保留 制式/带宽/站型。
+- 指标卡片重排为：物理站 → 扇区 → 上行利用率 → 下行利用率 → 日均流量 → 用户数 → 小区功率 → 是否高负荷（`detailMetrics` 顺序调整）。
+- 优化建议右上角加复制按钮：`copySuggestion()` 复用 `composables/clipboard.writeClipboardText` 复制 `detailSuggestion`，成功/失败 `message` 提示；`.cap-suggest-head` 改 space-between 布局。
+- 同扇区同运营商小区每项加详情图标按钮（`OpenOutline`），点击 `openDetail(sib.id)` 在抽屉内切换到该小区详情；`.cap-sib-item` 改 flex 行（`.cap-sib-body` 占主 + 右侧 `.cap-icon-btn`）。新增通用 `.cap-icon-btn` 样式（复制/详情共用）。
+- 验证：`frontend` `vue-tsc --noEmit` 通过。

@@ -142,7 +142,6 @@
               <span class="cap-tag plain">{{ detailValue('制式') }}</span>
               <span class="cap-tag plain">{{ detailValue('带宽') }}</span>
               <span class="cap-tag plain">{{ detailValue('站型') }}</span>
-              <span class="cap-tag plain">{{ detailValue('频段') }}</span>
             </div>
 
             <div class="cap-detail-grid">
@@ -153,7 +152,12 @@
             </div>
 
             <div v-if="detailSuggestion" class="cap-suggest">
-              <div class="cap-suggest-head"><n-icon><BulbOutline /></n-icon> 优化建议</div>
+              <div class="cap-suggest-head">
+                <span class="cap-suggest-title"><n-icon><BulbOutline /></n-icon> 优化建议</span>
+                <button class="cap-icon-btn" type="button" title="复制建议" @click="copySuggestion">
+                  <n-icon><CopyOutline /></n-icon>
+                </button>
+              </div>
               <p class="cap-suggest-text">{{ detailSuggestion }}</p>
             </div>
 
@@ -162,17 +166,22 @@
               <n-empty v-if="!detail.siblings.length" size="small" description="无同扇区其他小区" />
               <div v-else class="cap-sib-list">
                 <div v-for="sib in detail.siblings" :key="sib.id" class="cap-sib-item">
-                  <div class="cap-sib-main">
-                    <span class="cap-sib-id">{{ sib.id }}</span>
-                    <span class="cap-sib-name">{{ sib.name }}</span>
+                  <div class="cap-sib-body">
+                    <div class="cap-sib-main">
+                      <span class="cap-sib-id">{{ sib.id }}</span>
+                      <span class="cap-sib-name">{{ sib.name }}</span>
+                    </div>
+                    <div class="cap-sib-meta">
+                      <span class="cap-tag plain xs">{{ sib.band || '-' }}</span>
+                      <span class="cap-tag plain xs">{{ sib.freq || '-' }}</span>
+                      <span class="cap-sib-stat">下行 {{ sib.dl }}%</span>
+                      <span class="cap-sib-stat">流量 {{ sib.flow }}GB</span>
+                      <span class="cap-tag xs" :class="problemClass(sib.problem)">{{ sib.problem }}</span>
+                    </div>
                   </div>
-                  <div class="cap-sib-meta">
-                    <span class="cap-tag plain xs">{{ sib.band || '-' }}</span>
-                    <span class="cap-tag plain xs">{{ sib.freq || '-' }}</span>
-                    <span class="cap-sib-stat">下行 {{ sib.dl }}%</span>
-                    <span class="cap-sib-stat">流量 {{ sib.flow }}GB</span>
-                    <span class="cap-tag xs" :class="problemClass(sib.problem)">{{ sib.problem }}</span>
-                  </div>
+                  <button class="cap-icon-btn" type="button" title="查看该小区详情" @click="openDetail(sib.id)">
+                    <n-icon><OpenOutline /></n-icon>
+                  </button>
                 </div>
               </div>
             </div>
@@ -194,8 +203,10 @@ import {
   BulbOutline,
   CellularOutline,
   CloudUploadOutline,
+  CopyOutline,
   DownloadOutline,
   FlashOutline,
+  OpenOutline,
   PulseOutline,
   RefreshOutline,
   SearchOutline,
@@ -203,6 +214,7 @@ import {
 } from '@vicons/ionicons5';
 
 import { apiGet, downloadGet } from '../api/client';
+import { writeClipboardText } from '../composables/clipboard';
 import { themeName } from '../composables/theme';
 import { resetPageHeader, setPageHeader, type PageHeaderAction } from '../composables/pageHeader';
 import EChart from './EChart.vue';
@@ -552,13 +564,13 @@ const detailMetrics = computed(() => {
   const pct = (key: string) => { const v = det[key]; return v === '' || v === null || v === undefined ? '-' : `${(Number(v) * 100).toFixed(1)}%`; };
   const raw = (key: string) => { const v = det[key]; return v === '' || v === null || v === undefined ? '-' : String(v); };
   return [
+    { label: '物理站', value: raw('物理站') },
+    { label: '扇区', value: raw('扇区') },
     { label: d.labels.ul, value: pct(d.ul_field) },
     { label: d.labels.dl, value: pct(d.dl_field) },
     { label: '日均流量(GB)', value: raw(d.flow_field) },
     { label: '用户数', value: raw(d.users_field) },
     { label: '小区功率', value: raw('功率') },
-    { label: '扇区', value: raw('扇区') },
-    { label: '物理站', value: raw('物理站') },
     { label: '是否高负荷', value: raw('是否高负荷小区') }
   ];
 });
@@ -625,6 +637,16 @@ async function exportCells() {
     message.error(error instanceof Error ? error.message : '导出失败');
   } finally {
     exporting.value = false;
+  }
+}
+
+async function copySuggestion() {
+  if (!detailSuggestion.value) return;
+  try {
+    await writeClipboardText(detailSuggestion.value);
+    message.success('优化建议已复制');
+  } catch {
+    message.error('复制失败');
   }
 }
 
@@ -891,9 +913,9 @@ onBeforeUnmount(resetPageHeader);
 .cap-pager-total { font-size: 12px; color: var(--cap-text-muted); }
 
 /* 详情抽屉 */
-.cap-detail-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.cap-detail-id { font-weight: 700; font-size: 15px; color: var(--cap-text-strong); }
-.cap-detail-name { font-size: 12px; color: var(--cap-text-sub); overflow: hidden; text-overflow: ellipsis; }
+.cap-detail-head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cap-detail-id { font-weight: 700; font-size: 15px; color: var(--cap-text-strong); line-height: 1.3; }
+.cap-detail-name { font-size: 12px; color: var(--cap-text-sub); line-height: 1.4; }
 .cap-detail { display: flex; flex-direction: column; gap: 16px; }
 .cap-detail-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .cap-tag { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -908,10 +930,20 @@ onBeforeUnmount(resetPageHeader);
 .cap-metric-label { font-size: 12px; color: var(--cap-text-sub); }
 .cap-metric-value { margin-top: 4px; font-size: 16px; font-weight: 700; color: var(--cap-text-strong); }
 .cap-suggest { padding: 12px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.32); }
-.cap-suggest-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #d97706; margin-bottom: 6px; }
+.cap-suggest-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.cap-suggest-title { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #d97706; }
 .cap-suggest-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--cap-text); }
+.cap-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex: 0 0 auto;
+  border-radius: 8px; border: 1px solid var(--cap-panel-border);
+  background: var(--cap-soft-bg); color: var(--cap-text-sub);
+  cursor: pointer; font-size: 15px; transition: all 0.18s ease;
+}
+.cap-icon-btn:hover { color: #06b6d4; border-color: rgba(56, 189, 248, 0.5); }
 .cap-sib-list { display: flex; flex-direction: column; gap: 8px; }
-.cap-sib-item { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--cap-panel-border); background: var(--cap-soft-bg); }
+.cap-sib-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--cap-panel-border); background: var(--cap-soft-bg); }
+.cap-sib-body { flex: 1 1 auto; min-width: 0; }
 .cap-sib-main { display: flex; align-items: baseline; gap: 8px; }
 .cap-sib-id { font-weight: 600; font-size: 13px; color: var(--cap-text); }
 .cap-sib-name { font-size: 12px; color: var(--cap-text-sub); overflow: hidden; text-overflow: ellipsis; }
