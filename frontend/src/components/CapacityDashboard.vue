@@ -313,7 +313,7 @@ const chartHeight = 'clamp(108px, 13vh, 160px)';
 
 const loadingStatus = ref(true);
 const ready = ref(false);
-const rat = ref<Rat>('4g');
+const rat = ref<Rat>('5g');
 const ratOptions: { label: string; value: Rat }[] = [
   { label: '4G', value: '4g' },
   { label: '5G', value: '5g' }
@@ -444,6 +444,17 @@ function tooltipBase(): EChartsOption['tooltip'] {
 function legendStyle() {
   return { color: chartPalette.value.legend, fontSize: 11 };
 }
+// 矮图表的数值轴缩写，避免刻度文字过长 / 纵向重叠
+function abbrNum(v: number): string {
+  const n = Math.abs(v);
+  if (n >= 1e8) return `${(v / 1e8).toFixed(1).replace(/\.0$/, '')}亿`;
+  if (n >= 1e4) return `${(v / 1e4).toFixed(1).replace(/\.0$/, '')}万`;
+  if (n >= 1e3) return `${(v / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(v);
+}
+function valueAxis(): EChartsOption['yAxis'] {
+  return { type: 'value', splitNumber: 3, splitLine: splitLine(), axisLabel: { ...axisLabel(), formatter: (v: number) => abbrNum(v) } };
+}
 
 const problemOption = computed<EChartsOption>(() => {
   const data = (overview.value?.problem_pie || []).map(d => ({
@@ -467,7 +478,7 @@ function makeHist(buckets: HistBucket[], c0: string, c1: string): EChartsOption 
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: baseGrid(),
     xAxis: { type: 'category', data: buckets.map(b => b.bucket), axisLine: axisLine(), axisLabel: { ...axisLabel(), rotate: 30 }, axisTick: { show: false } },
-    yAxis: { type: 'value', splitLine: splitLine(), axisLabel: axisLabel() },
+    yAxis: valueAxis(),
     series: [{
       type: 'bar', barWidth: '58%', data: buckets.map(b => b.value),
       itemStyle: {
@@ -487,7 +498,7 @@ const systemOption = computed<EChartsOption>(() => {
     legend: { top: 0, right: 0, textStyle: legendStyle(), itemWidth: 10, itemHeight: 10 },
     grid: baseGrid(),
     xAxis: { type: 'category', data: stats.map(s => s.name), axisLine: axisLine(), axisLabel: { ...axisLabel(), interval: 0, rotate: stats.length > 5 ? 24 : 0 }, axisTick: { show: false } },
-    yAxis: { type: 'value', splitLine: splitLine(), axisLabel: axisLabel() },
+    yAxis: valueAxis(),
     series: [
       { name: '总数', type: 'bar', barGap: '-100%', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: chartPalette.value.barTrack }, data: stats.map(s => s.total) },
       { name: '高负荷', type: 'bar', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: '#fb7185' }, data: stats.map(s => s.high) }
@@ -513,7 +524,7 @@ const freqOption = computed<EChartsOption>(() => {
   return {
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: 8, right: 24, top: 10, bottom: 6, containLabel: true },
-    xAxis: { type: 'value', splitLine: splitLine(), axisLabel: axisLabel() },
+    xAxis: { type: 'value', splitNumber: 3, splitLine: splitLine(), axisLabel: { ...axisLabel(), formatter: (v: number) => abbrNum(v) } },
     yAxis: { type: 'category', data: stats.map(s => s.name), axisLine: axisLine(), axisLabel: axisLabel(), axisTick: { show: false } },
     series: [{
       type: 'bar', barWidth: '56%', data: stats.map(s => s.flagged),

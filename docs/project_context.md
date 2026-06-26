@@ -942,3 +942,9 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - ECharts：新增 `chartPalette` computed（轴文字/轴线/分割线/tooltip 底色与文字/图例/饼描边/柱底色 两套值），所有 option 通过 `axisLine/axisLabel/splitLine/tooltipBase/legendStyle` 辅助函数读取，主题切换时 computed 重算、`EChart.vue` 深度 watch `setOption(opt,true)` 自动重绘。
 - CSS：硬编码颜色抽成 `--cap-*` 变量（bg/panel/card/border/shadow/text 系列/soft-bg/tag 等），**定义在 `:global([data-theme='dark'])` 与 `:global([data-theme='light'])`(documentElement)** 上——这样 teleport 到 body 的详情抽屉也能继承同一套变量。浅色：白底玻璃卡片 + 柔和阴影 + 深色文字；深色：原科技风径向辉光。强调色（青/紫/玫红/琥珀）与 `.cap-spark`/分段激活态在两主题保持一致。卡片 icon/底色条改用更深的实色(#06b6d4/#f43f5e 等)以保证浅色下对比度。
 - 验证：`frontend` `npm run build`(vue-tsc+vite) 通过。
+
+## 2026-06-26：容量看板默认 5G + 数值轴刻度防重叠
+
+- 默认制式：看板进入默认 `rat='5g'`（原 4g）。
+- 修复矮图表数值轴刻度重叠：图表高度仅 `clamp(108px,13vh,160px)`，上行/下行利用率分布 0-10% 桶计数极大（约 1.9w）且带千分位，ECharts 自动放 5-6 条刻度导致 Y 轴标签纵向叠压。新增 `abbrNum()`（≥1万→「x万」、≥1千→「xk」、≥1亿→「x亿」）与 `valueAxis()`(`splitNumber:3` + 缩写 formatter)，套用到上/下行直方与制式分布的数值轴；频段标记小区横向柱的数值 x 轴同样加 `splitNumber:3`+缩写。
+- 验证：`frontend` `vue-tsc --noEmit` 通过。
