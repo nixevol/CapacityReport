@@ -69,6 +69,10 @@ api_tokens.json
 *.xls
 *.csv
 
+# Test data tooling and generated test data (local only)
+test/
+temp/
+
 # IDE and OS
 .claude/
 .vscode/
