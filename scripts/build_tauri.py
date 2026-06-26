@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -113,12 +114,11 @@ def make_nsis_template(tmp_dir: Path) -> Path:
     source = find_nsis_template()
     content = source.read_text(encoding="utf-8")
 
-    import re
-
     hook_path = str(NSIS_HOOK.resolve())
+    include_line = f'!include "{hook_path}"'
     content, n = re.subn(
         r'\{\{#if installer_hooks\}\}\s*!include "\{\{installer_hooks\}\}"\s*\{\{/if\}\}',
-        f'!include "{hook_path}"',
+        lambda _: include_line,
         content,
     )
     if n == 0:
