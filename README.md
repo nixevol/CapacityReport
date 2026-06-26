@@ -86,6 +86,17 @@ docker load -i dist/docker/capacity-report-app-latest.tar
 docker compose -f dist/docker/docker-compose.yml up -d
 ```
 
+### Docker 编排（应用 + MySQL + sftpgo）
+
+整套系统（应用、MySQL、sftpgo 文件服务）可用 `packaging/docker-compose.yml` 一键构建运行：
+
+```bash
+cd frontend && npm ci && npm run build && cd ../packaging
+docker compose build && docker compose up -d
+```
+
+完整的编排说明（在线构建、内网离线部署、默认账号、上传数据、数据卷、运维命令）见 [packaging/README.md](packaging/README.md)。
+
 ## 文档
 
 - [使用说明 USAGE.md](USAGE.md)：Web 端各功能的操作方法与注意事项。

@@ -44,6 +44,10 @@ def make_bundle(save_tar: bool) -> Path:
 
     shutil.copy2(COMPOSE_FILE, out_dir / "docker-compose.yml")
     shutil.copytree(_env.PACKAGING_DIR / "mysql", out_dir / "mysql", dirs_exist_ok=True)
+    shutil.copytree(_env.PACKAGING_DIR / "sftpgo", out_dir / "sftpgo", dirs_exist_ok=True)
+    readme = _env.PACKAGING_DIR / "README.md"
+    if readme.exists():
+        shutil.copy2(readme, out_dir / "README.md")
     for name in BUNDLE_FILES:
         src = _env.ROOT / name
         if src.exists():

@@ -1023,6 +1023,9 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - **修复镜像缺文件**：根 `Dockerfile` 原只拷 `Configure.json/ReportScript.sql`，漏了 `CellData.sql` 与 `db_init/`（容器内跑 CellData/前置检查会缺）；现增拷 `CellData.sql`、`db_init/`、整个 `docker/`。`docker/entrypoint.sh` 增加播种 `CellData.sql`、`db_init/` 到 /data，并在**首次播种**时调用新脚本 `docker/apply_env_config.py` 按 env 改写 Configure.json 的数据库/SFTP 连接（用户后续界面改动不被覆盖）。
 - `packaging/README.md`：一键编排使用说明（构建前端→compose build/up、默认账号、放数据路径、数据卷）。
 - 校验：`docker compose config -q` 通过；JSON/py_compile 通过。
+- 文档：`packaging/README.md` 重写为「一键构建整套系统」完整指南（方式A 联网 build+up、方式B 内网离线 load+up、默认账号、上传数据路径、数据卷、运维命令）；主 `README.md` 增「Docker 编排」段落并链接 packaging/README.md。
+- 修复 `scripts/build_docker.py` 离线包缺口：`make_bundle` 原只拷 `mysql/`，现补拷 `sftpgo/` 与 `packaging/README.md`（compose 引用 `./sftpgo/sftpgo-init.json`，否则离线包启动缺文件）。
+- 离线镜像：`F:\CR\env\images` 已 `docker save` 三个基础镜像（mysql_8.0.44.tar/sftpgo_v2.7.1.tar/python_3.13.11-slim.tar）+ `load_images.py`（扫描同目录 *.tar 逐个 `docker load -i ./xxx.tar`，已实测导入成功）。注：F: 盘离线资产不在仓库内。
 
 ## 2026-06-26：测试数据抽取工具（本地 test/，已 gitignore）
 
