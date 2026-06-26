@@ -955,3 +955,10 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 注入内容：subtitle「高负荷小区分析 · 实时数据」；actions = 4G / 5G 两个按钮（激活=`type:primary, variant:solid`，未激活=`default+outline`，点击 `switchRat`）+「刷新」(icon `RefreshOutline`，`loading/disabled` 绑 `loadingOverview`)。因 `PageHeaderAction.type/variant` 非响应式，用 `watch([rat, ready], applyPageHeader)` 在制式切换/就绪时重建 actions；`onBeforeUnmount` 调 `resetPageHeader` 清理；未就绪(无结果表)时不注入。
 - 清理：移除 `ratOptions` 及 `.cap-topbar/.cap-title/.cap-spark/.cap-sub/.cap-controls/.cap-refresh` 样式；`.cap-seg*` 保留（问题清单的筛选分段仍在用）。
 - 验证：`frontend` `npm run build`(vue-tsc+vite) 通过。
+
+## 2026-06-26：看板页头去副标题 + 站型/频段排除未知 + 矮屏可滚动
+
+- 去掉页头副标题「高负荷小区分析 · 实时数据」：`applyPageHeader` 只传 `actions`，不传 `subtitle`。
+- 站型分布、频段标记小区也排除「未知」：`overview` 的 `by_station`、`by_freq` 调用加 `skip_unknown=True`（同制式分布，`WHERE 列 IS NOT NULL AND <> ''`）。
+- 矮屏可滚动：`.cap-dashboard` `overflow:hidden` → `overflow-y:auto`（仍固定 `height:calc(100vh-64px)`）；`.cap-list` `min-height:0` → `min-height:300px`。视口够高时 flex 填满不滚动；过矮时卡片+图表+清单(≥300px) 总高超出 → 整页出纵向滚动条，可滚到问题小区清单。移除原 `@media(<=1180px)` 里多余的 `height:auto/overflow` 覆盖（统一由主规则处理）。
+- 验证：后端 `py_compile` 通过；`frontend` `vue-tsc --noEmit` 通过。

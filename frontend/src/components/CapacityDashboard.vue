@@ -655,7 +655,7 @@ function applyPageHeader() {
     resetPageHeader();
     return;
   }
-  setPageHeader({ subtitle: '高负荷小区分析 · 实时数据', actions: buildHeaderActions() });
+  setPageHeader({ actions: buildHeaderActions() });
 }
 watch([rat, ready], applyPageHeader);
 
@@ -738,7 +738,8 @@ onBeforeUnmount(resetPageHeader);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* 视口足够高时整页不滚动；过矮时出现纵向滚动条，保证能看到清单 */
+  overflow-y: auto;
   padding: 14px 18px;
   color: var(--cap-text);
   background: var(--cap-bg);
@@ -878,8 +879,8 @@ onBeforeUnmount(resetPageHeader);
 .cap-panel-head.sm { font-size: 12px; margin: 14px 0 8px; }
 .cap-panel-head .bar { width: 4px; height: 13px; border-radius: 2px; background: linear-gradient(180deg, #22d3ee, #818cf8); }
 
-/* 清单：占据剩余高度，表体内部滚动（表头固定） */
-.cap-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-bottom: 10px; }
+/* 清单：占据剩余高度，表体内部滚动（表头固定）；min-height 保证矮屏下不被压没、触发整页滚动 */
+.cap-list { flex: 1 1 0; min-height: 300px; display: flex; flex-direction: column; padding-bottom: 10px; }
 .cap-list-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
 .cap-list-head .cap-panel-head { margin-bottom: 0; }
 .cap-list-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -921,7 +922,6 @@ onBeforeUnmount(resetPageHeader);
   .cap-card-icon { width: 30px; height: 30px; font-size: 16px; }
 }
 @media (max-width: 1180px) {
-  .cap-dashboard { height: auto; min-height: calc(100vh - 64px); overflow: auto; }
   .cap-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .cap-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cap-list { min-height: 360px; }
