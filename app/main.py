@@ -43,6 +43,12 @@ LOGIN_ONLY_API_PREFIXES = (
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
+    try:
+        from app.config import AppConfig
+        from app.db_init import ensure_required_tables
+        ensure_required_tables(AppConfig.load())
+    except Exception as exc:  # noqa: BLE001
+        print(f"[前置检查] 启动检查异常：{exc}")
     state.auto_scheduler = AutoScheduler()
     state.auto_scheduler.start()
     try:

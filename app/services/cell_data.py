@@ -460,6 +460,12 @@ def refresh_cell_data(app_config: AppConfig, work_dir: Path, logger=None) -> Cel
 
 
 def execute_celldata_script(script_path: Path, app_config: AppConfig, logger=None) -> None:
+    try:
+        from app.db_init import ensure_required_tables
+        ensure_required_tables(app_config, logger)
+    except Exception as exc:  # noqa: BLE001
+        if logger:
+            logger.info(f"[前置检查] 执行异常：{exc}")
     if not script_path.exists():
         if logger:
             logger.info("CellData 脚本文件不存在，跳过")

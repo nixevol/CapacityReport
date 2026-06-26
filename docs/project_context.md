@@ -1003,6 +1003,16 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 准确率（MCP 实测，重叠 66001）：网络 100%、制式 97.88%(排除 3DMM 即 100%)、频段 97.6%、带宽 99.75%、站型 99.94%、**物理站 99.59%、扇区 99.20%**；残差为不可还原的人工差异（室分多载波编号、700M 个别人工编号、源数据制表符等）。详见 `docs/sector_inference_research.md`。
 - 关键坑：MySQL 字符串字面量会吞掉未知转义的反斜杠，正则字面量需写 `\\(`（.sql 文件）/ JSON 调用需 `\\\\(`；ICU 正则字符类内的 `[ ]` 易误判，统一把名称中的 `[]` 转 `()` 后只处理圆括号。
 
+## 2026-06-26：数据库前置检查 / 缺表自动初始化（db_init）
+
+- 目的：运行前自动检查两库「必须存在的结构表」，缺表则按预设 SQL 自动建好，避免运行中因缺表报错。
+- 目录 `db_init/`（一个目录，文件名 `<库标识>.<表名>.sql`）：`<库标识>` 决定连哪个库且**库名以用户配置为准**——`celldata`→`cell_data.mysql`（始终直连）、`capacityreport`→`mysql`（仅 `warehouse_type=='mysql'` 直连时检查，Metrix 模式跳过）。当前文件：`celldata.cellinfo.sql`、`celldata.sector.sql`、`celldata.sector_band_ref.sql`（含 10 条预设频段规则）。`README.md` 说明命名/时机/规则。
+- 必须存在表分析：celldata 的 `sector` **无任何流程会自动建**（CellData.sql 直接 INSERT，缺表必报错），`sector_band_ref` 需持久+预设，`cellinfo` 兜底（正常由导入 `CREATE TABLE IF NOT EXISTS` 自建）。capacityreport 的 `4G_UD/5G_UD`、`4G_结果表/5G_结果表`、复制来的 `sector/cellinfo` 全由导入/ReportScript/跨库复制以 `DROP+CREATE` 动态生成（结构随源字段变），**不前置强建**以免冲突。
+- 实现 `app/db_init.py::ensure_required_tables(app_config, logger=None)`：扫描 `db_init/*.sql` 按库分组；`SHOW TABLES` 取现有表，**仅当目标表不存在**时用 `DataProcessor.parse_sql_script` 拆分并执行该文件（故 `sector_band_ref` 预设只在首建时写入，绝不覆盖用户自定义）；逐库/逐表 try/except，best-effort 不阻断。
+- 接入：`app/main.py` lifespan 启动时调用；`execute_celldata_script` 执行 CellData.sql 前调用（确保 sector/sector_band_ref 就位）。
+- CellData.sql 同步：**移除原 `DROP TABLE sector_band_ref; CREATE; INSERT` 重建块**，改为依赖前置检查持久维护（用户可在库中自行增改频段规则不被冲掉）；其余逆推逻辑不变，小节重排为 1/2.x/3。
+- 前提：数据库本身需已存在（本机制只建表不建库）。本地无 pymysql（运行态在 Docker，requirements 已含），端到端以 py_compile + 三表 CREATE 语法（MCP）验证。
+
 ## 2026-06-26：离线可用性全面审计（运行期零外网）
 
 结论：**运行期已完全离线就绪，无需改运行时代码**；外网仅「构建期」需要。审计证据：
