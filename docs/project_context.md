@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-06-26：重写 README 与新增开发文档（以实际代码为准）
+
+- `README.md` 精简重写：系统简介、技术栈、6 个导航模块作用表、初次运行（默认账号 `root`/`Capacity`，需配套 FTP/SFTP 数据源 + MySQL 仓库）、运行与编译命令（复用 `scripts/` 下 py 脚本，可复制即用）、以及跳转开发文档的锚点链接。去掉了原 README 中偏底层的「常用接口」「维护注意事项」等内容。
+- 新增 `docs/dev_guide.md` 开发文档：①技术栈与主要库（仅列实际用到的：后端 fastapi/uvicorn/pandas/openpyxl/chardet/pymysql/cryptography/paramiko/requests；前端 vue/vue-router/naive-ui/@vicons/echarts/monaco-editor/@tauri-apps/api + vite 构建链；Tauri tauri/shell/dialog/reqwest/sysinfo/open/serde）；②目录结构及各目录/文件职责；③导航栏 6 功能（数据处理/容量看板/处理历史/数据管理/脚本编辑/系统设置）逐一用表格列出前端组件、后端路由、相关服务文件与职责，方便定位修改点。
+- 文档事实核对要点（以代码为准）：默认账号在 `app/auth.py`（`root`/`Capacity`，存 `auth.ini`）；运行时 SQL 为 `ReportScript.sql` 与 `CellData.sql`（`app/config.py`）；历史记录存 `cache/history.json`（`app/history.py`）；6 个路由页对应 `frontend/src/router.ts`；端口 9081。
+
 ## 2026-06-26：统一运行/编译脚本为 scripts/ 下纯 Python（傻瓜式，自动 venv）
 
 把分散的运行/编译入口（根 `run.bat`/`debug.bat`/`start.sh`/`dev.py`、`scripts/build.{sh,ps1,bat}`、`supervisord.conf`、`packaging/Dockerfile`）清理掉，统一改为 `scripts/` 下只依赖标准库的 Python 脚本，可直接 `python scripts/xxx.py` 运行：
