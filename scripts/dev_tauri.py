@@ -1,8 +1,8 @@
 """Tauri 桌面端测试运行脚本：构建前端 + 后端 sidecar，然后 cargo tauri dev。
 
 用法：
-    python scripts/tauri_dev.py                 # 复用已有 sidecar/前端产物（缺失才构建）
-    python scripts/tauri_dev.py --rebuild        # 强制重建前端和 sidecar
+    python scripts/dev_tauri.py                 # 复用已有 sidecar/前端产物（缺失才构建）
+    python scripts/dev_tauri.py --rebuild        # 强制重建前端和 sidecar
 
 桌面端会启动本机 sidecar（http://127.0.0.1:9081）。首次运行会自动准备 .venv、
 前端依赖、PyInstaller，并在缺少 Rust / Tauri CLI 时给出安装引导。

@@ -50,7 +50,7 @@ CapacityReport 用于处理每周的网络容量报表数据：从本地上传�
 | --- | --- |
 | `python scripts/dev.py` | 开发模式：后端自动重载 + 前端热更新 |
 | `python scripts/run.py` | 本地运行：构建前端（如缺失）并启动服务 |
-| `python scripts/tauri_dev.py` | Tauri 桌面端测试运行 |
+| `python scripts/dev_tauri.py` | Tauri 桌面端测试运行 |
 | `python scripts/build_server.py` | 编译 Server 便携版 |
 | `python scripts/build_tauri.py` | 编译 Tauri 桌面版 |
 | `python scripts/build_docker.py` | 编译 / 更新 Docker 镜像 |
