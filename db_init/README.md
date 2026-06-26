@@ -2,7 +2,8 @@
 
 本目录存放各数据库「**必须存在的结构表**」的初始化 SQL。程序启动时、以及每次执行
 CellData 脚本前，会由 `app/db_init.py` 的 `ensure_required_tables()` 自动检查：
-**某张必需表不存在时，就执行对应的初始化 SQL 把它建好**，从而避免运行过程中因缺表报错。
+**① 库（schema）不存在时自动创建**（celldata 与 capacityreport，库名以配置为准）；
+**② 某张必需表不存在时，执行对应的初始化 SQL 把它建好**，从而避免运行过程中因缺库/缺表报错。
 
 ## 文件命名规则
 
@@ -26,7 +27,8 @@ CellData 脚本前，会由 `app/db_init.py` 的 `ensure_required_tables()` 自�
 - 因此带预设数据的表（如 `sector_band_ref`）**只在首次创建时写入预设**，之后你在库里
   对它的任何增改都会被保留，不会被覆盖或重置。
 - 全过程 best-effort：单库连不上 / 单表初始化失败只记日志，不会中断启动或数据处理。
-- 前提：**数据库本身需已存在**（本机制只建表，不建库）。
+- **建库**：连接前先用不带 database 的连接执行 `CREATE DATABASE IF NOT EXISTS`，故库不存在也能自愈；
+  前提是 MySQL 账号有建库权限（root 默认有）。Metrix 模式下主库走平台 API，不在此建库。
 
 ## 当前清单
 
@@ -38,7 +40,7 @@ CellData 脚本前，会由 `app/db_init.py` 的 `ensure_required_tables()` 自�
 | `celldata.sector_band_ref.sql` | `sector_band_ref` | 频段特征库（频点区间+PLMN→制式/频段），含预设 10 条规则，供逆推用，可自行增改。 |
 
 ### capacityreport（主仓库）
-当前**无需前置建表**：主仓库的原始表（`4G_UD`/`5G_UD`）、结果表（`4G_结果表`/`5G_结果表`）
+**会自动建库**（直连 MySQL 模式下），但**无需前置建表**：主仓库的原始表（`4G_UD`/`5G_UD`）、结果表（`4G_结果表`/`5G_结果表`）
 以及从 CellData 复制过来的 `sector`/`cellinfo`，都由导入流程 / `ReportScript.sql` /
 跨库复制以 `DROP TABLE IF EXISTS` + `CREATE` 动态生成，结构随源数据字段而定，
 不宜在此预先固定结构（会与动态建表冲突）。如确有需要，按上面的命名规则新增

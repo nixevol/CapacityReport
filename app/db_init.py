@@ -1,12 +1,13 @@
-"""数据库前置检查：确保各库「必须存在的结构表」已建好，缺表则按 db_init/ 下的初始化 SQL 自动创建。
+"""数据库前置检查：先确保各「库」存在（不存在则自动创建），再确保各库「必须存在的结构表」已建好。
 
 约定（见 db_init/README.md）：
-- 初始化 SQL 放在 BASE_DIR/db_init/，文件名形如 ``<库标识>.<表名>.sql``。
+- 建库：对 celldata 与 capacityreport(仅直连 MySQL 时) 两个目标库执行 CREATE DATABASE IF NOT EXISTS，
+  库名以用户配置为准；连接时若库不存在不会报错（先用不带 database 的连接建库）。
+- 建表：初始化 SQL 放在 BASE_DIR/db_init/，文件名形如 ``<库标识>.<表名>.sql``，仅当目标表「不存在」时执行，
+  因此 sector_band_ref 这类带预设数据的表只在首次创建时写入，绝不覆盖用户自定义。
 - 库标识 -> 实际连接（库名以用户配置为准，不写死）：
     celldata        -> AppConfig.cell_data.mysql（CellData 库，始终直连 MySQL）
     capacityreport  -> AppConfig.mysql（主仓库，仅当 warehouse_type == 'mysql' 直连时检查）
-- 仅当目标表「不存在」时执行对应 SQL；已存在则跳过整文件，
-  因此 sector_band_ref 这类带预设数据的表只在首次创建时写入，绝不覆盖用户自定义。
 - 全过程 best-effort：单个库/单张表失败只记录日志并继续，不阻断启动或处理流程。
 """
 from __future__ import annotations
@@ -19,6 +20,9 @@ import pymysql
 from app.config import BASE_DIR, AppConfig, MySQLConfig
 
 DB_INIT_DIR = BASE_DIR / "db_init"
+
+# 需要确保存在的目标库（建库不依赖是否有建表 SQL；主库表为动态生成，故无建表文件但仍需建库）
+DB_KEYS = ("celldata", "capacityreport")
 
 
 def _log(logger, message: str) -> None:
@@ -40,6 +44,40 @@ def _target_mysql(app_config: AppConfig, db_key: str) -> Optional[MySQLConfig]:
             return None
         return app_config.mysql.normalized()
     return None
+
+
+def _ensure_database(mysql: MySQLConfig) -> None:
+    """库不存在则创建（用不带 database 的连接执行 CREATE DATABASE IF NOT EXISTS）。"""
+    safe_name = str(mysql.dbname).replace("`", "")
+    conn = pymysql.connect(
+        host=mysql.host,
+        port=mysql.port,
+        user=mysql.user,
+        password=mysql.passwd,
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.Cursor,
+        autocommit=True,
+    )
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{safe_name}` "
+                f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+    finally:
+        conn.close()
+
+
+def _ensure_databases(app_config: AppConfig, logger=None) -> None:
+    """确保所有目标库存在（best-effort）。"""
+    for db_key in DB_KEYS:
+        mysql = _target_mysql(app_config, db_key)
+        if mysql is None or not mysql.dbname:
+            continue
+        try:
+            _ensure_database(mysql)
+        except Exception as exc:  # noqa: BLE001
+            _log(logger, f"[前置检查] 确保库 {db_key}({mysql.dbname}@{mysql.host}:{mysql.port}) 失败：{exc}")
 
 
 def _connect(mysql: MySQLConfig):
@@ -86,7 +124,9 @@ def _discover() -> dict[str, list[tuple[str, Path]]]:
 
 
 def ensure_required_tables(app_config: AppConfig, logger=None) -> None:
-    """检查各库必须存在的表，缺则按初始化 SQL 建好。失败不抛出（仅记录日志）。"""
+    """先确保各库存在（不存在则创建），再检查各库必须存在的表，缺则按初始化 SQL 建好。失败不抛出。"""
+    _ensure_databases(app_config, logger)
+
     groups = _discover()
     for db_key, items in groups.items():
         mysql = _target_mysql(app_config, db_key)

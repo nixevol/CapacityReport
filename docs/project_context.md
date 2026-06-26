@@ -1024,6 +1024,13 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 准确率（MCP 实测，重叠 66001）：网络 100%、制式 97.88%(排除 3DMM 即 100%)、频段 97.6%、带宽 99.75%、站型 99.94%、**物理站 99.59%、扇区 99.20%**；残差为不可还原的人工差异（室分多载波编号、700M 个别人工编号、源数据制表符等）。详见 `docs/sector_inference_research.md`。
 - 关键坑：MySQL 字符串字面量会吞掉未知转义的反斜杠，正则字面量需写 `\\(`（.sql 文件）/ JSON 调用需 `\\\\(`；ICU 正则字符类内的 `[ ]` 易误判，统一把名称中的 `[]` 转 `()` 后只处理圆括号。
 
+## 2026-06-26：前置检查补全「库不存在自动创建」
+
+- 问题：原 db_init 只建表不建库，库(schema)不存在时连接 `database=dbname` 直接失败，库始终建不出来。
+- 修复：`app/db_init.py` 新增 `_ensure_database`（用**不带 database** 的连接执行 `CREATE DATABASE IF NOT EXISTS \`库\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`）与 `_ensure_databases`（遍历 `DB_KEYS=(celldata, capacityreport)`，主库仅直连 MySQL 模式）；`ensure_required_tables` 开头先建库再建表。建库走独立库清单**不依赖建表 SQL**（主库无建表文件但仍需建库）。库名以配置为准、反引号去冲突；best-effort 不阻断。
+- 调用链不变：main 启动 lifespan + execute_celldata_script 前均会触发，故启动/手动上传/容量处理前库都会自愈。需 MySQL 账号有建库权限（root 默认有）；Metrix 模式主库走平台不在此建。
+- 校验：py_compile 通过；MCP 验证 `CREATE DATABASE IF NOT EXISTS` 语法/权限有效（建临时库→确认→删除）。db_init/README.md 同步更正（原写"只建表不建库"）。
+
 ## 2026-06-26：修复看板问题清单固定列重叠（透明背景透出下层列）
 
 - 现象：问题小区清单横向滚动时，右固定列「问题」与滚动区「日均流量」列视觉重叠。
