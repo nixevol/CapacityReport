@@ -32,6 +32,8 @@ CapacityReport 用于处理每周的网络容量报表数据：从本地上传�
 - 启动后访问 `http://localhost:9081`。
 - 也可以直接在「数据处理」页拖拽上传数据文件，无需远程数据源。
 
+详细的 Web 端操作方法与注意事项见 [使用说明 USAGE.md](USAGE.md)。
+
 ## 运行与编译
 
 所有运行 / 编译都统一为 `scripts/` 下的 Python 脚本，直接用系统 Python 运行即可。脚本会自动创建 `.venv` 并安装依赖、自动安装前端依赖；缺少 Node.js / Rust / Docker 时会给出安装引导。

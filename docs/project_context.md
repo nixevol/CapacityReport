@@ -1,5 +1,11 @@
 # 项目上下文记录
 
+## 2026-06-26：新增使用说明 USAGE.md + 文档去 Metrix
+
+- 新增根目录 `USAGE.md`（Web 端使用说明）：登录（`root`/`Capacity`）、整体流程与数据处理管线 Mermaid 图、准备工作/各功能页/系统设置标签页/注意事项均用表格。内容以实际代码为准：处理阶段取 `FileWorkflow.vue` 的 `stageLabels`（远程下载/更新 CellData/授权校验/解压/转换 Excel/导入/运行脚本）；系统设置 6 个标签（数据库、远程数据源、自动调度、规则映射、修改密码，及仅 Metrix 启用时的「数据源/仓库」）；数据处理含容量数据 + CellData 两区、本地上传 vs 远程下载；任务锁串行、文件名时间戳、每目录 7 天、授权按数据日期等注意事项。`README.md` 增加指向 USAGE.md 的链接。
+- 开发文档/README 去掉 Metrix 描述（暂未使用）：移除 requests/csv_processor/pipeline/platform 等仅服务 Metrix 的条目与字样。
+- 文档命名：开发文档由 `docs/dev_guide.md` 移到根目录 `DEVELOPMENT.md`；README/USAGE/DEVELOPMENT 三篇均在根目录，`docs/` 仅保留 `project_context.md`。
+
 ## 2026-06-26：重写 README 与新增开发文档（以实际代码为准）
 
 - `README.md` 精简重写：系统简介、技术栈、6 个导航模块作用表、初次运行（默认账号 `root`/`Capacity`，需配套 FTP/SFTP 数据源 + MySQL 仓库）、运行与编译命令（复用 `scripts/` 下 py 脚本，可复制即用）、以及跳转开发文档的锚点链接。去掉了原 README 中偏底层的「常用接口」「维护注意事项」等内容。
