@@ -94,10 +94,10 @@ UPDATE _sector_infer SET `扇区` = CONCAT(`物理站`,
        WHEN `制式` IN ('700M','广电') THEN RIGHT(numstr,1)
        ELSE CAST(CAST(numstr AS UNSIGNED) % 100 AS CHAR) END);
 
--- 4. 补缺写回 sector：仅插入 sector 中尚不存在的 CGI（区域留空，不参与逆推）
+-- 4. 补缺写回 sector：仅插入 sector 中尚不存在的 CGI
 --    已存在的 CGI 一律保留，避免人工修正（如 3DMM、人工纠正的物理站/带宽）被覆盖
-INSERT INTO sector (CGI,`扇区`,`物理站`,`区域`,`制式`,`频段`,`带宽`,`站型`,`网络`)
-SELECT i.CGI, i.`扇区`, i.`物理站`, NULL, i.`制式`, i.`频段`, i.`带宽`, i.`站型`, i.`网络`
+INSERT INTO sector (CGI,`扇区`,`物理站`,`制式`,`频段`,`带宽`,`站型`,`网络`)
+SELECT i.CGI, i.`扇区`, i.`物理站`, i.`制式`, i.`频段`, i.`带宽`, i.`站型`, i.`网络`
 FROM _sector_infer i
 LEFT JOIN sector s ON s.CGI = i.CGI
 WHERE s.CGI IS NULL;

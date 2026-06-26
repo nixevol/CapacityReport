@@ -974,7 +974,7 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 
 ## 2026-06-26：CellData.sql 新增 cellinfo→sector 逆推（特征库 + 补缺不覆盖）
 
-- 背景：`celldata.cellinfo`（自动处理、有数据源）→ `celldata.sector`（原人工整理）。新脚本自动逆推 sector 的 扇区/物理站/制式/频段/带宽/站型/网络（区域留空，最终不用）。
+- 背景：`celldata.cellinfo`（自动处理、有数据源）→ `celldata.sector`（原人工整理）。新脚本自动逆推 sector 的 扇区/物理站/制式/频段/带宽/站型/网络。原 `区域` 列经全项目检索无任何引用（其余「区域」均为 UI 文案），已 `DROP COLUMN` 删除，CellData.sql INSERT 同步去除。
 - 特征库 `sector_band_ref`（频点区间+PLMN→制式/频段，10 条）：700M/广电同频 763.25 用 PLMN 区分（460-00/460-15）；4.9G 用频点≥4000；4G FDD900/1800、TDD F/A/E/D 频按频点分档。**3DMM 在 cellinfo 无任何字段标注**（cellinfo.制式 仅 700M/TDD/FDD/2.6G，那 1400 个 sector-3DMM 在 cellinfo 全是 TDD/4G）；按"3DMM 用 TDD 制式规则"，脚本依频点判 TDD/D频 即正确，故制式实际正确率≈100%。
 - 逆推 staging `_sector_infer`：预处理小区名（全角括号→半角、【】→()、去空格/制表符）→ 剥设备码正则 `[A-Z0-9]+-Z[A-Z0-9]{2}-[0-9]+$` 得 base；站型(码尾 W=室分 / 名称含"微小"=微站 / 否则宏站)；制式频段经特征表 JOIN(未命中回落 cellinfo 制式)；物理站(非700M 删全部成对括号+清悬空+回贴(微小X)；700M 取"(江门"括号内容否则外层去CBN-)；扇区=物理站+扇区号(700M 末位/其余 %100)。
 - 落库：`INSERT` 仅补 sector 中缺失 CGI（**不清空、不覆盖**已有行，保人工修正如 3DMM/15M/纠正物理站），末尾 DROP staging；`sector_band_ref` 作为持久特征库保留。
