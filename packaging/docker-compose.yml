@@ -1,5 +1,11 @@
+# 一键编排：CapacityReport 应用 + MySQL + sftpgo
+# 构建前先在仓库根构建前端：cd frontend && npm ci && npm run build（产出 frontend/dist）
+# 然后在本目录：docker compose build && docker compose up -d
 services:
   capacity-app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
     image: capacity-report-app:latest
     container_name: capacity-report-app
     restart: unless-stopped
@@ -10,9 +16,22 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1
+      # 首次启动按以下变量初始化 Configure.json 的连接（用户后续在界面改动不被覆盖）
+      - DB_HOST=capacity-mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWD=gmcc123
+      - MAIN_DB_NAME=CapacityReport
+      - CELLDATA_DB_NAME=celldata
+      - SFTP_HOST=sftpgo
+      - SFTP_PORT=2022
+      - SFTP_USER=capacity
+      - SFTP_PASSWD=capacity123
     depends_on:
       capacity-mysql:
         condition: service_healthy
+      sftpgo:
+        condition: service_started
     networks:
       - capacity-network
 
@@ -49,6 +68,28 @@ services:
       retries: 5
       start_period: 30s
 
+  sftpgo:
+    image: drakkan/sftpgo:v2.7.1
+    container_name: capacity-sftpgo
+    restart: unless-stopped
+    ports:
+      - "2022:2022"      # SFTP（上传容量/CellData 数据）
+      - "18080:8080"     # Web 管理后台
+    environment:
+      - TZ=Asia/Shanghai
+      # Web 后台管理员
+      - SFTPGO_DEFAULT_ADMIN_USERNAME=admin
+      - SFTPGO_DEFAULT_ADMIN_PASSWORD=gmcc123
+      # 启动时导入 SFTP 用户（capacity/capacity123）；MODE=1 保留文件、每次启动确保用户存在
+      - SFTPGO_LOADDATA_FROM=/sftpgo-init.json
+      - SFTPGO_LOADDATA_MODE=1
+    volumes:
+      - sftpgo-config:/var/lib/sftpgo
+      - sftpgo-data:/srv/sftpgo/data
+      - ./sftpgo/sftpgo-init.json:/sftpgo-init.json:ro
+    networks:
+      - capacity-network
+
 networks:
   capacity-network:
     driver: bridge
@@ -57,4 +98,8 @@ volumes:
   capacity-mysql-data:
     driver: local
   capacity-data:
+    driver: local
+  sftpgo-config:
+    driver: local
+  sftpgo-data:
     driver: local

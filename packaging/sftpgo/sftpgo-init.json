@@ -1,0 +1,13 @@
+{
+  "users": [
+    {
+      "username": "capacity",
+      "password": "capacity123",
+      "status": 1,
+      "home_dir": "/srv/sftpgo/data/capacity",
+      "permissions": {
+        "/": ["*"]
+      }
+    }
+  ]
+}

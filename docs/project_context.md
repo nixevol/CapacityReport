@@ -1015,6 +1015,15 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 准确率（MCP 实测，重叠 66001）：网络 100%、制式 97.88%(排除 3DMM 即 100%)、频段 97.6%、带宽 99.75%、站型 99.94%、**物理站 99.59%、扇区 99.20%**；残差为不可还原的人工差异（室分多载波编号、700M 个别人工编号、源数据制表符等）。详见 `docs/sector_inference_research.md`。
 - 关键坑：MySQL 字符串字面量会吞掉未知转义的反斜杠，正则字面量需写 `\\(`（.sql 文件）/ JSON 调用需 `\\\\(`；ICU 正则字符类内的 `[ ]` 易误判，统一把名称中的 `[]` 转 `()` 后只处理圆括号。
 
+## 2026-06-26：Docker 一键编排补齐（应用 + MySQL + sftpgo）
+
+- `packaging/docker-compose.yml`：在原 capacity-app + capacity-mysql 基础上**新增 sftpgo 服务**（`drakkan/sftpgo:v2.7.1`，SFTP 2022、Web 18080:8080，卷 `sftpgo-config`/`sftpgo-data`，`SFTPGO_LOADDATA_FROM` 导入 SFTP 用户）。capacity-app 加 `build` 上下文与一组连接环境变量（DB_HOST/PORT/USER/PASSWD、MAIN_DB_NAME、CELLDATA_DB_NAME、SFTP_HOST/PORT/USER/PASSWD），depends_on mysql(healthy)+sftpgo。
+- `packaging/sftpgo/sftpgo-init.json`：自动建 SFTP 用户 `capacity/capacity123`（home `/srv/sftpgo/data/capacity`）；Web 管理员 `admin/gmcc123` 由 env 创建。
+- `packaging/mysql/init/01-init-db.sql`：补建 `celldata` 库（原只建 CapacityReport）；表仍由前置检查按需建。
+- **修复镜像缺文件**：根 `Dockerfile` 原只拷 `Configure.json/ReportScript.sql`，漏了 `CellData.sql` 与 `db_init/`（容器内跑 CellData/前置检查会缺）；现增拷 `CellData.sql`、`db_init/`、整个 `docker/`。`docker/entrypoint.sh` 增加播种 `CellData.sql`、`db_init/` 到 /data，并在**首次播种**时调用新脚本 `docker/apply_env_config.py` 按 env 改写 Configure.json 的数据库/SFTP 连接（用户后续界面改动不被覆盖）。
+- `packaging/README.md`：一键编排使用说明（构建前端→compose build/up、默认账号、放数据路径、数据卷）。
+- 校验：`docker compose config -q` 通过；JSON/py_compile 通过。
+
 ## 2026-06-26：测试数据抽取工具（本地 test/，已 gitignore）
 
 - `.gitignore` 新增忽略 `test/` 与 `temp/`（生成的测试数据）。`test/` 目录及其脚本不入库，仅本地用。
