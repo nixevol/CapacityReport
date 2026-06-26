@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="darkTheme" :theme-overrides="naiveDark">
+  <n-config-provider :theme="naiveTheme" :theme-overrides="naiveThemeOverrides">
     <div class="cap-dashboard">
       <!-- 加载中 -->
       <div v-if="loadingStatus" class="cap-center">
@@ -208,7 +208,7 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, type Component } from 'vue';
-import { NTag, darkTheme, useMessage } from 'naive-ui';
+import { NTag, darkTheme, lightTheme, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import type { EChartsOption } from 'echarts';
 import {
@@ -226,6 +226,7 @@ import {
 } from '@vicons/ionicons5';
 
 import { apiGet, downloadGet } from '../api/client';
+import { themeName } from '../composables/theme';
 import EChart from './EChart.vue';
 
 type Rat = '4g' | '5g';
@@ -255,50 +256,58 @@ interface CellDetail {
 
 const message = useMessage();
 
-// 强制看板内 Naive 组件走深色配色，统一科技感主题
+// ---------- 主题（跟随应用日/夜切换） ----------
+const isLight = computed(() => themeName.value === 'light');
+const naiveTheme = computed(() => (isLight.value ? lightTheme : darkTheme));
+
+// 看板内 Naive 组件配色覆盖：青色强调色 + 对应明暗底色
 const naiveDark = {
-  common: {
-    primaryColor: '#22d3ee',
-    primaryColorHover: '#38bdf8',
-    primaryColorPressed: '#0891b2',
-    primaryColorSuppl: '#38bdf8',
-    borderRadius: '8px'
-  },
+  common: { primaryColor: '#22d3ee', primaryColorHover: '#38bdf8', primaryColorPressed: '#0891b2', primaryColorSuppl: '#38bdf8', borderRadius: '8px' },
   DataTable: {
-    thColor: 'rgba(30, 41, 59, 0.85)',
-    thColorHover: 'rgba(30, 41, 59, 0.95)',
-    thTextColor: '#cbd5e1',
-    thFontWeight: '600',
-    tdColor: 'transparent',
-    tdColorHover: 'rgba(56, 189, 248, 0.08)',
-    tdTextColor: '#dbe4f0',
-    borderColor: 'rgba(148, 163, 184, 0.12)',
-    loadingColor: 'rgba(8, 14, 26, 0.6)'
+    thColor: 'rgba(30, 41, 59, 0.85)', thColorHover: 'rgba(30, 41, 59, 0.95)', thTextColor: '#cbd5e1', thFontWeight: '600',
+    tdColor: 'transparent', tdColorHover: 'rgba(56, 189, 248, 0.08)', tdTextColor: '#dbe4f0',
+    borderColor: 'rgba(148, 163, 184, 0.12)', loadingColor: 'rgba(8, 14, 26, 0.6)'
   },
   Input: {
-    color: 'rgba(15, 23, 42, 0.45)',
-    colorFocus: 'rgba(15, 23, 42, 0.7)',
-    border: '1px solid rgba(148, 163, 184, 0.18)',
-    borderHover: '1px solid rgba(56, 189, 248, 0.5)',
-    borderFocus: '1px solid rgba(56, 189, 248, 0.7)',
-    boxShadowFocus: '0 0 0 2px rgba(56, 189, 248, 0.18)',
-    textColor: '#e2e8f0',
-    placeholderColor: '#64748b'
+    color: 'rgba(15, 23, 42, 0.45)', colorFocus: 'rgba(15, 23, 42, 0.7)',
+    border: '1px solid rgba(148, 163, 184, 0.18)', borderHover: '1px solid rgba(56, 189, 248, 0.5)', borderFocus: '1px solid rgba(56, 189, 248, 0.7)',
+    boxShadowFocus: '0 0 0 2px rgba(56, 189, 248, 0.18)', textColor: '#e2e8f0', placeholderColor: '#64748b'
   },
   Pagination: {
-    itemColor: 'rgba(15, 23, 42, 0.4)',
-    itemColorHover: 'rgba(56, 189, 248, 0.12)',
-    itemColorPressed: 'rgba(56, 189, 248, 0.18)',
-    itemColorActive: 'rgba(56, 189, 248, 0.16)',
-    itemBorder: '1px solid rgba(148, 163, 184, 0.16)',
-    itemBorderActive: '1px solid #22d3ee',
-    itemTextColor: '#94a3b8',
-    itemTextColorHover: '#e2e8f0',
-    itemTextColorActive: '#22d3ee'
+    itemColor: 'rgba(15, 23, 42, 0.4)', itemColorHover: 'rgba(56, 189, 248, 0.12)', itemColorPressed: 'rgba(56, 189, 248, 0.18)', itemColorActive: 'rgba(56, 189, 248, 0.16)',
+    itemBorder: '1px solid rgba(148, 163, 184, 0.16)', itemBorderActive: '1px solid #22d3ee',
+    itemTextColor: '#94a3b8', itemTextColorHover: '#e2e8f0', itemTextColorActive: '#22d3ee'
   },
   Drawer: { color: '#0c1422' },
   Empty: { textColor: '#64748b', iconColor: '#475569' }
 };
+const naiveLight = {
+  common: { primaryColor: '#0891b2', primaryColorHover: '#06b6d4', primaryColorPressed: '#0e7490', primaryColorSuppl: '#06b6d4', borderRadius: '8px' },
+  DataTable: {
+    thColor: 'rgba(241, 245, 249, 0.9)', thColorHover: 'rgba(226, 232, 240, 0.95)', thTextColor: '#475569', thFontWeight: '600',
+    tdColor: 'transparent', tdColorHover: 'rgba(8, 145, 178, 0.07)', tdTextColor: '#334155',
+    borderColor: 'rgba(15, 23, 42, 0.08)', loadingColor: 'rgba(255, 255, 255, 0.6)'
+  },
+  Input: {
+    color: 'rgba(255, 255, 255, 0.85)', colorFocus: '#ffffff',
+    border: '1px solid rgba(15, 23, 42, 0.12)', borderHover: '1px solid rgba(8, 145, 178, 0.5)', borderFocus: '1px solid rgba(8, 145, 178, 0.7)',
+    boxShadowFocus: '0 0 0 2px rgba(8, 145, 178, 0.15)', textColor: '#1e293b', placeholderColor: '#94a3b8'
+  },
+  Pagination: {
+    itemColor: 'rgba(255, 255, 255, 0.7)', itemColorHover: 'rgba(8, 145, 178, 0.08)', itemColorPressed: 'rgba(8, 145, 178, 0.14)', itemColorActive: 'rgba(8, 145, 178, 0.12)',
+    itemBorder: '1px solid rgba(15, 23, 42, 0.12)', itemBorderActive: '1px solid #0891b2',
+    itemTextColor: '#64748b', itemTextColorHover: '#1e293b', itemTextColorActive: '#0891b2'
+  },
+  Drawer: { color: '#ffffff' },
+  Empty: { textColor: '#94a3b8', iconColor: '#cbd5e1' }
+};
+const naiveThemeOverrides = computed(() => (isLight.value ? naiveLight : naiveDark));
+
+// ECharts 明暗配色
+const chartPalette = computed(() => (isLight.value
+  ? { axisText: '#64748b', axisLine: 'rgba(15,23,42,0.15)', splitLine: 'rgba(15,23,42,0.06)', tooltipBg: 'rgba(255,255,255,0.97)', tooltipText: '#1e293b', tooltipBorder: 'rgba(8,145,178,0.4)', legend: '#64748b', pieBorder: '#ffffff', barTrack: 'rgba(8,145,178,0.18)' }
+  : { axisText: '#94a3b8', axisLine: 'rgba(148,163,184,0.25)', splitLine: 'rgba(148,163,184,0.12)', tooltipBg: 'rgba(15,23,42,0.92)', tooltipText: '#e2e8f0', tooltipBorder: 'rgba(56,189,248,0.35)', legend: '#94a3b8', pieBorder: 'rgba(2,6,23,0.6)', barTrack: 'rgba(56,189,248,0.18)' }
+));
 
 const chartHeight = 'clamp(108px, 13vh, 160px)';
 
@@ -340,7 +349,7 @@ const PROBLEM_COLOR: Record<string, string> = {
   高负荷: '#fb7185',
   高流量预警: '#fbbf24',
   利用率预警: '#38bdf8',
-  正常: '#475569'
+  正常: '#94a3b8'
 };
 
 // ---------- 汇总卡片（含数字滚动） ----------
@@ -415,18 +424,25 @@ function baseGrid(): EChartsOption['grid'] {
   return { left: 8, right: 16, top: 24, bottom: 6, containLabel: true };
 }
 function axisLine() {
-  return { lineStyle: { color: 'rgba(148,163,184,0.25)' } };
+  return { lineStyle: { color: chartPalette.value.axisLine } };
 }
 function axisLabel() {
-  return { color: '#94a3b8', fontSize: 11 };
+  return { color: chartPalette.value.axisText, fontSize: 11 };
+}
+function splitLine() {
+  return { lineStyle: { color: chartPalette.value.splitLine } };
 }
 function tooltipBase(): EChartsOption['tooltip'] {
+  const p = chartPalette.value;
   return {
-    backgroundColor: 'rgba(15,23,42,0.92)',
-    borderColor: 'rgba(56,189,248,0.35)',
+    backgroundColor: p.tooltipBg,
+    borderColor: p.tooltipBorder,
     borderWidth: 1,
-    textStyle: { color: '#e2e8f0', fontSize: 12 }
+    textStyle: { color: p.tooltipText, fontSize: 12 }
   };
+}
+function legendStyle() {
+  return { color: chartPalette.value.legend, fontSize: 11 };
 }
 
 const problemOption = computed<EChartsOption>(() => {
@@ -436,10 +452,10 @@ const problemOption = computed<EChartsOption>(() => {
   }));
   return {
     tooltip: { ...tooltipBase(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle', itemWidth: 9, itemHeight: 9 },
+    legend: { bottom: 0, textStyle: legendStyle(), icon: 'circle', itemWidth: 9, itemHeight: 9 },
     series: [{
       type: 'pie', radius: ['46%', '72%'], center: ['50%', '42%'], avoidLabelOverlap: true,
-      itemStyle: { borderColor: 'rgba(2,6,23,0.6)', borderWidth: 2 },
+      itemStyle: { borderColor: chartPalette.value.pieBorder, borderWidth: 2 },
       label: { show: false }, labelLine: { show: false },
       data
     }]
@@ -451,7 +467,7 @@ function makeHist(buckets: HistBucket[], c0: string, c1: string): EChartsOption 
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: baseGrid(),
     xAxis: { type: 'category', data: buckets.map(b => b.bucket), axisLine: axisLine(), axisLabel: { ...axisLabel(), rotate: 30 }, axisTick: { show: false } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }, axisLabel: axisLabel() },
+    yAxis: { type: 'value', splitLine: splitLine(), axisLabel: axisLabel() },
     series: [{
       type: 'bar', barWidth: '58%', data: buckets.map(b => b.value),
       itemStyle: {
@@ -468,12 +484,12 @@ const systemOption = computed<EChartsOption>(() => {
   const stats = overview.value?.by_system || [];
   return {
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { top: 0, right: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
+    legend: { top: 0, right: 0, textStyle: legendStyle(), itemWidth: 10, itemHeight: 10 },
     grid: baseGrid(),
     xAxis: { type: 'category', data: stats.map(s => s.name), axisLine: axisLine(), axisLabel: { ...axisLabel(), interval: 0, rotate: stats.length > 5 ? 24 : 0 }, axisTick: { show: false } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }, axisLabel: axisLabel() },
+    yAxis: { type: 'value', splitLine: splitLine(), axisLabel: axisLabel() },
     series: [
-      { name: '总数', type: 'bar', barGap: '-100%', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: 'rgba(56,189,248,0.18)' }, data: stats.map(s => s.total) },
+      { name: '总数', type: 'bar', barGap: '-100%', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: chartPalette.value.barTrack }, data: stats.map(s => s.total) },
       { name: '高负荷', type: 'bar', barWidth: '46%', itemStyle: { borderRadius: [3, 3, 0, 0], color: '#fb7185' }, data: stats.map(s => s.high) }
     ]
   };
@@ -483,10 +499,10 @@ const stationOption = computed<EChartsOption>(() => {
   const data = (overview.value?.by_station || []).map((s, i) => ({ name: s.name, value: s.total, itemStyle: { color: PALETTE[i % PALETTE.length] } }));
   return {
     tooltip: { ...tooltipBase(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle', itemWidth: 9, itemHeight: 9 },
+    legend: { bottom: 0, textStyle: legendStyle(), icon: 'circle', itemWidth: 9, itemHeight: 9 },
     series: [{
       type: 'pie', radius: ['42%', '70%'], center: ['50%', '42%'],
-      itemStyle: { borderColor: 'rgba(2,6,23,0.6)', borderWidth: 2 },
+      itemStyle: { borderColor: chartPalette.value.pieBorder, borderWidth: 2 },
       label: { show: false }, labelLine: { show: false }, data
     }]
   };
@@ -497,7 +513,7 @@ const freqOption = computed<EChartsOption>(() => {
   return {
     tooltip: { ...tooltipBase(), trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: 8, right: 24, top: 10, bottom: 6, containLabel: true },
-    xAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(148,163,184,0.12)' } }, axisLabel: axisLabel() },
+    xAxis: { type: 'value', splitLine: splitLine(), axisLabel: axisLabel() },
     yAxis: { type: 'category', data: stats.map(s => s.name), axisLine: axisLine(), axisLabel: axisLabel(), axisTick: { show: false } },
     series: [{
       type: 'bar', barWidth: '56%', data: stats.map(s => s.flagged),
@@ -529,7 +545,7 @@ const columns = computed<DataTableColumns<CellRow>>(() => [
 
 function tagColor(problem: string) {
   const c = PROBLEM_COLOR[problem] || '#64748b';
-  return { color: 'rgba(148,163,184,0.12)', textColor: c, borderColor: 'transparent' };
+  return { color: isLight.value ? 'rgba(100,116,139,0.1)' : 'rgba(148,163,184,0.14)', textColor: c, borderColor: 'transparent' };
 }
 function problemClass(problem: string) {
   if (problem === '高负荷') return 'is-rose';
@@ -671,6 +687,48 @@ onMounted(loadStatus);
 </script>
 
 <style scoped>
+/* 主题变量定义在 documentElement 上，使 teleport 到 body 的详情抽屉也能继承 */
+:global([data-theme='dark']) {
+  --cap-bg:
+    radial-gradient(1200px 600px at 12% -10%, rgba(56, 189, 248, 0.12), transparent 60%),
+    radial-gradient(1000px 600px at 100% 0%, rgba(129, 140, 248, 0.12), transparent 55%),
+    linear-gradient(180deg, #0b1220 0%, #070b15 100%);
+  --cap-panel-bg: linear-gradient(160deg, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.32));
+  --cap-card-bg: linear-gradient(160deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.35));
+  --cap-panel-border: rgba(148, 163, 184, 0.14);
+  --cap-shadow: none;
+  --cap-icon-bg: rgba(148, 163, 184, 0.1);
+  --cap-control-bg: rgba(15, 23, 42, 0.6);
+  --cap-control-border: rgba(148, 163, 184, 0.16);
+  --cap-text: #e2e8f0;
+  --cap-text-strong: #f1f5f9;
+  --cap-text-sub: #94a3b8;
+  --cap-text-muted: #64748b;
+  --cap-soft-bg: rgba(148, 163, 184, 0.08);
+  --cap-tag-plain-bg: rgba(148, 163, 184, 0.16);
+  --cap-glow-opacity: 0.5;
+}
+:global([data-theme='light']) {
+  --cap-bg:
+    radial-gradient(1200px 600px at 12% -10%, rgba(56, 189, 248, 0.16), transparent 60%),
+    radial-gradient(1000px 600px at 100% 0%, rgba(129, 140, 248, 0.14), transparent 55%),
+    linear-gradient(180deg, #eef2f9 0%, #e3e9f3 100%);
+  --cap-panel-bg: rgba(255, 255, 255, 0.82);
+  --cap-card-bg: rgba(255, 255, 255, 0.9);
+  --cap-panel-border: rgba(15, 23, 42, 0.08);
+  --cap-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+  --cap-icon-bg: rgba(15, 23, 42, 0.05);
+  --cap-control-bg: rgba(255, 255, 255, 0.7);
+  --cap-control-border: rgba(15, 23, 42, 0.1);
+  --cap-text: #334155;
+  --cap-text-strong: #0f172a;
+  --cap-text-sub: #64748b;
+  --cap-text-muted: #94a3b8;
+  --cap-soft-bg: rgba(15, 23, 42, 0.04);
+  --cap-tag-plain-bg: rgba(15, 23, 42, 0.06);
+  --cap-glow-opacity: 0.32;
+}
+
 .cap-dashboard {
   position: relative;
   height: calc(100vh - 64px);
@@ -679,11 +737,8 @@ onMounted(loadStatus);
   flex-direction: column;
   overflow: hidden;
   padding: 14px 18px;
-  color: #e2e8f0;
-  background:
-    radial-gradient(1200px 600px at 12% -10%, rgba(56, 189, 248, 0.12), transparent 60%),
-    radial-gradient(1000px 600px at 100% 0%, rgba(129, 140, 248, 0.12), transparent 55%),
-    linear-gradient(180deg, #0b1220 0%, #070b15 100%);
+  color: var(--cap-text);
+  background: var(--cap-bg);
 }
 
 .cap-center {
@@ -709,14 +764,14 @@ onMounted(loadStatus);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 2px;
-  color: #e2e8f0;
+  color: var(--cap-text-strong);
 }
 .cap-empty-sub {
   margin: 0;
   max-width: 460px;
   text-align: center;
   font-size: 13px;
-  color: #64748b;
+  color: var(--cap-text-muted);
 }
 
 @keyframes pulse {
@@ -740,16 +795,16 @@ onMounted(loadStatus);
   background: linear-gradient(180deg, #22d3ee, #818cf8);
   box-shadow: 0 0 16px rgba(56, 189, 248, 0.7);
 }
-.cap-title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 1px; color: #f1f5f9; }
-.cap-sub { font-size: 12px; color: #64748b; }
+.cap-title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 1px; color: var(--cap-text-strong); }
+.cap-sub { font-size: 12px; color: var(--cap-text-muted); }
 .cap-controls { display: flex; align-items: center; gap: 12px; }
 
 .cap-seg {
   display: inline-flex;
   padding: 3px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: var(--cap-control-bg);
+  border: 1px solid var(--cap-control-border);
 }
 .cap-seg.sm { padding: 2px; border-radius: 8px; }
 .cap-seg-btn {
@@ -757,14 +812,14 @@ onMounted(loadStatus);
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--cap-text-sub);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 .cap-seg.sm .cap-seg-btn { padding: 4px 12px; font-size: 12px; }
-.cap-seg-btn:hover { color: #e2e8f0; }
+.cap-seg-btn:hover { color: var(--cap-text-strong); }
 .cap-seg-btn.active {
   color: #061018;
   background: linear-gradient(135deg, #22d3ee, #38bdf8);
@@ -773,12 +828,12 @@ onMounted(loadStatus);
 .cap-refresh {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 9px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.6);
-  color: #94a3b8; cursor: pointer; font-size: 16px;
+  border: 1px solid var(--cap-control-border);
+  background: var(--cap-control-bg);
+  color: var(--cap-text-sub); cursor: pointer; font-size: 16px;
   transition: all 0.18s ease;
 }
-.cap-refresh:hover:not(:disabled) { color: #22d3ee; border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 16px rgba(56, 189, 248, 0.3); }
+.cap-refresh:hover:not(:disabled) { color: #06b6d4; border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 16px rgba(56, 189, 248, 0.3); }
 .cap-refresh:disabled { opacity: 0.5; cursor: wait; }
 
 /* 概览区（卡片 + 图表），固定高度，由 n-spin 包裹 */
@@ -798,8 +853,9 @@ onMounted(loadStatus);
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: linear-gradient(160deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.35));
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: var(--cap-card-bg);
+  border: 1px solid var(--cap-panel-border);
+  box-shadow: var(--cap-shadow);
   overflow: hidden;
   backdrop-filter: blur(8px);
   animation: cardIn 0.5s ease both;
@@ -809,22 +865,22 @@ onMounted(loadStatus);
   display: flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; flex: 0 0 auto;
   border-radius: 9px; font-size: 18px;
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--cap-icon-bg);
 }
 .cap-card-body { min-width: 0; }
-.cap-card-value { font-size: 19px; font-weight: 800; line-height: 1.15; color: #f8fafc; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cap-card-unit { font-size: 11px; font-weight: 600; margin-left: 2px; color: #94a3b8; }
-.cap-card-label { margin-top: 2px; font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cap-card-glow { position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%; opacity: 0.5; filter: blur(8px); }
-.tone-cyan .cap-card-icon { color: #22d3ee; } .tone-cyan .cap-card-glow { background: rgba(34, 211, 238, 0.35); }
-.tone-rose .cap-card-icon { color: #fb7185; } .tone-rose .cap-card-glow { background: rgba(251, 113, 133, 0.35); }
-.tone-blue .cap-card-icon { color: #38bdf8; } .tone-blue .cap-card-glow { background: rgba(56, 189, 248, 0.32); }
-.tone-amber .cap-card-icon { color: #fbbf24; } .tone-amber .cap-card-glow { background: rgba(251, 191, 36, 0.3); }
-.tone-violet .cap-card-icon { color: #c084fc; } .tone-violet .cap-card-glow { background: rgba(192, 132, 252, 0.3); }
-.tone-emerald .cap-card-icon { color: #34d399; } .tone-emerald .cap-card-glow { background: rgba(52, 211, 153, 0.3); }
-.cap-card::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: currentColor; opacity: 0.5; }
-.tone-cyan::after { color: #22d3ee; } .tone-rose::after { color: #fb7185; } .tone-blue::after { color: #38bdf8; }
-.tone-amber::after { color: #fbbf24; } .tone-violet::after { color: #c084fc; } .tone-emerald::after { color: #34d399; }
+.cap-card-value { font-size: 19px; font-weight: 800; line-height: 1.15; color: var(--cap-text-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cap-card-unit { font-size: 11px; font-weight: 600; margin-left: 2px; color: var(--cap-text-sub); }
+.cap-card-label { margin-top: 2px; font-size: 11px; color: var(--cap-text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-card-glow { position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%; opacity: var(--cap-glow-opacity); filter: blur(8px); }
+.tone-cyan .cap-card-icon { color: #06b6d4; } .tone-cyan .cap-card-glow { background: rgba(34, 211, 238, 0.35); }
+.tone-rose .cap-card-icon { color: #f43f5e; } .tone-rose .cap-card-glow { background: rgba(251, 113, 133, 0.35); }
+.tone-blue .cap-card-icon { color: #0ea5e9; } .tone-blue .cap-card-glow { background: rgba(56, 189, 248, 0.32); }
+.tone-amber .cap-card-icon { color: #f59e0b; } .tone-amber .cap-card-glow { background: rgba(251, 191, 36, 0.3); }
+.tone-violet .cap-card-icon { color: #8b5cf6; } .tone-violet .cap-card-glow { background: rgba(192, 132, 252, 0.3); }
+.tone-emerald .cap-card-icon { color: #10b981; } .tone-emerald .cap-card-glow { background: rgba(52, 211, 153, 0.3); }
+.cap-card::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: currentColor; opacity: 0.55; }
+.tone-cyan::after { color: #06b6d4; } .tone-rose::after { color: #f43f5e; } .tone-blue::after { color: #0ea5e9; }
+.tone-amber::after { color: #f59e0b; } .tone-violet::after { color: #8b5cf6; } .tone-emerald::after { color: #10b981; }
 
 /* 图表区：两行三列 */
 .cap-charts {
@@ -835,13 +891,14 @@ onMounted(loadStatus);
 .cap-panel {
   padding: 10px 14px;
   border-radius: 12px;
-  background: linear-gradient(160deg, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.32));
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: var(--cap-panel-bg);
+  border: 1px solid var(--cap-panel-border);
+  box-shadow: var(--cap-shadow);
   backdrop-filter: blur(8px);
 }
 .cap-panel-head {
   display: flex; align-items: center; gap: 8px;
-  margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #cbd5e1;
+  margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--cap-text);
 }
 .cap-panel-head.sm { font-size: 12px; margin: 14px 0 8px; }
 .cap-panel-head .bar { width: 4px; height: 13px; border-radius: 2px; background: linear-gradient(180deg, #22d3ee, #818cf8); }
@@ -855,34 +912,34 @@ onMounted(loadStatus);
 .cap-table-wrap { flex: 1 1 0; min-height: 0; }
 .cap-table { height: 100%; background: transparent; }
 .cap-pager { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
-.cap-pager-total { font-size: 12px; color: #64748b; }
+.cap-pager-total { font-size: 12px; color: var(--cap-text-muted); }
 
-/* 详情抽屉（强制深色，避免跟随应用浅色主题） */
+/* 详情抽屉 */
 .cap-detail-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.cap-detail-id { font-weight: 700; font-size: 15px; color: #f1f5f9; }
-.cap-detail-name { font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; }
+.cap-detail-id { font-weight: 700; font-size: 15px; color: var(--cap-text-strong); }
+.cap-detail-name { font-size: 12px; color: var(--cap-text-sub); overflow: hidden; text-overflow: ellipsis; }
 .cap-detail { display: flex; flex-direction: column; gap: 16px; }
 .cap-detail-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .cap-tag { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .cap-tag.xs { padding: 1px 8px; font-size: 11px; }
-.cap-tag.plain { background: rgba(148, 163, 184, 0.16); color: #94a3b8; }
-.cap-tag.is-rose { background: rgba(251, 113, 133, 0.18); color: #fb7185; }
-.cap-tag.is-amber { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
-.cap-tag.is-blue { background: rgba(56, 189, 248, 0.18); color: #38bdf8; }
-.cap-tag.is-slate { background: rgba(100, 116, 139, 0.18); color: #94a3b8; }
+.cap-tag.plain { background: var(--cap-tag-plain-bg); color: var(--cap-text-sub); }
+.cap-tag.is-rose { background: rgba(251, 113, 133, 0.18); color: #f43f5e; }
+.cap-tag.is-amber { background: rgba(251, 191, 36, 0.18); color: #d97706; }
+.cap-tag.is-blue { background: rgba(56, 189, 248, 0.18); color: #0284c7; }
+.cap-tag.is-slate { background: rgba(100, 116, 139, 0.18); color: #64748b; }
 .cap-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.cap-metric { padding: 10px 12px; border-radius: 10px; background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.16); }
-.cap-metric-label { font-size: 12px; color: #94a3b8; }
-.cap-metric-value { margin-top: 4px; font-size: 16px; font-weight: 700; color: #f1f5f9; }
+.cap-metric { padding: 10px 12px; border-radius: 10px; background: var(--cap-soft-bg); border: 1px solid var(--cap-panel-border); }
+.cap-metric-label { font-size: 12px; color: var(--cap-text-sub); }
+.cap-metric-value { margin-top: 4px; font-size: 16px; font-weight: 700; color: var(--cap-text-strong); }
 .cap-suggest { padding: 12px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.32); }
-.cap-suggest-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #fbbf24; margin-bottom: 6px; }
-.cap-suggest-text { margin: 0; font-size: 13px; line-height: 1.7; color: #e2e8f0; }
+.cap-suggest-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #d97706; margin-bottom: 6px; }
+.cap-suggest-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--cap-text); }
 .cap-sib-list { display: flex; flex-direction: column; gap: 8px; }
-.cap-sib-item { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.16); background: rgba(148, 163, 184, 0.05); }
+.cap-sib-item { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--cap-panel-border); background: var(--cap-soft-bg); }
 .cap-sib-main { display: flex; align-items: baseline; gap: 8px; }
-.cap-sib-id { font-weight: 600; font-size: 13px; color: #e2e8f0; }
-.cap-sib-name { font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; }
-.cap-sib-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 12px; color: #94a3b8; }
+.cap-sib-id { font-weight: 600; font-size: 13px; color: var(--cap-text); }
+.cap-sib-name { font-size: 12px; color: var(--cap-text-sub); overflow: hidden; text-overflow: ellipsis; }
+.cap-sib-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--cap-text-sub); }
 
 @media (max-width: 1366px) {
   .cap-card-value { font-size: 17px; }

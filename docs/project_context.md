@@ -934,3 +934,11 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - **制式分布排除「未知」**：`group_by` 增 `skip_unknown` 参数(`WHERE 制式 IS NOT NULL AND <> ''`)，制式分布只剩 TDD/FDD。
 - 行间距：统一用 flex `gap:12px`，卡片/图表 panel 内边距收紧，避免叠压。图表高度 `clamp(108px,13vh,160px)` 适配矮窗口。
 - 验证：`frontend` `npm run build`(vue-tsc+vite) 通过；后端 `py_compile` 通过；4G/5G 的 avg_ul/total_flow、制式排除空值、上下行直方均经 MCP 对真实数据验证。
+
+## 2026-06-26：容量看板适配日/夜双主题
+
+- 跟随应用主题：复用全局 `composables/theme.ts` 的 `themeName`(`light|dark`，写 `documentElement[data-theme]`)。看板 `isLight = computed(themeName==='light')`。
+- Naive 组件：`n-config-provider :theme` 绑定 `lightTheme|darkTheme`；`:theme-overrides` 绑定 `naiveLight|naiveDark`（两套 DataTable/Input/Pagination/Drawer/Empty 覆盖，浅色强调色用 `#0891b2`、深色用 `#22d3ee`）。
+- ECharts：新增 `chartPalette` computed（轴文字/轴线/分割线/tooltip 底色与文字/图例/饼描边/柱底色 两套值），所有 option 通过 `axisLine/axisLabel/splitLine/tooltipBase/legendStyle` 辅助函数读取，主题切换时 computed 重算、`EChart.vue` 深度 watch `setOption(opt,true)` 自动重绘。
+- CSS：硬编码颜色抽成 `--cap-*` 变量（bg/panel/card/border/shadow/text 系列/soft-bg/tag 等），**定义在 `:global([data-theme='dark'])` 与 `:global([data-theme='light'])`(documentElement)** 上——这样 teleport 到 body 的详情抽屉也能继承同一套变量。浅色：白底玻璃卡片 + 柔和阴影 + 深色文字；深色：原科技风径向辉光。强调色（青/紫/玫红/琥珀）与 `.cap-spark`/分段激活态在两主题保持一致。卡片 icon/底色条改用更深的实色(#06b6d4/#f43f5e 等)以保证浅色下对比度。
+- 验证：`frontend` `npm run build`(vue-tsc+vite) 通过。
