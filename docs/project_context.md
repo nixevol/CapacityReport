@@ -1020,7 +1020,7 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - `.gitignore` 新增忽略 `test/` 与 `temp/`（生成的测试数据）。`test/` 目录及其脚本不入库，仅本地用。
 - `test/make_test_data.py`：交互式从完整 CapacityReportData 源目录抽小样本，输出到 `<仓库>/temp/CapacityReport`（结构同源 4G/5G/RJ，每次生成前先清空）。启动询问「源目录」「每频段数量(默认500)」。
 - 抽取规则：按数据文件夹为单位，4G 主文件按 `制式` 列拆 TD-LTE(TDD)/LTE FDD(FDD) 各取数量；每频段 = `test/dump.csv` 清单中属于该频段的小区(优先全保留) + 指定数量其他小区；保留全部列与时序仅删行；RJ 日均流量整体原样复制。小区主键 4G=eNodeBId-cellId、5G/RJ=网元ID-cellId（注意 4G CSV 同时含网元ID，需以 eNodeBId 为准并保留制式拆分）。
-- `test/dump.csv`：每行一个 CGI/NCGI（自动去 PLMN 前缀匹配），# 注释；用于固定保留高负荷等特定小区。
+- `test/dump.csv`：首行 `CGI` 表头，其后每行一个 CGI/NCGI（自动去 PLMN 前缀匹配，无注释）；用于固定保留高负荷等特定小区。抽取数量由运行时输入决定（默认 500）。
 - 实测：源 673MB→样本(500/频段) 约 34MB；优先小区与制式拆分均验证正确。
 
 ## 2026-06-26：容量处理无条件同步 CellData→容量库（覆盖手动上传场景）
