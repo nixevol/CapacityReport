@@ -1,6 +1,7 @@
 {
-  "Update": "2026/06/25 05:17:26",
-  "SourceType": "sftp",
+  "Update": "2026/06/26 05:38:36",
+  "MetrixEnabled": false,
+  "SourceType": "external",
   "WarehouseType": "mysql",
   "MySQL_DBInfo": {
     "host": "127.0.0.1",
@@ -191,7 +192,7 @@
     "protocol": "sftp",
     "host": "127.0.0.1",
     "port": 2022,
-    "user": "nixevol",
+    "user": "user1",
     "remote_dir": "/CapacityReportData",
     "passive": true,
     "timeout": 30,
@@ -202,7 +203,7 @@
       "expected_directories": [],
       "week_offset": 0
     },
-    "passwd": "242520"
+    "passwd": "123456"
   },
   "CellData": {
     "remote_data": {
@@ -210,7 +211,7 @@
       "protocol": "sftp",
       "host": "127.0.0.1",
       "port": 2022,
-      "user": "nixevol",
+      "user": "user1",
       "remote_dir": "/",
       "passive": true,
       "timeout": 30,
@@ -221,7 +222,7 @@
         "expected_directories": [],
         "week_offset": 0
       },
-      "passwd": "242520"
+      "passwd": "123456"
     },
     "mysql": {
       "host": "127.0.0.1",
@@ -234,6 +235,8 @@
       "/网优日常优化数据文档/日常性能报表/{maxyear}年/300表"
     ],
     "year_dir_regex": "(?P<year>\\d{4})年",
+    "month_dir_regex": "(?P<month>\\d{1,2})月",
+    "day_dir_regex": "(?P<day>\\d{1,2})日",
     "file_name_regex": "^Result_300_.*\\.zip$",
     "file_time_regex": "(?P<timestamp>\\d{14})(?=\\.zip$)",
     "mapping": {
