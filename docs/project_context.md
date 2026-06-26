@@ -1015,6 +1015,13 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 准确率（MCP 实测，重叠 66001）：网络 100%、制式 97.88%(排除 3DMM 即 100%)、频段 97.6%、带宽 99.75%、站型 99.94%、**物理站 99.59%、扇区 99.20%**；残差为不可还原的人工差异（室分多载波编号、700M 个别人工编号、源数据制表符等）。详见 `docs/sector_inference_research.md`。
 - 关键坑：MySQL 字符串字面量会吞掉未知转义的反斜杠，正则字面量需写 `\\(`（.sql 文件）/ JSON 调用需 `\\\\(`；ICU 正则字符类内的 `[ ]` 易误判，统一把名称中的 `[]` 转 `()` 后只处理圆括号。
 
+## 2026-06-26：修复看板问题清单固定列重叠（透明背景透出下层列）
+
+- 现象：问题小区清单横向滚动时，右固定列「问题」与滚动区「日均流量」列视觉重叠。
+- 根因：naive DataTable override 把 `tdColor` 设为 `transparent`（为融入玻璃面板），导致固定列(CGI 左固定 / 问题 右固定)背景透明，滚动时透出下层普通列内容。
+- 修复：新增主题变量 `--cap-table-fixed-bg`/`--cap-table-fixed-bg-hover`（深色 #111c2e/#18283f，浅色 #fff/#eaf6fb），用 `:deep` 给 `.n-data-table-th/td--fixed-left/right` 设不透明背景（含 tr:hover）。非固定列仍保持透明融入面板。
+- 校验：vue-tsc 通过。
+
 ## 2026-06-26：配置导入补全 MetrixEnabled（导出导入字段全对齐）
 
 - 问题：`config.py::to_file_dict`（导出）含 12 字段，但 `api/routers/config.py::_apply_config_data`（导入）漏处理 `MetrixEnabled` → 导入后「启用 Metrix 平台」开关不恢复，且可能出现 `SourceType=metrix` 但 `metrix_enabled=false` 的不一致。

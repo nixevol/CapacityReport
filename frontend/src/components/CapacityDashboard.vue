@@ -732,6 +732,8 @@ onBeforeUnmount(resetPageHeader);
   --cap-soft-bg: rgba(148, 163, 184, 0.08);
   --cap-tag-plain-bg: rgba(148, 163, 184, 0.16);
   --cap-glow-opacity: 0.5;
+  --cap-table-fixed-bg: #111c2e;
+  --cap-table-fixed-bg-hover: #18283f;
 }
 :global([data-theme='light']) {
   --cap-bg:
@@ -752,6 +754,8 @@ onBeforeUnmount(resetPageHeader);
   --cap-soft-bg: rgba(15, 23, 42, 0.04);
   --cap-tag-plain-bg: rgba(15, 23, 42, 0.06);
   --cap-glow-opacity: 0.32;
+  --cap-table-fixed-bg: #ffffff;
+  --cap-table-fixed-bg-hover: #eaf6fb;
 }
 
 .cap-dashboard {
@@ -909,6 +913,17 @@ onBeforeUnmount(resetPageHeader);
 .cap-search { width: 200px; }
 .cap-table-wrap { flex: 1 1 0; min-height: 0; }
 .cap-table { height: 100%; background: transparent; }
+/* 固定列(CGI 左 / 问题 右)需不透明背景，否则横向滚动时透出下层列造成"重叠" */
+.cap-table :deep(.n-data-table-th--fixed-left),
+.cap-table :deep(.n-data-table-th--fixed-right),
+.cap-table :deep(.n-data-table-td--fixed-left),
+.cap-table :deep(.n-data-table-td--fixed-right) {
+  background-color: var(--cap-table-fixed-bg) !important;
+}
+.cap-table :deep(.n-data-table-tr:hover .n-data-table-td--fixed-left),
+.cap-table :deep(.n-data-table-tr:hover .n-data-table-td--fixed-right) {
+  background-color: var(--cap-table-fixed-bg-hover) !important;
+}
 .cap-pager { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .cap-pager-total { font-size: 12px; color: var(--cap-text-muted); }
 
