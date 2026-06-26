@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
+import tarfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -96,23 +98,57 @@ _RESTORE_OVERRIDE = """Function RestorePreviousInstallLocation
 FunctionEnd"""
 
 
-def find_nsis_template() -> Path:
-    registry = Path.home() / ".cargo" / "registry" / "src"
+def _cargo_home() -> Path:
+    return Path(os.environ.get("CARGO_HOME") or (Path.home() / ".cargo"))
+
+
+def _read_template_from_src() -> str | None:
+    """优先读取 registry/src 下已解压的 tauri-bundler 模板。"""
+    registry = _cargo_home() / "registry" / "src"
     if not registry.exists():
-        _env.die(f"未找到 Cargo registry：{registry}", "先运行一次 cargo tauri build 拉取 tauri-bundler。")
+        return None
     candidates = [
         path
         for path in registry.rglob("installer.nsi")
         if "tauri-bundler-" in str(path) and path.parts[-4:] == ("bundle", "windows", "nsis", "installer.nsi")
     ]
     if not candidates:
-        _env.die("未找到 Tauri NSIS 模板（installer.nsi）", "先运行一次 cargo tauri build 拉取 tauri-bundler。")
-    return sorted(candidates, reverse=True)[0]
+        return None
+    return sorted(candidates, reverse=True)[0].read_text(encoding="utf-8")
+
+
+def _read_template_from_crate() -> str | None:
+    """registry/src 被 cargo gc 清理时，从缓存的 tauri-bundler-*.crate 包内直接解出模板。"""
+    cache = _cargo_home() / "registry" / "cache"
+    if not cache.exists():
+        return None
+    crates = sorted(cache.rglob("tauri-bundler-*.crate"), reverse=True)
+    member_suffix = "src/bundle/windows/nsis/installer.nsi"
+    for crate in crates:
+        try:
+            with tarfile.open(crate, "r:gz") as archive:
+                for member in archive.getmembers():
+                    if member.name.endswith(member_suffix):
+                        extracted = archive.extractfile(member)
+                        if extracted is not None:
+                            return extracted.read().decode("utf-8")
+        except (tarfile.TarError, OSError):
+            continue
+    return None
+
+
+def read_nsis_template_text() -> str:
+    content = _read_template_from_src() or _read_template_from_crate()
+    if content is None:
+        _env.die(
+            "未找到 Tauri NSIS 模板（installer.nsi）",
+            "先运行一次 cargo tauri build 拉取 tauri-bundler。",
+        )
+    return content
 
 
 def make_nsis_template(tmp_dir: Path) -> Path:
-    source = find_nsis_template()
-    content = source.read_text(encoding="utf-8")
+    content = read_nsis_template_text()
 
     hook_path = str(NSIS_HOOK.resolve())
     include_line = f'!include "{hook_path}"'
@@ -141,16 +177,17 @@ def make_nsis_template(tmp_dir: Path) -> Path:
 
 def build_with_windows_nsis(tmp_dir: Path) -> None:
     template = make_nsis_template(tmp_dir)
-    original = TAURI_CONF.read_text(encoding="utf-8")
+    # 按字节备份/还原，避免 Windows 文本写入把原文件 LF 改成 CRLF。
+    original = TAURI_CONF.read_bytes()
     try:
-        config = json.loads(original)
+        config = json.loads(original.decode("utf-8"))
         config["bundle"]["windows"]["nsis"]["template"] = str(template)
         TAURI_CONF.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         _env.remove_path(_env.SRC_TAURI_DIR / "target" / "release" / "bundle")
         _env.step("编译 Tauri 桌面版（cargo tauri build）")
         _env.run(["cargo", "tauri", "build"], cwd=_env.SRC_TAURI_DIR)
     finally:
-        TAURI_CONF.write_text(original, encoding="utf-8")
+        TAURI_CONF.write_bytes(original)
 
 
 def collect_installers(platform: str) -> None:
