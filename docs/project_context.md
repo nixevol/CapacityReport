@@ -917,3 +917,10 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 前端：新增依赖 `echarts`；`components/EChart.vue`（echarts 封装，ResizeObserver 自适应 + dispose）；`components/CapacityDashboard.vue`（科技感大屏：4G/5G 分段切换、6 张汇总卡片含数字滚动、6 个图表(环形/直方/分组柱/饼/横向柱)、问题小区清单(筛选+分页+点击行打开)、右侧详情抽屉(关键指标 + 优化建议 + 同扇区兄弟小区)）。无结果表时横纵居中「请先进行数据处理」。
 - 路由 `/dashboard`(name=`dashboard`，懒加载)；侧边菜单「容量看板」置于「数据处理」下方（`AppShell` menuKeys/menuOptions + `StatsChartOutline`）。看板自带深色科技风(径向辉光/玻璃拟态/霓虹色)，不随应用明暗主题；图表 echarts 自定义深色配色。
 - 验证：`npm run build`（vue-tsc）通过（CapacityDashboard 懒加载 chunk≈1.16MB 含 echarts）；后端 `compileall` 通过；各接口 SQL 经 MCP 对真实数据验证（4G 高负荷 792 / 5G 46，同扇区邻区 6–8 个）。
+
+## 2026-06-26：容量看板配色统一 + 整页不滚动 + 清单导出
+
+- 组件配色统一：`CapacityDashboard.vue` 整体用 `<n-config-provider :theme="darkTheme" :theme-overrides="naiveDark">` 包裹，强制看板内所有 Naive 组件（数据表/搜索框/分页/抽屉/Empty/按钮）走深色 + 青色(`#22d3ee`)强调色，解决浅色应用主题下表格/搜索/分页与深色大屏不匹配的问题。`naiveDark` 覆盖 DataTable(透明 td、半透明 th、淡边框)、Input(深色半透明底)、Pagination(深色项+青色激活)、Drawer(`#0c1422`)、Empty。抽屉内自定义 `.cap-*` 样式由 `var(--td-*)` 改为固定深色值，不再跟随应用主题。
+- 整页不滚动：`.cap-dashboard` 由 `overflow:auto` 改为 `height:100%; overflow:hidden; display:flex; flex-direction:column`（父链 `.content` 高 `calc(100vh-64px)` 为确定值）。布局分三段：顶栏(auto) → `.cap-spin`(flex:0 0 auto，包裹卡片+图表) → `.cap-list`(flex:1，占满剩余)。**清单已移出 `n-spin`** 成为 `.cap-body` 直接 flex 子项以获得确定高度；表格 `n-data-table` 加 `flex-height + height:100%`，由 `.cap-table-wrap`(flex:1 min-height:0) 提供高度，表体内部纵向滚动而非整页滚动。图表改为 2 行 3 列等宽网格，高度 `clamp(136px,16vh,184px)` 随视口自适应；卡片/字号整体缩小。窄屏(<1100px) 回退为 `overflow:auto` 多列换行。
+- 清单导出：后端新增 `GET /api/dashboard/export?rat&problem&keyword`（`dashboard.py`，sync def 走线程池），WHERE 与 `cells` 完全一致（同 problem/keyword 筛选、同排序、无分页），导出全部命中行为 CSV(`utf-8-sig`，FileResponse + BackgroundTask 清理 CACHE_DIR 临时文件)；列含 CGI/NCGI、小区名称、制式/带宽/站型/频段、上下行利用率%、日均流量、用户数、高负荷问题、优化建议。前端清单工具栏「查询」旁加「导出」按钮（`downloadGet`，`exporting` 态，清单为空时禁用）。
+- 验证：`frontend` `vue-tsc --noEmit` 通过；后端 `py_compile dashboard.py` 通过。

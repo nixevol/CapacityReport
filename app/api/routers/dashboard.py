@@ -5,11 +5,17 @@
 """
 from __future__ import annotations
 
+import csv
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from app import state
+from app.config import CACHE_DIR
+from app.utils.files import remove_file_safely
 from app.warehouse import make_warehouse
 
 router = APIRouter(tags=["dashboard"])
@@ -226,6 +232,57 @@ def dashboard_cells(
         for r in rows
     ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/api/dashboard/export")
+def dashboard_export(rat: str = Query("4g"), problem: str = Query(""), keyword: str = Query("")):
+    cfg = _rat(rat)
+    db = _db()
+    if cfg["table"].lower() not in _existing_tables(db):
+        raise HTTPException(status_code=404, detail=f"结果表 {cfg['table']} 不存在，请先进行数据处理")
+
+    t = f"`{cfg['table']}`"
+    ul, dl, flow, users = f"`{cfg['ul']}`", f"`{cfg['dl']}`", f"`{FLOW}`", f"`{cfg['users']}`"
+    wheres = ["`高负荷问题` IS NOT NULL"]
+    if problem in PROBLEMS:
+        wheres = [f"`高负荷问题`='{problem}'"]
+    if keyword.strip():
+        kw = _esc(keyword.strip())
+        wheres.append(f"(`{cfg['id']}` LIKE '%{kw}%' OR `{cfg['name']}` LIKE '%{kw}%')")
+    where_sql = " WHERE " + " AND ".join(wheres)
+
+    rows = _rows(db, (
+        f"SELECT `{cfg['id']}` id, IFNULL(`{cfg['name']}`,'') name, IFNULL(`制式`,'') sys,"
+        f" IFNULL(`带宽`,'') band, IFNULL(`站型`,'') station, IFNULL(`频段`,'') freq,"
+        f" ROUND({ul}*100,1) ul, ROUND({dl}*100,1) dl, ROUND({flow},2) flow, ROUND({users},0) users,"
+        f" IFNULL(`高负荷问题`,'') problem, IFNULL(`优化建议`,'') suggestion"
+        f" FROM {t}{where_sql}"
+        f" ORDER BY FIELD(`高负荷问题`,'高负荷','高流量预警','利用率预警'), {dl} DESC"
+    ))
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"问题小区清单_{rat.lower()}_{timestamp}.csv"
+    filepath = CACHE_DIR / filename
+    header = [cfg["id"], "小区名称", "制式", "带宽", "站型", "频段",
+              "上行利用率(%)", "下行利用率(%)", "日均流量(GB)", "用户数", "高负荷问题", "优化建议"]
+    try:
+        with filepath.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(header)
+            for r in rows:
+                writer.writerow([
+                    r.get("id"), r.get("name"), r.get("sys"), r.get("band"), r.get("station"),
+                    r.get("freq"), r.get("ul"), r.get("dl"), r.get("flow"), r.get("users"),
+                    r.get("problem"), r.get("suggestion"),
+                ])
+    except Exception:
+        remove_file_safely(filepath)
+        raise
+    return FileResponse(
+        path=str(filepath), filename=filename, media_type="text/csv",
+        background=BackgroundTask(remove_file_safely, filepath),
+    )
 
 
 @router.get("/api/dashboard/cell")

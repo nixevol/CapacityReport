@@ -1,88 +1,92 @@
 <template>
-  <div class="cap-dashboard">
-    <!-- 加载中 -->
-    <div v-if="loadingStatus" class="cap-center">
-      <n-spin size="large" />
-    </div>
+  <n-config-provider :theme="darkTheme" :theme-overrides="naiveDark">
+    <div class="cap-dashboard">
+      <!-- 加载中 -->
+      <div v-if="loadingStatus" class="cap-center">
+        <n-spin size="large" />
+      </div>
 
-    <!-- 无结果表：居中提示 -->
-    <div v-else-if="!ready" class="cap-center cap-empty">
-      <div class="cap-empty-orb"></div>
-      <p class="cap-empty-text">请先进行数据处理</p>
-      <p class="cap-empty-sub">检测到数据库中暂无 4G / 5G 结果表，完成「数据处理」后即可查看容量看板。</p>
-    </div>
+      <!-- 无结果表：居中提示 -->
+      <div v-else-if="!ready" class="cap-center cap-empty">
+        <div class="cap-empty-orb"></div>
+        <p class="cap-empty-text">请先进行数据处理</p>
+        <p class="cap-empty-sub">检测到数据库中暂无 4G / 5G 结果表，完成「数据处理」后即可查看容量看板。</p>
+      </div>
 
-    <!-- 看板主体 -->
-    <div v-else class="cap-body">
-      <header class="cap-topbar">
-        <div class="cap-title-wrap">
-          <span class="cap-spark"></span>
-          <h2 class="cap-title">容量负荷看板</h2>
-          <span class="cap-sub">高负荷小区分析 · 实时数据</span>
-        </div>
-        <div class="cap-controls">
-          <div class="cap-seg">
-            <button
-              v-for="opt in ratOptions"
-              :key="opt.value"
-              type="button"
-              class="cap-seg-btn"
-              :class="{ active: rat === opt.value }"
-              @click="switchRat(opt.value)"
-            >{{ opt.label }}</button>
+      <!-- 看板主体 -->
+      <div v-else class="cap-body">
+        <header class="cap-topbar">
+          <div class="cap-title-wrap">
+            <span class="cap-spark"></span>
+            <h2 class="cap-title">容量负荷看板</h2>
+            <span class="cap-sub">高负荷小区分析 · 实时数据</span>
           </div>
-          <button class="cap-refresh" type="button" :disabled="loadingOverview" title="刷新" @click="reload">
-            <n-icon><RefreshOutline /></n-icon>
-          </button>
-        </div>
-      </header>
-
-      <n-spin :show="loadingOverview">
-        <!-- 汇总卡片 -->
-        <section class="cap-cards">
-          <div
-            v-for="(card, idx) in cards"
-            :key="card.key"
-            class="cap-card"
-            :class="card.tone"
-            :style="{ animationDelay: idx * 60 + 'ms' }"
-          >
-            <div class="cap-card-icon"><n-icon><component :is="card.icon" /></n-icon></div>
-            <div class="cap-card-body">
-              <div class="cap-card-value">{{ card.display }}<span v-if="card.unit" class="cap-card-unit">{{ card.unit }}</span></div>
-              <div class="cap-card-label">{{ card.label }}</div>
+          <div class="cap-controls">
+            <div class="cap-seg">
+              <button
+                v-for="opt in ratOptions"
+                :key="opt.value"
+                type="button"
+                class="cap-seg-btn"
+                :class="{ active: rat === opt.value }"
+                @click="switchRat(opt.value)"
+              >{{ opt.label }}</button>
             </div>
-            <div class="cap-card-glow"></div>
+            <button class="cap-refresh" type="button" :disabled="loadingOverview" title="刷新" @click="reload">
+              <n-icon><RefreshOutline /></n-icon>
+            </button>
           </div>
-        </section>
+        </header>
 
-        <!-- 图表区 -->
-        <section class="cap-charts">
-          <div class="cap-panel span-2">
-            <div class="cap-panel-head"><span class="bar"></span>负荷问题分布</div>
-            <e-chart :option="problemOption" height="280px" />
-          </div>
-          <div class="cap-panel span-4">
-            <div class="cap-panel-head"><span class="bar"></span>下行利用率分布（{{ overview?.labels.dl }}）</div>
-            <e-chart :option="histOption" height="280px" />
-          </div>
-          <div class="cap-panel span-3">
-            <div class="cap-panel-head"><span class="bar"></span>制式分布（总数 / 高负荷）</div>
-            <e-chart :option="systemOption" height="260px" />
-          </div>
-          <div class="cap-panel span-3">
-            <div class="cap-panel-head"><span class="bar"></span>带宽分布（总数 / 高负荷）</div>
-            <e-chart :option="bandOption" height="260px" />
-          </div>
-          <div class="cap-panel span-2">
-            <div class="cap-panel-head"><span class="bar"></span>站型分布</div>
-            <e-chart :option="stationOption" height="260px" />
-          </div>
-          <div class="cap-panel span-4">
-            <div class="cap-panel-head"><span class="bar"></span>频段标记小区 Top</div>
-            <e-chart :option="freqOption" height="260px" />
-          </div>
-        </section>
+        <div class="cap-spin">
+          <n-spin :show="loadingOverview">
+            <!-- 汇总卡片 -->
+            <section class="cap-cards">
+              <div
+                v-for="(card, idx) in cards"
+                :key="card.key"
+                class="cap-card"
+                :class="card.tone"
+                :style="{ animationDelay: idx * 60 + 'ms' }"
+              >
+                <div class="cap-card-icon"><n-icon><component :is="card.icon" /></n-icon></div>
+                <div class="cap-card-body">
+                  <div class="cap-card-value">{{ card.display }}<span v-if="card.unit" class="cap-card-unit">{{ card.unit }}</span></div>
+                  <div class="cap-card-label">{{ card.label }}</div>
+                </div>
+                <div class="cap-card-glow"></div>
+              </div>
+            </section>
+
+            <!-- 图表区：两行三列 -->
+            <section class="cap-charts">
+              <div class="cap-panel">
+                <div class="cap-panel-head"><span class="bar"></span>负荷问题分布</div>
+                <e-chart :option="problemOption" :height="chartHeight" />
+              </div>
+              <div class="cap-panel">
+                <div class="cap-panel-head"><span class="bar"></span>下行利用率分布（{{ overview?.labels.dl }}）</div>
+                <e-chart :option="histOption" :height="chartHeight" />
+              </div>
+              <div class="cap-panel">
+                <div class="cap-panel-head"><span class="bar"></span>站型分布</div>
+                <e-chart :option="stationOption" :height="chartHeight" />
+              </div>
+              <div class="cap-panel">
+                <div class="cap-panel-head"><span class="bar"></span>制式分布（总数 / 高负荷）</div>
+                <e-chart :option="systemOption" :height="chartHeight" />
+              </div>
+              <div class="cap-panel">
+                <div class="cap-panel-head"><span class="bar"></span>带宽分布（总数 / 高负荷）</div>
+                <e-chart :option="bandOption" :height="chartHeight" />
+              </div>
+              <div class="cap-panel">
+                <div class="cap-panel-head"><span class="bar"></span>频段标记小区 Top</div>
+                <e-chart :option="freqOption" :height="chartHeight" />
+              </div>
+            </section>
+          </n-spin>
+        </div>
 
         <!-- 高负荷 / 预警 清单 -->
         <section class="cap-panel cap-list">
@@ -102,6 +106,7 @@
               <n-input
                 v-model:value="keyword"
                 class="cap-search"
+                size="small"
                 clearable
                 placeholder="CGI / 小区名称"
                 @keyup.enter="searchCells"
@@ -110,89 +115,100 @@
                 <template #prefix><n-icon><SearchOutline /></n-icon></template>
               </n-input>
               <n-button size="small" type="primary" ghost @click="searchCells">查询</n-button>
+              <n-button size="small" tertiary :loading="exporting" :disabled="!cellTotal" @click="exportCells">
+                <template #icon><n-icon><DownloadOutline /></n-icon></template>
+                导出
+              </n-button>
             </div>
           </div>
-          <n-data-table
-            class="cap-table"
-            :columns="columns"
-            :data="cells"
-            :loading="loadingCells"
-            :bordered="false"
-            :scroll-x="1180"
-            :row-props="rowProps"
-          />
+          <div class="cap-table-wrap">
+            <n-data-table
+              class="cap-table"
+              size="small"
+              :columns="columns"
+              :data="cells"
+              :loading="loadingCells"
+              :bordered="false"
+              :single-line="false"
+              :scroll-x="1180"
+              :row-props="rowProps"
+              flex-height
+              style="height: 100%"
+            />
+          </div>
           <div class="cap-pager">
             <span class="cap-pager-total">共 {{ cellTotal }} 个问题小区</span>
             <n-pagination
               :page="page"
               :page-count="pageCount"
               :page-size="pageSize"
+              size="small"
               @update:page="changePage"
             />
           </div>
         </section>
-      </n-spin>
-    </div>
+      </div>
 
-    <!-- 小区详情抽屉 -->
-    <n-drawer v-model:show="detailVisible" :width="detailWidth" placement="right" class="cap-drawer">
-      <n-drawer-content :native-scrollbar="false" closable>
-        <template #header>
-          <div class="cap-detail-head">
-            <span class="cap-detail-id">{{ detail?.id }}</span>
-            <span v-if="detail?.name" class="cap-detail-name">{{ detail?.name }}</span>
-          </div>
-        </template>
-        <div v-if="loadingDetail" class="cap-center"><n-spin /></div>
-        <div v-else-if="detail" class="cap-detail">
-          <div class="cap-detail-tags">
-            <span class="cap-tag" :class="problemClass(detailProblem)">{{ detailProblem || '正常' }}</span>
-            <span class="cap-tag plain">{{ detailValue('制式') }}</span>
-            <span class="cap-tag plain">{{ detailValue('带宽') }}</span>
-            <span class="cap-tag plain">{{ detailValue('站型') }}</span>
-            <span class="cap-tag plain">{{ detailValue('频段') }}</span>
-          </div>
-
-          <div class="cap-detail-grid">
-            <div v-for="m in detailMetrics" :key="m.label" class="cap-metric">
-              <div class="cap-metric-label">{{ m.label }}</div>
-              <div class="cap-metric-value">{{ m.value }}</div>
+      <!-- 小区详情抽屉 -->
+      <n-drawer v-model:show="detailVisible" :width="detailWidth" placement="right" class="cap-drawer">
+        <n-drawer-content :native-scrollbar="false" closable>
+          <template #header>
+            <div class="cap-detail-head">
+              <span class="cap-detail-id">{{ detail?.id }}</span>
+              <span v-if="detail?.name" class="cap-detail-name">{{ detail?.name }}</span>
             </div>
-          </div>
+          </template>
+          <div v-if="loadingDetail" class="cap-center"><n-spin /></div>
+          <div v-else-if="detail" class="cap-detail">
+            <div class="cap-detail-tags">
+              <span class="cap-tag" :class="problemClass(detailProblem)">{{ detailProblem || '正常' }}</span>
+              <span class="cap-tag plain">{{ detailValue('制式') }}</span>
+              <span class="cap-tag plain">{{ detailValue('带宽') }}</span>
+              <span class="cap-tag plain">{{ detailValue('站型') }}</span>
+              <span class="cap-tag plain">{{ detailValue('频段') }}</span>
+            </div>
 
-          <div v-if="detailSuggestion" class="cap-suggest">
-            <div class="cap-suggest-head"><n-icon><BulbOutline /></n-icon> 优化建议</div>
-            <p class="cap-suggest-text">{{ detailSuggestion }}</p>
-          </div>
+            <div class="cap-detail-grid">
+              <div v-for="m in detailMetrics" :key="m.label" class="cap-metric">
+                <div class="cap-metric-label">{{ m.label }}</div>
+                <div class="cap-metric-value">{{ m.value }}</div>
+              </div>
+            </div>
 
-          <div class="cap-sib">
-            <div class="cap-panel-head sm"><span class="bar"></span>同扇区同运营商小区（{{ detail.siblings.length }}）</div>
-            <n-empty v-if="!detail.siblings.length" size="small" description="无同扇区其他小区" />
-            <div v-else class="cap-sib-list">
-              <div v-for="sib in detail.siblings" :key="sib.id" class="cap-sib-item">
-                <div class="cap-sib-main">
-                  <span class="cap-sib-id">{{ sib.id }}</span>
-                  <span class="cap-sib-name">{{ sib.name }}</span>
-                </div>
-                <div class="cap-sib-meta">
-                  <span class="cap-tag plain xs">{{ sib.band || '-' }}</span>
-                  <span class="cap-tag plain xs">{{ sib.freq || '-' }}</span>
-                  <span class="cap-sib-stat">下行 {{ sib.dl }}%</span>
-                  <span class="cap-sib-stat">流量 {{ sib.flow }}GB</span>
-                  <span class="cap-tag xs" :class="problemClass(sib.problem)">{{ sib.problem }}</span>
+            <div v-if="detailSuggestion" class="cap-suggest">
+              <div class="cap-suggest-head"><n-icon><BulbOutline /></n-icon> 优化建议</div>
+              <p class="cap-suggest-text">{{ detailSuggestion }}</p>
+            </div>
+
+            <div class="cap-sib">
+              <div class="cap-panel-head sm"><span class="bar"></span>同扇区同运营商小区（{{ detail.siblings.length }}）</div>
+              <n-empty v-if="!detail.siblings.length" size="small" description="无同扇区其他小区" />
+              <div v-else class="cap-sib-list">
+                <div v-for="sib in detail.siblings" :key="sib.id" class="cap-sib-item">
+                  <div class="cap-sib-main">
+                    <span class="cap-sib-id">{{ sib.id }}</span>
+                    <span class="cap-sib-name">{{ sib.name }}</span>
+                  </div>
+                  <div class="cap-sib-meta">
+                    <span class="cap-tag plain xs">{{ sib.band || '-' }}</span>
+                    <span class="cap-tag plain xs">{{ sib.freq || '-' }}</span>
+                    <span class="cap-sib-stat">下行 {{ sib.dl }}%</span>
+                    <span class="cap-sib-stat">流量 {{ sib.flow }}GB</span>
+                    <span class="cap-tag xs" :class="problemClass(sib.problem)">{{ sib.problem }}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </n-drawer-content>
-    </n-drawer>
-  </div>
+        </n-drawer-content>
+      </n-drawer>
+    </div>
+  </n-config-provider>
 </template>
 
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, type Component } from 'vue';
-import { NTag, useMessage } from 'naive-ui';
+import { NTag, darkTheme, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import type { EChartsOption } from 'echarts';
 import {
@@ -200,6 +216,7 @@ import {
   AnalyticsOutline,
   BulbOutline,
   CellularOutline,
+  DownloadOutline,
   FlashOutline,
   PulseOutline,
   RefreshOutline,
@@ -207,7 +224,7 @@ import {
   TrendingUpOutline
 } from '@vicons/ionicons5';
 
-import { apiGet } from '../api/client';
+import { apiGet, downloadGet } from '../api/client';
 import EChart from './EChart.vue';
 
 type Rat = '4g' | '5g';
@@ -237,6 +254,53 @@ interface CellDetail {
 
 const message = useMessage();
 
+// 强制看板内 Naive 组件走深色配色，统一科技感主题
+const naiveDark = {
+  common: {
+    primaryColor: '#22d3ee',
+    primaryColorHover: '#38bdf8',
+    primaryColorPressed: '#0891b2',
+    primaryColorSuppl: '#38bdf8',
+    borderRadius: '8px'
+  },
+  DataTable: {
+    thColor: 'rgba(30, 41, 59, 0.55)',
+    thColorHover: 'rgba(30, 41, 59, 0.85)',
+    thTextColor: '#cbd5e1',
+    thFontWeight: '600',
+    tdColor: 'transparent',
+    tdColorHover: 'rgba(56, 189, 248, 0.08)',
+    tdTextColor: '#dbe4f0',
+    borderColor: 'rgba(148, 163, 184, 0.12)',
+    loadingColor: 'rgba(8, 14, 26, 0.6)'
+  },
+  Input: {
+    color: 'rgba(15, 23, 42, 0.45)',
+    colorFocus: 'rgba(15, 23, 42, 0.7)',
+    border: '1px solid rgba(148, 163, 184, 0.18)',
+    borderHover: '1px solid rgba(56, 189, 248, 0.5)',
+    borderFocus: '1px solid rgba(56, 189, 248, 0.7)',
+    boxShadowFocus: '0 0 0 2px rgba(56, 189, 248, 0.18)',
+    textColor: '#e2e8f0',
+    placeholderColor: '#64748b'
+  },
+  Pagination: {
+    itemColor: 'rgba(15, 23, 42, 0.4)',
+    itemColorHover: 'rgba(56, 189, 248, 0.12)',
+    itemColorPressed: 'rgba(56, 189, 248, 0.18)',
+    itemColorActive: 'rgba(56, 189, 248, 0.16)',
+    itemBorder: '1px solid rgba(148, 163, 184, 0.16)',
+    itemBorderActive: '1px solid #22d3ee',
+    itemTextColor: '#94a3b8',
+    itemTextColorHover: '#e2e8f0',
+    itemTextColorActive: '#22d3ee'
+  },
+  Drawer: { color: '#0c1422' },
+  Empty: { textColor: '#64748b', iconColor: '#475569' }
+};
+
+const chartHeight = 'clamp(136px, 16vh, 184px)';
+
 const loadingStatus = ref(true);
 const ready = ref(false);
 const rat = ref<Rat>('4g');
@@ -255,6 +319,7 @@ const pageSize = 20;
 const loadingCells = ref(false);
 const problemFilter = ref('');
 const keyword = ref('');
+const exporting = ref(false);
 const problemFilters = [
   { label: '全部', value: '' },
   { label: '高负荷', value: '高负荷' },
@@ -525,6 +590,21 @@ async function loadCells() {
   }
 }
 
+async function exportCells() {
+  if (!cellTotal.value) return;
+  exporting.value = true;
+  try {
+    const qs = `rat=${rat.value}&problem=${encodeURIComponent(problemFilter.value)}&keyword=${encodeURIComponent(keyword.value.trim())}`;
+    const filename = `问题小区清单_${rat.value.toUpperCase()}.csv`;
+    const result = await downloadGet(`/api/dashboard/export?${qs}`, filename);
+    if (result.saved) message.success('问题小区清单已导出');
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '导出失败');
+  } finally {
+    exporting.value = false;
+  }
+}
+
 async function openDetail(id: string) {
   detailVisible.value = true;
   loadingDetail.value = true;
@@ -573,8 +653,10 @@ onMounted(loadStatus);
   position: relative;
   height: 100%;
   min-height: 0;
-  overflow: auto;
-  padding: 20px 24px 32px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px;
   color: #e2e8f0;
   background:
     radial-gradient(1200px 600px at 12% -10%, rgba(56, 189, 248, 0.12), transparent 60%),
@@ -587,8 +669,8 @@ onMounted(loadStatus);
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  min-height: 320px;
+  flex: 1;
+  min-height: 0;
   gap: 14px;
 }
 
@@ -620,9 +702,10 @@ onMounted(loadStatus);
   50% { transform: scale(1.12); opacity: 1; }
 }
 
-.cap-body { display: flex; flex-direction: column; gap: 18px; }
+.cap-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 
 .cap-topbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -631,11 +714,11 @@ onMounted(loadStatus);
 }
 .cap-title-wrap { display: flex; align-items: center; gap: 12px; }
 .cap-spark {
-  width: 6px; height: 26px; border-radius: 3px;
+  width: 6px; height: 24px; border-radius: 3px;
   background: linear-gradient(180deg, #22d3ee, #818cf8);
   box-shadow: 0 0 16px rgba(56, 189, 248, 0.7);
 }
-.cap-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 1px; color: #f1f5f9; }
+.cap-title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 1px; color: #f1f5f9; }
 .cap-sub { font-size: 12px; color: #64748b; }
 .cap-controls { display: flex; align-items: center; gap: 12px; }
 
@@ -648,7 +731,7 @@ onMounted(loadStatus);
 }
 .cap-seg.sm { padding: 2px; border-radius: 8px; }
 .cap-seg-btn {
-  padding: 6px 18px;
+  padding: 5px 16px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -667,28 +750,33 @@ onMounted(loadStatus);
 }
 .cap-refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 9px;
+  width: 32px; height: 32px; border-radius: 9px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.6);
-  color: #94a3b8; cursor: pointer; font-size: 17px;
+  color: #94a3b8; cursor: pointer; font-size: 16px;
   transition: all 0.18s ease;
 }
 .cap-refresh:hover:not(:disabled) { color: #22d3ee; border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 16px rgba(56, 189, 248, 0.3); }
 .cap-refresh:disabled { opacity: 0.5; cursor: wait; }
 
+/* n-spin 包裹卡片与图表（固定高度区域） */
+.cap-spin { flex: 0 0 auto; }
+.cap-spin :deep(.n-spin-content) { display: flex; flex-direction: column; gap: 12px; }
+
 /* 汇总卡片 */
 .cap-cards {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 .cap-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 14px;
+  gap: 11px;
+  padding: 11px 13px;
+  border-radius: 13px;
   background: linear-gradient(160deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.35));
   border: 1px solid rgba(148, 163, 184, 0.14);
   overflow: hidden;
@@ -698,14 +786,14 @@ onMounted(loadStatus);
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 .cap-card-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 42px; height: 42px; flex: 0 0 auto;
-  border-radius: 11px; font-size: 22px;
+  width: 38px; height: 38px; flex: 0 0 auto;
+  border-radius: 10px; font-size: 20px;
   background: rgba(148, 163, 184, 0.1);
 }
 .cap-card-body { min-width: 0; }
-.cap-card-value { font-size: 26px; font-weight: 800; line-height: 1.1; color: #f8fafc; font-variant-numeric: tabular-nums; }
-.cap-card-unit { font-size: 13px; font-weight: 600; margin-left: 3px; color: #94a3b8; }
-.cap-card-label { margin-top: 4px; font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-card-value { font-size: 22px; font-weight: 800; line-height: 1.15; color: #f8fafc; font-variant-numeric: tabular-nums; }
+.cap-card-unit { font-size: 12px; font-weight: 600; margin-left: 3px; color: #94a3b8; }
+.cap-card-label { margin-top: 2px; font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cap-card-glow { position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%; opacity: 0.5; filter: blur(8px); }
 .tone-cyan .cap-card-icon { color: #22d3ee; } .tone-cyan .cap-card-glow { background: rgba(34, 211, 238, 0.35); }
 .tone-rose .cap-card-icon { color: #fb7185; } .tone-rose .cap-card-glow { background: rgba(251, 113, 133, 0.35); }
@@ -717,71 +805,76 @@ onMounted(loadStatus);
 .tone-cyan::after { color: #22d3ee; } .tone-rose::after { color: #fb7185; } .tone-blue::after { color: #38bdf8; }
 .tone-amber::after { color: #fbbf24; } .tone-violet::after { color: #c084fc; } .tone-emerald::after { color: #34d399; }
 
-/* 图表区 */
+/* 图表区：两行三列 */
 .cap-charts {
+  flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 .cap-panel {
-  padding: 14px 16px;
-  border-radius: 14px;
+  padding: 12px 14px;
+  border-radius: 13px;
   background: linear-gradient(160deg, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.32));
   border: 1px solid rgba(148, 163, 184, 0.14);
   backdrop-filter: blur(8px);
 }
-.span-2 { grid-column: span 2; } .span-3 { grid-column: span 3; } .span-4 { grid-column: span 4; }
 .cap-panel-head {
   display: flex; align-items: center; gap: 8px;
-  margin-bottom: 10px; font-size: 13px; font-weight: 600; color: #cbd5e1;
+  margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #cbd5e1;
 }
 .cap-panel-head.sm { font-size: 12px; margin: 14px 0 8px; }
 .cap-panel-head .bar { width: 4px; height: 13px; border-radius: 2px; background: linear-gradient(180deg, #22d3ee, #818cf8); }
 
-/* 清单 */
-.cap-list { display: flex; flex-direction: column; }
-.cap-list-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+/* 清单：占据剩余高度，表格内部滚动 */
+.cap-list { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding-bottom: 10px; }
+.cap-list-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.cap-list-head .cap-panel-head { margin-bottom: 0; }
 .cap-list-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cap-search { width: 220px; }
-.cap-table { background: transparent; margin-top: 4px; }
-.cap-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.cap-search { width: 200px; }
+.cap-table-wrap { flex: 1 1 0; min-height: 0; }
+.cap-table { height: 100%; background: transparent; }
+.cap-pager { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .cap-pager-total { font-size: 12px; color: #64748b; }
 
-/* 详情抽屉 */
+/* 详情抽屉（强制深色，避免跟随应用浅色主题） */
 .cap-detail-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.cap-detail-id { font-weight: 700; font-size: 15px; }
-.cap-detail-name { font-size: 12px; color: var(--td-text-color-secondary, #94a3b8); overflow: hidden; text-overflow: ellipsis; }
+.cap-detail-id { font-weight: 700; font-size: 15px; color: #f1f5f9; }
+.cap-detail-name { font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; }
 .cap-detail { display: flex; flex-direction: column; gap: 16px; }
 .cap-detail-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .cap-tag { padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .cap-tag.xs { padding: 1px 8px; font-size: 11px; }
-.cap-tag.plain { background: rgba(148, 163, 184, 0.16); color: var(--td-text-color-secondary, #64748b); }
-.cap-tag.is-rose { background: rgba(251, 113, 133, 0.16); color: #f43f5e; }
-.cap-tag.is-amber { background: rgba(251, 191, 36, 0.16); color: #d97706; }
-.cap-tag.is-blue { background: rgba(56, 189, 248, 0.16); color: #0284c7; }
-.cap-tag.is-slate { background: rgba(100, 116, 139, 0.16); color: #64748b; }
+.cap-tag.plain { background: rgba(148, 163, 184, 0.16); color: #94a3b8; }
+.cap-tag.is-rose { background: rgba(251, 113, 133, 0.18); color: #fb7185; }
+.cap-tag.is-amber { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
+.cap-tag.is-blue { background: rgba(56, 189, 248, 0.18); color: #38bdf8; }
+.cap-tag.is-slate { background: rgba(100, 116, 139, 0.18); color: #94a3b8; }
 .cap-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.cap-metric { padding: 10px 12px; border-radius: 10px; background: var(--td-bg-color-secondarycontainer, rgba(148, 163, 184, 0.08)); border: 1px solid var(--td-border-color-light, rgba(148, 163, 184, 0.16)); }
-.cap-metric-label { font-size: 12px; color: var(--td-text-color-secondary, #94a3b8); }
-.cap-metric-value { margin-top: 4px; font-size: 16px; font-weight: 700; }
-.cap-suggest { padding: 12px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.3); }
-.cap-suggest-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #d97706; margin-bottom: 6px; }
-.cap-suggest-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--td-text-color-primary, #334155); }
+.cap-metric { padding: 10px 12px; border-radius: 10px; background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.16); }
+.cap-metric-label { font-size: 12px; color: #94a3b8; }
+.cap-metric-value { margin-top: 4px; font-size: 16px; font-weight: 700; color: #f1f5f9; }
+.cap-suggest { padding: 12px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.32); }
+.cap-suggest-head { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #fbbf24; margin-bottom: 6px; }
+.cap-suggest-text { margin: 0; font-size: 13px; line-height: 1.7; color: #e2e8f0; }
 .cap-sib-list { display: flex; flex-direction: column; gap: 8px; }
-.cap-sib-item { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--td-border-color-light, rgba(148, 163, 184, 0.16)); }
+.cap-sib-item { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.16); background: rgba(148, 163, 184, 0.05); }
 .cap-sib-main { display: flex; align-items: baseline; gap: 8px; }
-.cap-sib-id { font-weight: 600; font-size: 13px; }
-.cap-sib-name { font-size: 12px; color: var(--td-text-color-secondary, #94a3b8); overflow: hidden; text-overflow: ellipsis; }
-.cap-sib-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--td-text-color-secondary, #94a3b8); }
+.cap-sib-id { font-weight: 600; font-size: 13px; color: #e2e8f0; }
+.cap-sib-name { font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; }
+.cap-sib-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 12px; color: #94a3b8; }
 
-@media (max-width: 1280px) {
-  .cap-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .span-2, .span-3, .span-4 { grid-column: span 3; }
-  .cap-charts { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1366px) {
+  .cap-card-value { font-size: 20px; }
+  .cap-card-icon { width: 34px; height: 34px; font-size: 18px; }
 }
-@media (max-width: 760px) {
-  .cap-dashboard { padding: 14px; }
+@media (max-width: 1100px) {
+  .cap-dashboard { overflow: auto; }
+  .cap-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cap-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
   .cap-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .span-2, .span-3, .span-4 { grid-column: span 6; }
+  .cap-charts { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
