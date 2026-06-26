@@ -1015,6 +1015,12 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 准确率（MCP 实测，重叠 66001）：网络 100%、制式 97.88%(排除 3DMM 即 100%)、频段 97.6%、带宽 99.75%、站型 99.94%、**物理站 99.59%、扇区 99.20%**；残差为不可还原的人工差异（室分多载波编号、700M 个别人工编号、源数据制表符等）。详见 `docs/sector_inference_research.md`。
 - 关键坑：MySQL 字符串字面量会吞掉未知转义的反斜杠，正则字面量需写 `\\(`（.sql 文件）/ JSON 调用需 `\\\\(`；ICU 正则字符类内的 `[ ]` 易误判，统一把名称中的 `[]` 转 `()` 后只处理圆括号。
 
+## 2026-06-26：配置导入补全 MetrixEnabled（导出导入字段全对齐）
+
+- 问题：`config.py::to_file_dict`（导出）含 12 字段，但 `api/routers/config.py::_apply_config_data`（导入）漏处理 `MetrixEnabled` → 导入后「启用 Metrix 平台」开关不恢复，且可能出现 `SourceType=metrix` 但 `metrix_enabled=false` 的不一致。
+- 修复：导入开头读取 `MetrixEnabled`；并在未启用 Metrix 时强制 `source_type=external`/`warehouse_type=mysql`（与 `/api/config/metrix-enabled` 开关行为一致）。前端导出/导入直接传整份 Configure.json 走 `/api/config/download`、`/api/config/upload`，不在前端拆字段，故后端补全即全覆盖。
+- 校验：导出字段集合 vs 导入处理集合比对，「导出但未导入(除时间戳 Update)」为空；py_compile 通过。
+
 ## 2026-06-26：Docker 一键编排补齐（应用 + MySQL + sftpgo）
 
 - `packaging/docker-compose.yml`：在原 capacity-app + capacity-mysql 基础上**新增 sftpgo 服务**（`drakkan/sftpgo:v2.7.1`，SFTP 2022、Web 18080:8080，卷 `sftpgo-config`/`sftpgo-data`，`SFTPGO_LOADDATA_FROM` 导入 SFTP 用户）。capacity-app 加 `build` 上下文与一组连接环境变量（DB_HOST/PORT/USER/PASSWD、MAIN_DB_NAME、CELLDATA_DB_NAME、SFTP_HOST/PORT/USER/PASSWD），depends_on mysql(healthy)+sftpgo。

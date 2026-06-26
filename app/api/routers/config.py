@@ -255,10 +255,18 @@ async def upload_config(file: UploadFile = File(...)):
 
 
 def _apply_config_data(data: dict[str, Any]) -> None:
+    if "MetrixEnabled" in data:
+        state.config.metrix_enabled = bool(data["MetrixEnabled"])
+
     if data.get("SourceType") in SOURCE_TYPES:
         state.config.source_type = data["SourceType"]
     if data.get("WarehouseType") in WAREHOUSE_TYPES:
         state.config.warehouse_type = data["WarehouseType"]
+
+    # 未启用 Metrix 时强制回落为外部储存 + 直连 MySQL，避免导入后状态不一致
+    if not state.config.metrix_enabled:
+        state.config.source_type = "external"
+        state.config.warehouse_type = "mysql"
 
     metrix_data = data.get("Metrix")
     if isinstance(metrix_data, dict):
