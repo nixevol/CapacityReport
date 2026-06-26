@@ -212,20 +212,27 @@ def _run_remote_processing(
 
 
 def _try_refresh_cell_data(app_config: AppConfig, work_dir: Path, logger: ProcessLogger) -> None:
-    if not app_config.cell_data.remote_data.enabled:
-        return
+    # 1) 远程拉取 CellData（仅在配置了 FTP/SFTP 时）；失败不阻断容量处理
+    if app_config.cell_data.remote_data.enabled:
+        logger.set_stage("cell_data")
+        logger.info("── CellData 更新 ──")
+        try:
+            result = refresh_cell_data(app_config, work_dir, logger)
+            logger.success(
+                f"CellData 更新完成：{result.imported_rows} 行"
+                f"（解析 {result.parsed_rows}，跳过 {result.skipped_rows}）"
+            )
+        except Exception as exc:
+            logger.warning(f"CellData 远程更新失败，继续容量处理: {exc}")
+
+    # 2) 无论是否远程拉取，都执行 CellData 脚本并把表同步到容量库（覆盖手动上传场景）；
+    #    celldata 无数据 / 连不上则内部跳过，best-effort 不阻断容量处理
     logger.set_stage("cell_data")
-    logger.info("── CellData 更新 ──")
     try:
-        result = refresh_cell_data(app_config, work_dir, logger)
-        logger.success(
-            f"CellData 更新完成：{result.imported_rows} 行"
-            f"（解析 {result.parsed_rows}，跳过 {result.skipped_rows}）"
-        )
         execute_celldata_script(CELLDATA_SCRIPT, app_config, logger)
         copy_celldata_tables_to_capacity(app_config, logger)
     except Exception as exc:
-        logger.warning(f"CellData 更新失败，继续容量处理: {exc}")
+        logger.warning(f"CellData 同步到容量库失败，继续容量处理: {exc}")
 
 
 def _format_bytes(size: int) -> str:

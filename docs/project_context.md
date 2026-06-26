@@ -1015,6 +1015,12 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 准确率（MCP 实测，重叠 66001）：网络 100%、制式 97.88%(排除 3DMM 即 100%)、频段 97.6%、带宽 99.75%、站型 99.94%、**物理站 99.59%、扇区 99.20%**；残差为不可还原的人工差异（室分多载波编号、700M 个别人工编号、源数据制表符等）。详见 `docs/sector_inference_research.md`。
 - 关键坑：MySQL 字符串字面量会吞掉未知转义的反斜杠，正则字面量需写 `\\(`（.sql 文件）/ JSON 调用需 `\\\\(`；ICU 正则字符类内的 `[ ]` 易误判，统一把名称中的 `[]` 转 `()` 后只处理圆括号。
 
+## 2026-06-26：容量处理无条件同步 CellData→容量库（覆盖手动上传场景）
+
+- 问题：原 `_try_refresh_cell_data`（tasks.py / remote.py）首行 `if not cell_data.remote_data.enabled: return`，把「远程拉取 + 执行 CellData.sql + `copy_celldata_tables_to_capacity`」整体锁在 FTP/SFTP 开关后。手动上传 CellData 入库（无 FTP）时，容量处理不会把 celldata 的 cellinfo/sector 复制到 capacityreport，导致 ReportScript 富集用的是旧/缺失数据（celldata 与容量为不同库时）。
+- 改法：解耦——FTP 远程拉取 `refresh_cell_data` 仍仅在 `remote_data.enabled` 时执行；`execute_celldata_script` + `copy_celldata_tables_to_capacity` 改为**容量处理时无条件执行**，独立 try/except，best-effort（celldata 无数据/连不上、或 celldata 与容量同库则内部跳过，不阻断容量处理）。tasks.py 与 remote.py 两处同改。
+- 效果：无论 FTP 自动拉取还是手动上传 CellData，容量处理都会先把最新 cellinfo/sector 同步到 capacityreport 再跑报表。
+
 ## 2026-06-26：数据库前置检查 / 缺表自动初始化（db_init）
 
 - 目的：运行前自动检查两库「必须存在的结构表」，缺表则按预设 SQL 自动建好，避免运行中因缺表报错。
