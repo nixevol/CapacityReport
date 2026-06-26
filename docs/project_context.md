@@ -948,3 +948,10 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 默认制式：看板进入默认 `rat='5g'`（原 4g）。
 - 修复矮图表数值轴刻度重叠：图表高度仅 `clamp(108px,13vh,160px)`，上行/下行利用率分布 0-10% 桶计数极大（约 1.9w）且带千分位，ECharts 自动放 5-6 条刻度导致 Y 轴标签纵向叠压。新增 `abbrNum()`（≥1万→「x万」、≥1千→「xk」、≥1亿→「x亿」）与 `valueAxis()`(`splitNumber:3` + 缩写 formatter)，套用到上/下行直方与制式分布的数值轴；频段标记小区横向柱的数值 x 轴同样加 `splitNumber:3`+缩写。
 - 验证：`frontend` `vue-tsc --noEmit` 通过。
+
+## 2026-06-26：容量看板标题/操作并入框架页头
+
+- 参照「处理历史」做法，看板不再自绘标题栏：删除 `.cap-topbar`（标题/副标题/制式切换/刷新）。改用 `composables/pageHeader.ts` 的 `setPageHeader`/`resetPageHeader` 把内容注入 AppShell 顶部 `page-header`（与其他页一致，标题取路由 meta「容量看板」）。
+- 注入内容：subtitle「高负荷小区分析 · 实时数据」；actions = 4G / 5G 两个按钮（激活=`type:primary, variant:solid`，未激活=`default+outline`，点击 `switchRat`）+「刷新」(icon `RefreshOutline`，`loading/disabled` 绑 `loadingOverview`)。因 `PageHeaderAction.type/variant` 非响应式，用 `watch([rat, ready], applyPageHeader)` 在制式切换/就绪时重建 actions；`onBeforeUnmount` 调 `resetPageHeader` 清理；未就绪(无结果表)时不注入。
+- 清理：移除 `ratOptions` 及 `.cap-topbar/.cap-title/.cap-spark/.cap-sub/.cap-controls/.cap-refresh` 样式；`.cap-seg*` 保留（问题清单的筛选分段仍在用）。
+- 验证：`frontend` `npm run build`(vue-tsc+vite) 通过。

@@ -15,29 +15,6 @@
 
       <!-- 看板主体 -->
       <div v-else class="cap-body">
-        <header class="cap-topbar">
-          <div class="cap-title-wrap">
-            <span class="cap-spark"></span>
-            <h2 class="cap-title">容量负荷看板</h2>
-            <span class="cap-sub">高负荷小区分析 · 实时数据</span>
-          </div>
-          <div class="cap-controls">
-            <div class="cap-seg">
-              <button
-                v-for="opt in ratOptions"
-                :key="opt.value"
-                type="button"
-                class="cap-seg-btn"
-                :class="{ active: rat === opt.value }"
-                @click="switchRat(opt.value)"
-              >{{ opt.label }}</button>
-            </div>
-            <button class="cap-refresh" type="button" :disabled="loadingOverview" title="刷新" @click="reload">
-              <n-icon><RefreshOutline /></n-icon>
-            </button>
-          </div>
-        </header>
-
         <div class="cap-overview">
           <n-spin :show="loadingOverview">
             <!-- 汇总卡片 -->
@@ -207,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref, type Component } from 'vue';
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue';
 import { NTag, darkTheme, lightTheme, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import type { EChartsOption } from 'echarts';
@@ -227,6 +204,7 @@ import {
 
 import { apiGet, downloadGet } from '../api/client';
 import { themeName } from '../composables/theme';
+import { resetPageHeader, setPageHeader, type PageHeaderAction } from '../composables/pageHeader';
 import EChart from './EChart.vue';
 
 type Rat = '4g' | '5g';
@@ -314,10 +292,6 @@ const chartHeight = 'clamp(108px, 13vh, 160px)';
 const loadingStatus = ref(true);
 const ready = ref(false);
 const rat = ref<Rat>('5g');
-const ratOptions: { label: string; value: Rat }[] = [
-  { label: '4G', value: '4g' },
-  { label: '5G', value: '5g' }
-];
 
 const loadingOverview = ref(false);
 const overview = ref<Overview | null>(null);
@@ -668,6 +642,23 @@ async function openDetail(id: string) {
   }
 }
 
+// ---------- 顶部框架页头（标题/制式切换/刷新） ----------
+function buildHeaderActions(): PageHeaderAction[] {
+  return [
+    { key: 'rat-4g', label: '4G', type: rat.value === '4g' ? 'primary' : 'default', variant: rat.value === '4g' ? 'solid' : 'outline', onClick: () => switchRat('4g') },
+    { key: 'rat-5g', label: '5G', type: rat.value === '5g' ? 'primary' : 'default', variant: rat.value === '5g' ? 'solid' : 'outline', onClick: () => switchRat('5g') },
+    { key: 'dashboard-refresh', label: '刷新', icon: RefreshOutline, variant: 'outline', loading: loadingOverview, disabled: loadingOverview, onClick: reload }
+  ];
+}
+function applyPageHeader() {
+  if (!ready.value) {
+    resetPageHeader();
+    return;
+  }
+  setPageHeader({ subtitle: '高负荷小区分析 · 实时数据', actions: buildHeaderActions() });
+}
+watch([rat, ready], applyPageHeader);
+
 function switchRat(value: Rat) {
   if (rat.value === value) return;
   rat.value = value;
@@ -695,6 +686,7 @@ function reload() {
 }
 
 onMounted(loadStatus);
+onBeforeUnmount(resetPageHeader);
 </script>
 
 <style scoped>
@@ -792,24 +784,6 @@ onMounted(loadStatus);
 
 .cap-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 
-.cap-topbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.cap-title-wrap { display: flex; align-items: center; gap: 12px; }
-.cap-spark {
-  width: 6px; height: 24px; border-radius: 3px;
-  background: linear-gradient(180deg, #22d3ee, #818cf8);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.7);
-}
-.cap-title { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: 1px; color: var(--cap-text-strong); }
-.cap-sub { font-size: 12px; color: var(--cap-text-muted); }
-.cap-controls { display: flex; align-items: center; gap: 12px; }
-
 .cap-seg {
   display: inline-flex;
   padding: 3px;
@@ -836,16 +810,6 @@ onMounted(loadStatus);
   background: linear-gradient(135deg, #22d3ee, #38bdf8);
   box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
 }
-.cap-refresh {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 9px;
-  border: 1px solid var(--cap-control-border);
-  background: var(--cap-control-bg);
-  color: var(--cap-text-sub); cursor: pointer; font-size: 16px;
-  transition: all 0.18s ease;
-}
-.cap-refresh:hover:not(:disabled) { color: #06b6d4; border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 0 16px rgba(56, 189, 248, 0.3); }
-.cap-refresh:disabled { opacity: 0.5; cursor: wait; }
 
 /* 概览区（卡片 + 图表），固定高度，由 n-spin 包裹 */
 .cap-overview { flex: 0 0 auto; }
