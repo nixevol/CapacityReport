@@ -86,14 +86,14 @@ docker compose -f dist/docker/docker-compose.yml up -d
 
 ## 开发文档
 
-更详细的技术栈、目录结构和「功能 ↔ 代码」对照见 [开发文档](docs/dev_guide.md)：
+更详细的技术栈、目录结构和「功能 ↔ 代码」对照见 [开发文档 DEVELOPMENT.md](DEVELOPMENT.md)：
 
-- [技术栈与主要库](docs/dev_guide.md#技术栈与主要库)
-- [目录结构](docs/dev_guide.md#目录结构)
-- [功能与代码对照](docs/dev_guide.md#功能与代码对照)
-  - [数据处理](docs/dev_guide.md#数据处理)
-  - [容量看板](docs/dev_guide.md#容量看板)
-  - [处理历史](docs/dev_guide.md#处理历史)
-  - [数据管理](docs/dev_guide.md#数据管理)
-  - [脚本编辑](docs/dev_guide.md#脚本编辑)
-  - [系统设置](docs/dev_guide.md#系统设置)
+- [技术栈与主要库](DEVELOPMENT.md#技术栈与主要库)
+- [目录结构](DEVELOPMENT.md#目录结构)
+- [功能与代码对照](DEVELOPMENT.md#功能与代码对照)
+  - [数据处理](DEVELOPMENT.md#数据处理)
+  - [容量看板](DEVELOPMENT.md#容量看板)
+  - [处理历史](DEVELOPMENT.md#处理历史)
+  - [数据管理](DEVELOPMENT.md#数据管理)
+  - [脚本编辑](DEVELOPMENT.md#脚本编辑)
+  - [系统设置](DEVELOPMENT.md#系统设置)

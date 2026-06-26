@@ -74,7 +74,9 @@ CapacityReport/
 ├─ scripts/                 # 运行/编译 Python 脚本
 ├─ packaging/               # docker-compose、PyInstaller 配置、MySQL 初始化
 ├─ docker/entrypoint.sh     # 容器启动脚本
-├─ docs/                    # 文档（本文件、项目维护记录）
+├─ docs/                    # 项目维护记录（project_context.md）
+├─ README.md                # 使用说明
+├─ DEVELOPMENT.md           # 开发文档（本文件）
 ├─ Configure.json           # 应用配置
 ├─ ReportScript.sql         # 容量报表处理 SQL
 ├─ CellData.sql             # CellData 处理 SQL
