@@ -971,3 +971,18 @@ CellData 处理日志细化（`app/services/cell_data.py`）：
 - 优化建议右上角加复制按钮：`copySuggestion()` 复用 `composables/clipboard.writeClipboardText` 复制 `detailSuggestion`，成功/失败 `message` 提示；`.cap-suggest-head` 改 space-between 布局。
 - 同扇区同运营商小区每项加详情图标按钮（`OpenOutline`），点击 `openDetail(sib.id)` 在抽屉内切换到该小区详情；`.cap-sib-item` 改 flex 行（`.cap-sib-body` 占主 + 右侧 `.cap-icon-btn`）。新增通用 `.cap-icon-btn` 样式（复制/详情共用）。
 - 验证：`frontend` `vue-tsc --noEmit` 通过。
+
+## 2026-06-26：离线可用性全面审计（运行期零外网）
+
+结论：**运行期已完全离线就绪，无需改运行时代码**；外网仅「构建期」需要。审计证据：
+
+运行期（无外网）已满足：
+- 前端 `dist` 完全自包含：所有 JS/CSS、图标（`@vicons/ionicons5` 按需 tree-shake 进 JS）、Monaco 图标字体 `codicon-*.ttf` 均为本地资源。`rg --no-ignore` 扫描整个 `dist`，出现的 http(s) 字符串全是**无害标识符/文档链接**：`127.0.0.1`/`host.docker.internal`(本地后端地址)、`json-schema.org`/`w3.org`(JSON Schema 方言 ID 与 XML/SVG 命名空间，仅作字符串永不下载)、`github.com`/`vuejs.org`/`naiveui.com`/`microsoft.com`(库源码注释与报错文档链接，用户点击才跳)。无 CDN、无在线字体(`@font-face`)、无外部 `<script>/<link>`、无 importmap。
+- Monaco：worker 经 Vite `?worker` 本地打包（`editor.worker`/`json.worker` 均在 `dist/assets`），`MonacoEnvironment.getWorker` 返回本地 worker，不走 AMD loader / CDN。
+- 后端仅连「用户配置的内网端点」：FTP/SFTP(`ftplib`/`paramiko`)、Metrix API(`requests`，base_url 默认 `host.docker.internal`)、MySQL(`pymysql`)。无互联网请求、无授权联网校验(`services/license.py` 本地校验)、无运行期 `pip install`。
+- 容器 `entrypoint.sh` 仅 `uvicorn` 启动 + 播种默认配置，不联网。
+
+外网仅构建期需要（在有网机器/内网镜像源完成，产物离线运输）：
+- 前端 `npm ci && npm run build`（npm registry）。
+- 镜像 `pip install -r requirements.txt`（PyPI）+ 基础镜像 `python:3.13.11-slim`（Docker registry；Dockerfile 已注明内网无 dockerhub 时需本地预先存在该镜像）。
+- 离线重建可选做法：内网 PyPI/npm 镜像源，或预下载 wheels + `pip install --no-index --find-links`、`npm ci --offline`。
