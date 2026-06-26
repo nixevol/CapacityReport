@@ -58,11 +58,12 @@ UPDATE _sector_infer SET `物理站` = CONCAT(
   IFNULL(REGEXP_SUBSTR(name1,'[(]微小[A-Z]?[)]'),''))
 WHERE `制式` IS NULL OR `制式` NOT IN ('700M','广电');
 
--- 2.4 物理站（700M/广电）：取以"(江门"开头的括号内容为真实站址；
---     无则取外层（去 CBN- 前缀与注记）。括号内容以"共"开头属共建标注，归外层
+-- 2.4 物理站（700M/广电）：真实站址在括号内，且与外层同「地市」前缀（小区名开头即地市，通用不限江门）。
+--     取外层名(去 CBN-)的前 2 个字作为地市前缀，匹配以该前缀开头的括号内容为物理站；
+--     无匹配则取外层（共建/从…拉远等注记括号因不以地市开头，自然落到外层）。
 UPDATE _sector_infer SET `物理站` =
-  CASE WHEN REGEXP_SUBSTR(base,'\\(江门[^()]*') <> ''
-       THEN TRIM(SUBSTRING(REGEXP_SUBSTR(base,'\\(江门[^()]*'),2))
+  CASE WHEN REGEXP_SUBSTR(base, CONCAT('\\(', LEFT(REGEXP_REPLACE(REGEXP_REPLACE(base,'\\(.*$',''),'^CBN-?',''), 2), '[^()]*')) <> ''
+       THEN TRIM(SUBSTRING(REGEXP_SUBSTR(base, CONCAT('\\(', LEFT(REGEXP_REPLACE(REGEXP_REPLACE(base,'\\(.*$',''),'^CBN-?',''), 2), '[^()]*')), 2))
        ELSE TRIM(REGEXP_REPLACE(REGEXP_REPLACE(base,'\\(.*$',''),'^CBN-?','')) END
 WHERE `制式` IN ('700M','广电');
 
